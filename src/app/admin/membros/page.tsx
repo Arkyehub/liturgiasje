@@ -29,6 +29,10 @@ import {
 } from "@/shared/ui/sheet"
 import { MemberForm } from "@/features/members/ui/MemberForm"
 import { Input } from "@/shared/ui/input"
+import { Button } from "@/shared/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar"
+import { Loader2, Search, Plus, Edit2, Trash2, UserCircle, UserKey } from "lucide-react"
+import { toast } from "sonner"
 
 export default function AdminMembersPage() {
   const { user, profile, loading } = useAuth()
@@ -148,7 +152,7 @@ export default function AdminMembersPage() {
                   <div key={member.id} className="bg-white p-4 rounded-3xl border border-stone-100 shadow-sm flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 overflow-hidden">
                       <Avatar className="h-10 w-10 shrink-0 border border-stone-100">
-                        <AvatarImage src={member.claimedUser?.avatar_url || undefined} />
+                        <AvatarImage src={member.claimedUser?.avatarUrl || undefined} />
                         <AvatarFallback className="bg-stone-50 text-stone-300">
                           <UserCircle className="h-6 w-6" />
                         </AvatarFallback>
@@ -223,7 +227,7 @@ export default function AdminMembersPage() {
             </SheetTitle>
           </SheetHeader>
           <MemberForm 
-            initialData={editingMember ? { full_name: editingmember.fullName, whatsapp: editingMember.whatsapp } : undefined}
+            initialData={editingMember ? { full_name: editingMember.fullName, whatsapp: editingMember.whatsapp } : undefined}
             onSave={async (data) => {
               try {
                 if (editingMember) {
@@ -260,18 +264,18 @@ export default function AdminMembersPage() {
           <div className="mx-auto w-full max-w-sm">
             <DrawerHeader className="text-center">
               <DrawerTitle className="text-stone-800">
-                {roleChangeMember?.claimed_user?.role === 'admin' ? "Remover Administrador?" : "Tornar Administrador?"}
+                {roleChangeMember?.claimedUser?.role === 'admin' ? "Remover Administrador?" : "Tornar Administrador?"}
               </DrawerTitle>
               <DrawerDescription>
-                {roleChangeMember?.claimed_user?.role === 'admin' 
-                  ? `O membro ${roleChangeMember?.full_name} deixará de ter permissões de administrador no sistema.`
-                  : `O membro ${roleChangeMember?.full_name} terá permissão total para gerenciar escalas e outros membros.`}
+                {roleChangeMember?.claimedUser?.role === 'admin' 
+                  ? `O membro ${roleChangeMember?.fullName} deixará de ter permissões de administrador no sistema.`
+                  : `O membro ${roleChangeMember?.fullName} terá permissão total para gerenciar escalas e outros membros.`}
               </DrawerDescription>
             </DrawerHeader>
             <DrawerFooter className="flex flex-col gap-2 pb-8">
               <Button 
-                variant={roleChangeMember?.claimed_user?.role === 'admin' ? "destructive" : "default"}
-                className={`w-full font-bold h-12 rounded-xl ${roleChangeMember?.claimed_user?.role !== 'admin' ? 'bg-stone-800 hover:bg-black text-white' : ''}`}
+                variant={roleChangeMember?.claimedUser?.role === 'admin' ? "destructive" : "default"}
+                className={`w-full font-bold h-12 rounded-xl ${roleChangeMember?.claimedUser?.role !== 'admin' ? 'bg-stone-800 hover:bg-black text-white' : ''}`}
                 disabled={isSubmittingRole}
                 onClick={async () => {
                   try {
@@ -306,7 +310,7 @@ export default function AdminMembersPage() {
             <DrawerHeader className="text-center">
               <DrawerTitle className="text-stone-800">Excluir Membro?</DrawerTitle>
               <DrawerDescription>
-                Esta ação removerá o membro <strong>{memberToDelete?.full_name}</strong>, sua conta de login e todos os registros relacionados (escalas, trocas e indisponibilidades) permanentemente.
+                Esta ação removerá o membro <strong>{memberToDelete?.fullName}</strong>, sua conta de login e todos os registros relacionados (escalas, trocas e indisponibilidades) permanentemente.
               </DrawerDescription>
             </DrawerHeader>
             <DrawerFooter className="flex flex-col gap-2 pb-8">
