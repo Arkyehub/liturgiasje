@@ -13,3 +13,10 @@ export class ToggleUnavailableDate {
     return this.unavailableRepository.toggleDate(userId, date)
   }
 }
+
+export class ListUnavailableByDate {
+  constructor(private readonly unavailableRepository: UnavailableRepository) {}
+  async execute(date: string): Promise<string[]> {
+    return this.unavailableRepository.listManyByDate(date)
+  }
+}

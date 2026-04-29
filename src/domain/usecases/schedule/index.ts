@@ -84,3 +84,10 @@ export class CheckMassExists {
     return this.scheduleRepository.checkMassExists(date)
   }
 }
+
+export class UpdateMassesStatus {
+  constructor(private readonly scheduleRepository: ScheduleRepository) {}
+  async execute(massIds: string[], isPublished: boolean): Promise<void> {
+    return this.scheduleRepository.updateMassesStatus(massIds, isPublished)
+  }
+}

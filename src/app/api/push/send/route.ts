@@ -1,6 +1,6 @@
-import { createClient } from '@/lib/supabaseServer';
+import { createClient } from '@/shared/api/supabaseServer';
 import { NextResponse } from 'next/server';
-import { sendPushNotification } from '@/lib/push';
+import { sendPushNotification } from '@/shared/lib/push';
 
 export const dynamic = 'force-dynamic';
 

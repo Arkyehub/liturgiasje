@@ -13,4 +13,5 @@ export interface ScheduleRepository {
   deleteMass(massId: string): Promise<void>
   acceptSwap(slotId: string, newReaderId: string, newMemberId?: string): Promise<void>
   checkMassExists(date: string): Promise<Mass[]>
+  updateMassesStatus(massIds: string[], isPublished: boolean): Promise<void>
 }

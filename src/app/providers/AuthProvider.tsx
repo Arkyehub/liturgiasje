@@ -28,6 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   const fetchProfile = async (userId: string) => {
+    setLoading(true)
     try {
       const [profileData, memberData] = await Promise.all([
         makeGetUserProfile().execute(userId),

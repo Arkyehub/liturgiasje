@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react"
 import { Announcement } from "@/domain/models/Announcement"
 import { 
-  makeGetAnnouncements, 
+  makeListAnnouncements, 
   makeCreateAnnouncement, 
   makeDeleteAnnouncement, 
   makeMarkAnnouncementAsRead, 
@@ -13,16 +13,16 @@ export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(false)
 
-  const loadAnnouncements = useCallback(async (userId?: string) => {
+  const loadAnnouncements = useCallback(async (userId?: string, silent = false) => {
     try {
-      setLoading(true)
-      const data = await makeGetAnnouncements().execute(userId)
+      if (!silent) setLoading(true)
+      const data = await makeListAnnouncements().execute(userId)
       setAnnouncements(data)
     } catch (error) {
       console.error(error)
       toast.error("Erro ao carregar avisos")
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [])
 

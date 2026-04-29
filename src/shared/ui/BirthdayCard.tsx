@@ -10,9 +10,9 @@ import { ptBR } from "date-fns/locale"
 
 interface BirthdayMember {
   id: string
-  full_name: string
-  avatar_url?: string
-  birth_date: string
+  fullName: string
+  avatarUrl?: string
+  birthDate: string
 }
 
 interface BirthdayCardProps {
@@ -25,16 +25,16 @@ export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
 
   // Filtrar aniversariantes DO DIA (com base no horário local do browser)
   const todayBirthdays = members.filter(m => {
-    if (!m.birth_date) return false
-    const date = parseISO(m.birth_date)
+    if (!m.birthDate) return false
+    const date = parseISO(m.birthDate)
     const today = new Date()
     return date.getDate() === today.getDate() && date.getMonth() === today.getMonth()
   })
 
   // Ordenar aniversariantes do mês por dia
   const monthBirthdays = [...members].sort((a, b) => {
-    const dayA = parseISO(a.birth_date).getDate()
-    const dayB = parseISO(b.birth_date).getDate()
+    const dayA = parseISO(a.birthDate).getDate()
+    const dayB = parseISO(b.birthDate).getDate()
     return dayA - dayB
   })
 
@@ -56,9 +56,9 @@ export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
                   <div key={m.id} className="flex items-center gap-3">
                     <div className="relative">
                       <Avatar className="h-9 w-9 border-2 border-amber-200">
-                        <AvatarImage src={m.avatar_url} />
+                        <AvatarImage src={m.avatarUrl} />
                         <AvatarFallback className="bg-amber-50 text-amber-500 font-bold text-xs">
-                          {m.full_name.substring(0, 2).toUpperCase()}
+                          {m.fullName.substring(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       {/* Chapéu de Aniversário */}
@@ -72,7 +72,7 @@ export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
                       <span className="text-[11px] font-black uppercase tracking-tight text-amber-600 flex items-center gap-1">
                          É hoje! Parabéns! <PartyPopper className="h-3 w-3" />
                       </span>
-                      <span className="text-sm font-bold text-stone-800 leading-tight">{m.full_name}</span>
+                      <span className="text-sm font-bold text-stone-800 leading-tight">{m.fullName}</span>
                     </div>
                   </div>
                 ))}
@@ -106,7 +106,7 @@ export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
           </p>
           <div className="grid gap-3">
             {monthBirthdays.map((m) => {
-              const birthDate = parseISO(m.birth_date)
+              const birthDate = parseISO(m.birthDate)
               const today = new Date()
               const isTodayBirthday = birthDate.getDate() === today.getDate() && birthDate.getMonth() === today.getMonth()
               
@@ -115,9 +115,9 @@ export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
                   <div className="flex items-center gap-3">
                     <div className="relative">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={m.avatar_url} />
+                        <AvatarImage src={m.avatarUrl} />
                         <AvatarFallback className="bg-stone-100 text-stone-400">
-                          {m.full_name.substring(0, 2).toUpperCase()}
+                          {m.fullName.substring(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       {isTodayBirthday && (
@@ -129,7 +129,7 @@ export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
                       )}
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-stone-800">{m.full_name}</p>
+                      <p className="text-sm font-bold text-stone-800">{m.fullName}</p>
                       <p className="text-[10px] text-stone-500 font-medium capitalize">
                         Dia {format(birthDate, "dd 'de' MMMM", { locale: ptBR })}
                       </p>

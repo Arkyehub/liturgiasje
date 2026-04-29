@@ -113,19 +113,17 @@ interface AnnouncementProps {
   title: string
   content: string
   type: "Aviso" | "Troca"
-  image_url?: string
-  image_urls?: string[]
-  audio_url?: string
-  audio_urls?: string[]
-  expires_at?: string
+  imageUrls?: string[]
+  audioUrls?: string[]
+  expiresAt?: string
   createdAt?: string
   isRead?: boolean
   isAdmin?: boolean
   isLoggedIn?: boolean
   authorName?: string
   authorId?: string
-  viewers?: { name: string; at: string; avatar_url?: string | null }[]
-  related_schedule_slot_id?: string
+  viewers?: { name: string; at: string; avatarUrl?: string | null }[]
+  relatedScheduleSlotId?: string
   onRead?: (id: string) => void
   onUpdate?: (id: string, data: any) => void
   onDelete?: (id: string) => void
@@ -139,11 +137,9 @@ export function AnnouncementCard({
   title,
   content,
   type,
-  image_url,
-  image_urls = [],
-  audio_url,
-  audio_urls = [],
-  expires_at,
+  imageUrls = [],
+  audioUrls = [],
+  expiresAt,
   createdAt,
   isRead,
   isAdmin,
@@ -151,7 +147,7 @@ export function AnnouncementCard({
   authorName,
   authorId,
   viewers = [],
-  related_schedule_slot_id,
+  relatedScheduleSlotId,
   onRead,
   onUpdate,
   onDelete,
@@ -162,8 +158,8 @@ export function AnnouncementCard({
   const [isExpanded, setIsExpanded] = useState(false)
   const [activeImageIndex, setActiveImageIndex] = useState<number | null>(null)
 
-  const allImages = (image_urls.length > 0 ? image_urls : [image_url]).filter(Boolean) as string[]
-  const allAudios = (audio_urls.length > 0 ? audio_urls : [audio_url]).filter(Boolean) as string[]
+  const allImages = imageUrls.filter(Boolean) as string[]
+  const allAudios = audioUrls.filter(Boolean) as string[]
 
   // Para fins de comparação, assumimos que se o usuário pode ver o botão, ele está logado.
   // No page.tsx passaremos o ID do usuário logado se necessário, mas aqui usaremosauthorId.
@@ -202,8 +198,8 @@ export function AnnouncementCard({
                       {viewers.map((viewer, idx) => (
                         <div key={idx} className="flex items-center gap-2.5 px-2 py-2 hover:bg-stone-50 rounded-md border border-transparent hover:border-stone-100 transition-all">
                           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-stone-100 overflow-hidden border border-stone-200 shadow-sm transition-transform group-hover:scale-105">
-                            {viewer.avatar_url ? (
-                              <img src={viewer.avatar_url} alt={viewer.name} className="h-full w-full object-cover" />
+                            {viewer.avatarUrl ? (
+                              <img src={viewer.avatarUrl} alt={viewer.name} className="h-full w-full object-cover" />
                             ) : (
                               <UserIcon className="h-3.5 w-3.5 text-stone-400" />
                             )}
@@ -228,7 +224,7 @@ export function AnnouncementCard({
           {/* Direita: Ações */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onEdit?.({ id, title, content, expires_at, image_url, image_urls, audio_url, audio_urls })}
+              onClick={() => onEdit?.({ id, title, content, expiresAt, imageUrls, audioUrls })}
               className="p-1.5 hover:bg-amber-100 rounded-lg text-stone-500 hover:text-stone-800 transition-colors"
               title="Editar"
             >
@@ -240,14 +236,14 @@ export function AnnouncementCard({
               <PopoverTrigger render={
                 <button className="flex items-center gap-1.5 text-[10px] font-bold text-stone-600 hover:text-stone-900 bg-white px-2 py-0.5 rounded-lg border border-stone-200 transition-colors">
                   <Clock className="h-3 w-3 text-red-500" />
-                  {expires_at ? `até ${format(new Date(expires_at), "dd/MM/yyyy", { locale: ptBR })}` : "Sem expiração"}
+                  {expiresAt ? `até ${format(new Date(expiresAt), "dd/MM/yyyy", { locale: ptBR })}` : "Sem expiração"}
                 </button>
               } />
               <PopoverContent className="w-auto p-0" align="end">
                 <Calendar
                   mode="single"
-                  selected={expires_at ? new Date(expires_at) : undefined}
-                  onSelect={(date) => onUpdate?.(id, { expires_at: date?.toISOString() })}
+                  selected={expiresAt ? new Date(expiresAt) : undefined}
+                  onSelect={(date) => onUpdate?.(id, { expiresAt: date?.toISOString() })}
                   initialFocus
                   locale={ptBR}
                 />
@@ -403,9 +399,9 @@ export function AnnouncementCard({
                 </Button>
               )}
 
-              {isLoggedIn && type === 'Troca' && related_schedule_slot_id && authorId !== currentUserId && (
+              {isLoggedIn && type === 'Troca' && relatedScheduleSlotId && authorId !== currentUserId && (
                 <Button
-                  onClick={() => onAcceptSwap?.(related_schedule_slot_id, id)}
+                  onClick={() => onAcceptSwap?.(relatedScheduleSlotId, id)}
                   variant="outline"
                   size="sm"
                   className="w-full h-9 text-xs font-bold border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 hover:text-amber-800 rounded-lg transition-all active:scale-95 shadow-sm"

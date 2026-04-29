@@ -1,5 +1,5 @@
 import { GetUserProfile, CreateUserProfile, UpdateUserProfile, UploadUserAvatar, UpdateUserRole, ListBirthdays } from "@/domain/usecases/user"
-import { ListUnavailableByUser, ToggleUnavailableDate } from "@/domain/usecases/user/unavailable"
+import { ListUnavailableByUser, ToggleUnavailableDate, ListUnavailableByDate } from "@/domain/usecases/user/unavailable"
 import { SupabaseUserRepository } from "@/data/repositories/SupabaseUserRepository"
 import { SupabaseUnavailableRepository } from "@/data/repositories/SupabaseUnavailableRepository"
 
@@ -15,3 +15,4 @@ export const makeListBirthdays = () => new ListBirthdays(userRepository)
 
 export const makeListUnavailableByUser = () => new ListUnavailableByUser(unavailableRepository)
 export const makeToggleUnavailableDate = () => new ToggleUnavailableDate(unavailableRepository)
+export const makeListUnavailableByDate = () => new ListUnavailableByDate(unavailableRepository)

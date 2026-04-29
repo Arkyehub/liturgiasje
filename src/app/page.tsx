@@ -26,6 +26,8 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetTrigger,
+  SheetDescription,
 } from "@/shared/ui/sheet"
 import {
   Drawer,
@@ -34,20 +36,12 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
+  DrawerDescription,
 } from "@/shared/ui/drawer"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/shared/ui/alert-dialog"
+import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar"
 
 export default function Home() {
-  const { user, profile, member, isMember, signInWithGoogle, signOut } = useAuth()
+  const { user, profile, member, isMember, loading, signInWithGoogle, signOut } = useAuth()
   const router = useRouter()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [isSheetOpen, setIsSheetOpen] = useState(false)
@@ -93,12 +87,25 @@ export default function Home() {
   const [isUnavailableDrawerOpen, setIsUnavailableDrawerOpen] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
   
-  // Redirecionamento para Onboarding se não for membro
+  // Lógica de Redirecionamento e Onboarding
   useEffect(() => {
-    if (user && !isMember) {
-      router.push("/bemvindo")
+    if (loading) return
+
+    if (user) {
+      if (!isMember) {
+        // 1. Usuário logado mas não vinculado à lista de membros
+        router.push("/bemvindo")
+      } else if (profile) {
+        // 2. É membro, mas verificar se o perfil está completo (Data Nasc + Missa Preferencial)
+        const hasBirthDate = !!profile.birthDate
+        const hasPreferences = (profile.preferences?.day_preferences?.[6]?.length || 0) > 0
+        
+        if (!hasBirthDate || !hasPreferences) {
+          router.push("/perfil")
+        }
+      }
     }
-  }, [user, isMember, router])
+  }, [user, isMember, profile, loading, router])
 
   const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1))
   const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1))
@@ -126,29 +133,31 @@ export default function Home() {
   }, [user?.id, loadAnnouncements, loadSwaps, loadBirthdays])
 
   useEffect(() => {
-    if (loading) return
     loadSchedule(currentDate, profile?.role === "admin")
-  }, [currentDate, profile?.role, loading, loadSchedule])
-
+  }, [currentDate, profile?.role, loadSchedule])
+  
   // Atualização em Tempo Real (Realtime)
   useEffect(() => {
+    if (!user?.id) return
+
+    // Canal único por usuário para evitar conflitos de sessão
     const channel = supabase
-      .channel('schema-db-changes')
+      .channel(`db-realtime-${user.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'announcements' },
-        () => loadAnnouncements()
+        () => loadAnnouncements(user.id, true)
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'announcement_views' },
-        () => loadAnnouncements()
+        () => loadAnnouncements(user.id, true)
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'masses' },
         () => {
-          loadSchedule()
+          loadSchedule(currentDate, profile?.role === "admin", true)
           loadSwaps()
         }
       )
@@ -156,17 +165,53 @@ export default function Home() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'schedule_slots' },
         () => {
-          loadSchedule()
+          loadSchedule(currentDate, profile?.role === "admin", true)
           loadSwaps()
         }
       )
-      .subscribe()
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'members' },
+        () => {
+          // Quando um membro é alterado (ex: claim de perfil), atualiza tudo
+          loadAnnouncements(user.id, true)
+          loadSchedule(currentDate, profile?.role === "admin", true)
+          loadBirthdays()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'users' },
+        (payload: any) => {
+          // Se o próprio usuário mudou, ou outro usuário (admins veem nomes)
+          if (payload.new?.id === user.id) {
+            // Recarregar se for o próprio usuário para pegar novas preferências/role
+            loadAnnouncements(user.id, true)
+            loadSchedule(currentDate, profile?.role === "admin", true)
+          } else {
+            // Se for outro usuário, atualiza a escala para refletir nomes/avatares
+            loadSchedule(currentDate, profile?.role === "admin", true)
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'CLOSED') {
+          console.warn('Realtime connection closed, retrying...')
+        }
+      })
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [user?.id, currentDate, profile?.role])
+  }, [user?.id, currentDate, profile?.role, loadAnnouncements, loadSchedule, loadSwaps, loadBirthdays])
 
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-stone-50">
+        <Loader2 className="h-8 w-8 animate-spin text-stone-300" />
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-stone-50/30">
@@ -194,8 +239,8 @@ export default function Home() {
                     'L': 'Leitura Única'
                   } as Record<string, string>)[swap.role]) || swap.role;
 
-                  const requesterName = swap.reader?.full_name || swap.member?.full_name || "---";
-                  const requesterAvatar = swap.reader?.avatar_url;
+                  const requesterName = swap.reader?.fullName || swap.member?.fullName || "---";
+                  const requesterAvatar = swap.reader?.avatarUrl;
 
                   return (
                     <button
@@ -236,7 +281,7 @@ export default function Home() {
                           </span>
                         </div>
                         <Avatar className="h-6 w-6 shrink-0 border border-amber-50 shadow-sm">
-                          <AvatarImage src={requesterAvatar} />
+                          <AvatarImage src={requesterAvatar ?? undefined} />
                           <AvatarFallback className="text-[8px] font-black bg-stone-100 text-stone-400">
                             {requesterName.substring(0, 2).toUpperCase()}
                           </AvatarFallback>
@@ -272,8 +317,8 @@ export default function Home() {
                   <AnnouncementCard 
                     key={ann.id} 
                     {...ann} 
-                    createdAt={ann.created_at}
-                    authorId={ann.created_by}
+                    createdAt={ann.createdAt}
+                    authorId={ann.createdBy}
                     currentUserId={user?.id}
                     isAdmin={profile?.role === "admin"}
                     isLoggedIn={!!user}
@@ -284,7 +329,7 @@ export default function Home() {
                       }
                       try {
                         await markAsRead(id, user.id)
-                        loadAnnouncements(user.id)
+                        loadAnnouncements(user.id, true)
                       } catch (error) {
                         console.error(error)
                       }
@@ -293,7 +338,7 @@ export default function Home() {
                       try {
                         await updateAnnouncement(id, data)
                         toast.success("Aviso atualizado!")
-                        loadAnnouncements(user?.id)
+                        loadAnnouncements(user?.id, true)
                       } catch (error) {
                         toast.error("Erro ao atualizar aviso.")
                       }
@@ -341,10 +386,10 @@ export default function Home() {
                   <SheetTrigger render={
                       <Button 
                         variant="outline" 
-                        className="w-full h-14 border-dashed border-stone-600 text-stone-600 hover:text-stone-800 hover:border-stone-800 hover:bg-stone-50 rounded-2xl group transition-all font-bold"
+                        className="w-full h-12 border-dashed border-stone-400 text-stone-500 hover:text-amber-800 hover:border-amber-400 hover:bg-amber-50 rounded-2xl group transition-all font-bold text-xs"
                         onClick={() => setAnnouncementToEdit(null)}
                       >
-                        <Plus className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform" />
+                        <Plus className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
                         Adicionar Recado
                       </Button>
                   } />
@@ -362,12 +407,16 @@ export default function Home() {
                             // Atualização
                             await updateAnnouncement(data.id, {
                               ...data,
-                              expiresAt: data.expiresAt?.toISOString()
+                              expiresAt: data.expiresAt ? data.expiresAt.toISOString() : undefined
                             })
                             toast.success("Aviso atualizado!")
                           } else {
                             // Criação
-                            await createAnnouncement({ ...data, type: 'Aviso' })
+                            await createAnnouncement({ 
+                              ...data, 
+                              type: 'Aviso',
+                              expiresAt: data.expiresAt ? data.expiresAt.toISOString() : undefined
+                            })
                             toast.success("Aviso publicado com sucesso!")
                           }
                           loadAnnouncements(user?.id)
@@ -436,10 +485,13 @@ export default function Home() {
             <BirthdayCard 
               currentMonth={currentDate}
               members={allBirthdays.filter(m => {
-                if (!m.birth_date) return false
-                const birthMonth = new Date(m.birth_date).getUTCMonth()
+                if (!m.birthDate) return false
+                const birthMonth = new Date(m.birthDate).getUTCMonth()
                 return birthMonth === currentDate.getMonth()
-              })}
+              }).map(m => ({
+                ...m,
+                avatarUrl: m.avatarUrl ?? undefined
+              }))}
             />
           </section>
 
@@ -463,6 +515,7 @@ export default function Home() {
                 </div>
               )}
             </div>
+
             <div className="flex items-center justify-between w-full bg-white rounded-full border border-stone-400 px-2 py-1.5 shadow-sm transition-colors hover:border-stone-600">
               <Button 
                 variant="ghost" 
@@ -486,6 +539,44 @@ export default function Home() {
                 <ChevronRight className="h-5 w-5" />
               </Button>
             </div>
+
+            {profile?.role === "admin" && (
+              <div className="w-full">
+                <Sheet open={isScheduleSheetOpen} onOpenChange={setIsScheduleSheetOpen}>
+                  <SheetTrigger render={
+                    <Button 
+                      variant="outline" 
+                      className="w-full h-12 border-dashed border-stone-400 text-stone-500 hover:text-amber-800 hover:border-amber-400 hover:bg-amber-50 rounded-2xl group transition-all font-bold text-xs"
+                    >
+                      <Plus className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
+                      Adicionar Dia
+                    </Button>
+                  } />
+                  <SheetContent side="right" className="w-full sm:max-w-lg border-l-stone-100 p-0 flex flex-col">
+                    <div className="px-6 pt-6 pb-2">
+                      <SheetHeader className="mb-0">
+                        <SheetTitle className="text-stone-800 uppercase tracking-tighter font-black text-xl">
+                          {scheduleToEdit ? "Editar Escala" : `Escala de ${format(currentDate, "MMMM yyyy", { locale: ptBR })}`}
+                        </SheetTitle>
+                      </SheetHeader>
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <ScheduleForm 
+                        currentMonth={currentDate}
+                        initialData={scheduleToEdit}
+                        onSuccess={() => {
+                          loadSchedule(currentDate, profile?.role === "admin")
+                        }}
+                        onClose={() => {
+                          setIsScheduleSheetOpen(false)
+                          setScheduleToEdit(null)
+                        }}
+                      />
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              </div>
+            )}
           </section>
 
           {/* Sessão 2: Escala do Mês */}
@@ -524,15 +615,15 @@ export default function Home() {
                     'P': 4
                   }
 
-                  return sortedDays.map((day: any, dayIndex: number) => (
+                  return sortedDays.map((day: any) => (
                     <ScheduleCard 
-                      key={dayIndex} 
+                      key={day.date} 
                       date={format(new Date(day.date + 'T00:00:00'), "EEEE, dd/MM", { locale: ptBR })}
                       rawDate={new Date(day.date + 'T00:00:00')}
                       items={day.items.map((item: any) => ({
                         id: item.id,
                         time: item.time.substring(0, 5),
-                        specialTitle: item.special_description,
+                        specialTitle: item.specialDescription,
                         slots: [...item.slots].sort((a: any, b: any) => 
                           (roleWeights[a.role] || 99) - (roleWeights[b.role] || 99)
                         ).map((s: any) => ({
@@ -545,16 +636,16 @@ export default function Home() {
                             'P': 'Preces',
                             'L': 'Leitura Única'
                           } as Record<string, string>)[s.role]) || s.role,
-                          readerName: s.reader_name,
-                          avatarUrl: s.avatar_url,
-                          originalReaderName: s.original_reader?.full_name,
-                          isConfirmed: s.is_confirmed,
-                          isSwapRequested: s.is_swap_requested,
-                          isMine: s.reader_id ? s.reader_id === user?.id : (member?.id && (s.member_id === member.id))
+                          readerName: s.readerName,
+                          avatarUrl: s.avatarUrl,
+                          originalReaderName: s.originalReader?.fullName,
+                          isConfirmed: s.isConfirmed,
+                          isSwapRequested: s.isSwapRequested,
+                          isMine: s.readerId ? s.readerId === user?.id : (member?.id && (s.memberId === member.id))
                         }))
                       }))}
                       isAdmin={profile?.role === "admin"}
-                      isPublished={day.items.every((i: any) => i.is_published)}
+                      isPublished={day.items.every((i: any) => i.isPublished)}
                       onEdit={() => {
                         setScheduleToEdit(day.items) // Passa o array de missas do dia
                         setIsScheduleSheetOpen(true)
@@ -562,12 +653,22 @@ export default function Home() {
                       onDelete={() => {
                         setScheduleToDelete(day.items.map((item: any) => item.id))
                       }}
+                      onTogglePublish={async (isPublished) => {
+                        try {
+                          const massIds = day.items.map((item: any) => item.id)
+                          await updateMassesStatus(massIds, isPublished)
+                          toast.success(isPublished ? "Escala publicada!" : "Escala movida para rascunho")
+                          loadSchedule(currentDate, profile?.role === "admin", true)
+                        } catch (error) {
+                          toast.error("Erro ao alterar status.")
+                        }
+                      }}
                       onConfirm={async (slotId) => {
                         if (!user) return
                         try {
                           await confirmSlot(slotId, user.id)
                           toast.success("Presença confirmada!")
-                          loadSchedule(currentDate, profile?.role === "admin")
+                          loadSchedule(currentDate, profile?.role === "admin", true)
                         } catch (error) {
                           toast.error("Erro ao confirmar.")
                         }
@@ -588,7 +689,7 @@ export default function Home() {
                             id: slotId,
                             massDate: format(new Date(targetMass.date + 'T00:00:00'), "dd/MM"),
                             massTime: targetMass.time.substring(0, 5),
-                            description: targetMass.special_description || "Missa"
+                            description: targetMass.specialDescription || "Missa"
                           });
                         }
                       }}
@@ -638,44 +739,6 @@ export default function Home() {
                 })()
               )}
             </div>
-            
-            {profile?.role === "admin" && (
-              <div className="pt-2">
-                <Sheet open={isScheduleSheetOpen} onOpenChange={setIsScheduleSheetOpen}>
-                  <SheetTrigger render={
-                    <Button 
-                      variant="outline" 
-                      className="w-full h-14 border-dashed border-stone-500 text-stone-600 hover:text-amber-800 hover:border-amber-400 hover:bg-amber-50 rounded-2xl group transition-all font-bold"
-                    >
-                      <Plus className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform" />
-                      Adicionar Missa
-                    </Button>
-                  } />
-                  <SheetContent side="right" className="w-full sm:max-w-lg border-l-stone-100 p-0 flex flex-col">
-                    <div className="px-6 pt-6 pb-2">
-                      <SheetHeader className="mb-0">
-                        <SheetTitle className="text-stone-800 uppercase tracking-tighter font-black text-xl">
-                          {scheduleToEdit ? "Editar Escala" : `Escala de ${format(currentDate, "MMMM yyyy", { locale: ptBR })}`}
-                        </SheetTitle>
-                      </SheetHeader>
-                    </div>
-                    <div className="flex-1 overflow-hidden">
-                      <ScheduleForm 
-                        currentMonth={currentDate}
-                        initialData={scheduleToEdit}
-                        onSuccess={() => {
-                          loadSchedule(currentDate, profile?.role === "admin")
-                        }}
-                        onClose={() => {
-                          setIsScheduleSheetOpen(false)
-                          setScheduleToEdit(null)
-                        }}
-                      />
-                    </div>
-                  </SheetContent>
-                </Sheet>
-              </div>
-            )}
           </section>
 
           {/* Drawer de Confirmação de Exclusão de Escala */}
@@ -799,13 +862,13 @@ export default function Home() {
                     onClick={async () => {
                       if (!takeSwapTarget || !user) return
                       setIsAcceptingSwap(true)
-                      try {
-                        await scheduleService.acceptSwap(takeSwapTarget.slotId, user.id, member?.id)
-                        toast.success("Você assumiu a escala! Presença confirmada.")
-                        loadSchedule()
-                        loadSwaps()
-                        setTakeSwapTarget(null)
-                      } catch (error) {
+                        try {
+                          await acceptSwap(takeSwapTarget.slotId, user.id, member?.id)
+                          toast.success("Você assumiu a escala! Presença confirmada.")
+                          loadSchedule(currentDate, profile?.role === "admin")
+                          loadSwaps()
+                          setTakeSwapTarget(null)
+                        } catch (error) {
                         toast.error("Erro ao assumir troca.")
                       } finally {
                         setIsAcceptingSwap(false)
@@ -857,33 +920,34 @@ export default function Home() {
             </span>
           </div>
  
-          {/* Botão Flutuante de Publicação (Apenas para Admin se houver rascunhos) */}
-          {profile?.role === "admin" && schedule.some(mass => !mass.isPublished) && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-md">
-              <Button 
-                className="w-full h-14 bg-green-600 hover:bg-green-700 text-white font-black rounded-2xl shadow-xl border-t border-white/20 animate-in fade-in slide-in-from-bottom-8 duration-500"
-                onClick={handlePublish}
-                disabled={isPublishing}
-              >
-                {isPublishing ? (
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                ) : (
-                  <CheckCircle className="mr-2 h-5 w-5" />
-                )}
-                PUBLICAR ESCALA DE {format(currentDate, "MMMM", { locale: ptBR }).toUpperCase()}
-              </Button>
-            </div>
-          )}
-          {/* Botão Flutuante (FAB) para o Folheto */}
-          <Link 
-            href="/folheto"
-            className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#322113] text-white shadow-lg shadow-[#322113]/40 transition-all hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-500"
-            title="Folheto da Missa"
-          >
-            <FileText className="h-6 w-6" />
-          </Link>
         </div>
       </main>
+
+      {/* Botões Flutuantes (Fora do scroll para garantir fixação) */}
+      {profile?.role === "admin" && schedule.some(mass => !mass.isPublished) && (
+        <div className="fixed bottom-6 left-6 z-50 w-[calc(100%-120px)] max-w-[280px]">
+          <Button 
+            className="w-full h-14 bg-green-600 hover:bg-green-700 text-white font-black rounded-2xl shadow-xl border-t border-white/20 animate-in fade-in slide-in-from-bottom-8 duration-500"
+            onClick={handlePublish}
+            disabled={isPublishing}
+          >
+            {isPublishing ? (
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <CheckCircle className="mr-2 h-5 w-5" />
+            )}
+            PUBLICAR ESCALA DE {format(currentDate, "MMMM", { locale: ptBR }).toUpperCase()}
+          </Button>
+        </div>
+      )}
+      
+      <Link 
+        href="/folheto"
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#322113] text-white shadow-lg shadow-[#322113]/40 transition-all hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-500"
+        title="Folheto da Missa"
+      >
+        <FileText className="h-6 w-6" />
+      </Link>
     </div>
   )
 }

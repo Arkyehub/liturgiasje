@@ -18,21 +18,19 @@ interface AnnouncementFormProps {
     id: string;
     title: string;
     content: string;
-    expires_at?: string;
-    image_url?: string;
-    image_urls?: string[];
-    audio_url?: string;
-    audio_urls?: string[];
+    expiresAt?: string;
+    imageUrls?: string[];
+    audioUrls?: string[];
   }
   onSave: (data: { 
     id?: string;
     title: string; 
     content: string; 
-    expires_at: Date | null;
+    expiresAt: Date | null;
     imageFiles?: File[] | null;
-    image_urls?: string[];
+    imageUrls?: string[];
     audioFiles?: File[] | null;
-    audio_urls?: string[];
+    audioUrls?: string[];
   }) => Promise<void>
   onClose: () => void
 }
@@ -40,15 +38,15 @@ interface AnnouncementFormProps {
 export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementFormProps) {
   const [title, setTitle] = useState(initialData?.title || "")
   const [content, setContent] = useState(initialData?.content || "")
-  const [hasExpiration, setHasExpiration] = useState(!!initialData?.expires_at)
+  const [hasExpiration, setHasExpiration] = useState(!!initialData?.expiresAt)
   const [expirationDate, setExpirationDate] = useState<Date | undefined>(
-    initialData?.expires_at ? new Date(initialData.expires_at) : undefined
+    initialData?.expiresAt ? new Date(initialData.expiresAt) : undefined
   )
   const [imageFiles, setImageFiles] = useState<File[]>([])
-  const [existingImages, setExistingImages] = useState<string[]>(initialData?.image_urls || (initialData?.image_url ? [initialData.image_url] : []))
+  const [existingImages, setExistingImages] = useState<string[]>(initialData?.imageUrls || [])
   
   const [audioFiles, setAudioFiles] = useState<File[]>([])
-  const [existingAudios, setExistingAudios] = useState<string[]>(initialData?.audio_urls || (initialData?.audio_url ? [initialData.audio_url] : []))
+  const [existingAudios, setExistingAudios] = useState<string[]>(initialData?.audioUrls || [])
   
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
@@ -70,11 +68,11 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         id: initialData?.id,
         title,
         content,
-        expires_at: hasExpiration ? (expirationDate || null) : null,
+        expiresAt: hasExpiration ? (expirationDate || null) : null,
         imageFiles: imageFiles.length > 0 ? imageFiles : null,
-        image_urls: existingImages,
+        imageUrls: existingImages,
         audioFiles: audioFiles.length > 0 ? audioFiles : null,
-        audio_urls: existingAudios
+        audioUrls: existingAudios
       })
       onClose()
     } catch (error) {

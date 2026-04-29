@@ -1,6 +1,6 @@
 "use client"
 
-import { useAuthContext } from "@/providers/AuthProvider"
+import { useAuthContext } from "@/app/providers/AuthProvider"
 
 /**
  * Hook para acessar o contexto de autenticação de forma compartilhada.

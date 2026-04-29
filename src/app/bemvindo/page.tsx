@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/shared/hooks/useAuth"
-import { memberService, Member } from "@/services/memberService"
-import { userService } from "@/services/userService"
+import { Member } from "@/domain/models/Member"
+import { makeSearchMembers, makeClaimMember, makeCreateMember } from "@/main/factories/usecases/members"
+import { makeUpdateUserProfile, makeCreateUserProfile } from "@/main/factories/usecases/user"
 import { Button } from "@/shared/ui/button"
 import { Input } from "@/shared/ui/input"
 import { Loader2, Search, UserPlus } from "lucide-react"
@@ -34,7 +35,7 @@ export default function OnboardingPage() {
     if (!searchTerm.trim()) return
     setIsSearching(true)
     try {
-      const results = await memberService.search(searchTerm)
+      const results = await makeSearchMembers().execute(searchTerm)
       setSearchResults(results)
     } finally {
       setIsSearching(false)
@@ -45,22 +46,18 @@ export default function OnboardingPage() {
     if (!user) return
     setIsSubmitting(true)
     try {
-      // 1. Criar/Atualizar perfil em public.users (upsert) - IMPORTANTE: Fazer antes do vínculo para evitar erro de FK
-      const { error: profileError } = await supabase
-        .from('users')
-        .upsert({
-          id: user.id,
-          email: user.email!,
-          full_name: member.full_name,
-          whatsapp: member.whatsapp,
-          role: profile?.role || 'reader',
-          claimed_at: new Date().toISOString()
-        })
-      
-      if (profileError) throw profileError
+      // 1. Criar/Atualizar perfil em public.users
+      await makeCreateUserProfile().execute({
+        id: user.id,
+        email: user.email!,
+        fullName: member.fullName,
+        whatsapp: member.whatsapp,
+        role: profile?.role || 'reader',
+        claimedAt: new Date().toISOString()
+      })
 
       // 2. Vincular na tabela members
-      await memberService.claim(member.id, user.id)
+      await makeClaimMember().execute(member.id, user.id)
       
       toast.success("Perfil vinculado com sucesso!")
       await refreshProfile()
@@ -77,24 +74,20 @@ export default function OnboardingPage() {
     if (!user) return
     setIsSubmitting(true)
     try {
-      // 1. Criar/Atualizar perfil em public.users (upsert)
-      const { error: profileError } = await supabase
-        .from('users')
-        .upsert({
-          id: user.id,
-          email: user.email!,
-          full_name: user.user_metadata.full_name || profile?.full_name || "",
-          role: profile?.role || 'reader',
-          is_self_registered: true
-        })
-      
-      if (profileError) throw profileError
+      // 1. Criar/Atualizar perfil em public.users
+      await makeCreateUserProfile().execute({
+        id: user.id,
+        email: user.email!,
+        fullName: user.user_metadata.full_name || profile?.fullName || "",
+        role: profile?.role || 'reader',
+        isSelfRegistered: true
+      })
       
       // 2. Criar registro na tabela members já vinculado
-      await memberService.create({
-        full_name: user.user_metadata.full_name || user.email?.split('@')[0] || "Novo Membro",
-        is_claimed: true,
-        claimed_by: user.id
+      await makeCreateMember().execute({
+        fullName: user.user_metadata.full_name || user.email?.split('@')[0] || "Novo Membro",
+        isClaimed: true,
+        claimedBy: user.id
       })
       
       toast.success("Perfil criado e vinculado!")
@@ -149,7 +142,7 @@ export default function OnboardingPage() {
                   className="w-full flex items-center justify-between p-4 rounded-xl border border-stone-100 bg-stone-50/50 hover:bg-stone-100 transition-colors text-left"
                 >
                   <div className="space-y-0.5">
-                    <p className="text-sm font-semibold text-stone-800">{m.full_name}</p>
+                    <p className="text-sm font-semibold text-stone-800">{m.fullName}</p>
                     <p className="text-[10px] text-stone-500">{m.whatsapp || "WhatsApp não cadastrado"}</p>
                   </div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 bg-white px-2 py-1 rounded-md border border-stone-100">Este sou eu</span>

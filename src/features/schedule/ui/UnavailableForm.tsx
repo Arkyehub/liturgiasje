@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Calendar } from "@/shared/ui/calendar"
 import { ptBR } from "date-fns/locale"
 import { format } from "date-fns"
-import { makeListUnavailableByUser, makeToggleUnavailableDate } from "@/main/factories/usecases/schedule"
+import { makeListUnavailableByUser, makeToggleUnavailableDate } from "@/main/factories/usecases/user"
 import { toast } from "sonner"
 import { Loader2, CalendarX, AlertCircle } from "lucide-react"
 

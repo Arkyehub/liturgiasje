@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/shared/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card"
 import { Badge } from "@/shared/ui/badge"
+import { Switch } from "@/shared/ui/switch"
 import { cn } from "@/shared/lib/utils"
 import { CalendarDays, Clock, RefreshCw, CheckCircle, UserPlus, Pencil, Trash2, ChevronDown, ChevronUp, X } from "lucide-react"
 import { isPast, isToday, startOfDay } from "date-fns"
@@ -37,6 +38,7 @@ interface ScheduleCardProps {
   isPublished?: boolean
   onEdit?: () => void
   onDelete?: (massIds: string[]) => void
+  onTogglePublish?: (isPublished: boolean) => void
 }
 
 export function ScheduleCard({
@@ -51,6 +53,7 @@ export function ScheduleCard({
   isPublished = true,
   onEdit,
   onDelete,
+  onTogglePublish,
 }: ScheduleCardProps) {
   // Uma missa é "passada" se for antes de hoje (considerando apenas o dia)
   const isDatePast = isPast(rawDate) && !isToday(rawDate)
@@ -60,12 +63,23 @@ export function ScheduleCard({
 
   const adminBar = isAdmin && (
     <div className="flex items-center justify-between gap-2 border-b border-stone-100 bg-stone-50/50 px-3 py-1">
-      <div className="flex items-center">
-        {!isPublished && (
+      <div className="flex items-center gap-3">
+        {!isPublished ? (
           <Badge variant="outline" className="text-[9px] font-black bg-orange-50 text-orange-600 border-orange-200 py-0 px-2 h-5">
             RASCUNHO
           </Badge>
+        ) : (
+          <Badge variant="outline" className="text-[9px] font-black bg-green-50 text-green-600 border-green-200 py-0 px-2 h-5">
+            PUBLICADO
+          </Badge>
         )}
+        <div className="flex items-center gap-1.5 ml-1">
+          <Switch 
+            checked={isPublished} 
+            onCheckedChange={onTogglePublish}
+            className="scale-75"
+          />
+        </div>
       </div>
       <div className="flex items-center gap-2">
         <button

@@ -8,7 +8,8 @@ import {
   makeListAllSwaps,
   makeDeleteMass,
   makeAcceptScheduleSwap,
-  makePublishScheduleMonth
+  makePublishScheduleMonth,
+  makeUpdateMassesStatus
 } from "@/main/factories/usecases/schedule"
 import { toast } from "sonner"
 
@@ -18,16 +19,16 @@ export function useSchedule() {
   const [loading, setLoading] = useState(false)
   const [loadingSwaps, setLoadingSwaps] = useState(false)
 
-  const loadSchedule = useCallback(async (date: Date, isAdmin?: boolean) => {
+  const loadSchedule = useCallback(async (date: Date, isAdmin?: boolean, silent = false) => {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       const data = await makeListSchedulesForMonth().execute(date, isAdmin)
       setSchedule(data)
     } catch (error) {
       console.error(error)
       toast.error("Erro ao carregar escala")
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [])
 
@@ -67,6 +68,10 @@ export function useSchedule() {
     await makePublishScheduleMonth().execute(monthRef)
   }
 
+  const updateMassesStatus = async (massIds: string[], isPublished: boolean) => {
+    await makeUpdateMassesStatus().execute(massIds, isPublished)
+  }
+  
   return {
     schedule,
     swaps,
@@ -79,6 +84,7 @@ export function useSchedule() {
     cancelSwap,
     acceptSwap,
     deleteMass,
-    publishMonth
+    publishMonth,
+    updateMassesStatus
   }
 }

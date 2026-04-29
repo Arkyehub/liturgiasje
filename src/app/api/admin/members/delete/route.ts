@@ -1,4 +1,4 @@
-import { createClient, createAdminClient } from '@/lib/supabaseServer';
+import { createClient, createAdminClient } from '@/shared/api/supabaseServer';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';

@@ -172,8 +172,25 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
   }
 
   async deleteMass(massId: string): Promise<void> {
-    const { error } = await supabase.from('masses').delete().eq('id', massId)
-    if (error) throw error
+    // 1. Buscar os IDs dos slots vinculados a esta missa
+    const { data: slots, error: fetchSlotsError } = await supabase.from('schedule_slots').select('id').eq('mass_id', massId)
+    if (fetchSlotsError) throw fetchSlotsError
+
+    if (slots && slots.length > 0) {
+      const slotIds = slots.map(s => s.id)
+      
+      // 2. Deletar anúncios/trocas vinculados a esses slots (ex: pedidos de troca)
+      const { error: announceError } = await supabase.from('announcements').delete().in('related_schedule_slot_id', slotIds)
+      if (announceError) throw announceError
+
+      // 3. Deletar os slots
+      const { error: slotsError } = await supabase.from('schedule_slots').delete().in('id', slotIds)
+      if (slotsError) throw slotsError
+    }
+
+    // 4. Finalmente, deletar a missa
+    const { error: massError } = await supabase.from('masses').delete().eq('id', massId)
+    if (massError) throw massError
   }
 
   async acceptSwap(slotId: string, newReaderId: string, newMemberId?: string): Promise<void> {
@@ -181,9 +198,22 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
     if (error) throw error
   }
 
-  async checkMassExists(date: string): Promise<any[]> {
-    const { data, error } = await supabase.from('masses').select('id').eq('date', date)
+  async checkMassExists(date: string): Promise<Mass[]> {
+    const { data, error } = await supabase.from('masses').select('*').eq('date', date)
     if (error) throw error
-    return data || []
+    return (data || []).map(mass => ({
+      id: mass.id,
+      date: mass.date,
+      time: mass.time,
+      specialDescription: mass.special_description,
+      monthReference: mass.month_reference,
+      isPublished: mass.is_published,
+      slots: [] // Não precisamos dos slots para a checagem de existência
+    }))
+  }
+
+  async updateMassesStatus(massIds: string[], isPublished: boolean): Promise<void> {
+    const { error } = await supabase.from('masses').update({ is_published: isPublished }).in('id', massIds)
+    if (error) throw error
   }
 }

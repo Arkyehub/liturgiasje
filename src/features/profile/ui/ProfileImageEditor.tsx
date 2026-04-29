@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react"
 import { useAuth } from "@/shared/hooks/useAuth"
-import { userService } from "@/services/userService"
+import { makeUploadUserAvatar, makeUpdateUserProfile } from "@/main/factories/usecases/user"
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar"
 import { Button } from "@/shared/ui/button"
 import { ImageCropperModal } from "./ImageCropperModal"
@@ -32,7 +32,7 @@ export function ProfileImageEditor() {
     if (!user) return
     setIsUpdating(true)
     try {
-      await userService.uploadAvatar(user.id, blob)
+      await makeUploadUserAvatar().execute(user.id, blob)
       toast.success("Foto de perfil atualizada!")
       await refreshProfile()
     } catch (error) {
@@ -53,7 +53,7 @@ export function ProfileImageEditor() {
 
     setIsUpdating(true)
     try {
-      await userService.updateProfile(user.id, { avatar_url: googleAvatarUrl })
+      await makeUpdateUserProfile().execute(user.id, { avatarUrl: googleAvatarUrl })
       toast.success("Foto importada do Google!")
       await refreshProfile()
     } catch (error) {
@@ -71,7 +71,7 @@ export function ProfileImageEditor() {
           className="relative cursor-pointer transition-transform hover:scale-105 active:scale-95"
         >
           <Avatar className="h-32 w-32 border-4 border-white shadow-xl ring-2 ring-stone-100">
-            <AvatarImage src={profile?.avatar_url ?? undefined} className="object-cover" />
+            <AvatarImage src={profile?.avatarUrl ?? undefined} className="object-cover" />
             <AvatarFallback className="bg-stone-50">
               <UserCircle className="h-16 w-16 text-stone-300" />
             </AvatarFallback>

@@ -31,7 +31,7 @@ import {
   makeUpdateMass, 
   makeCreateMassWithSlots 
 } from "@/main/factories/usecases/schedule"
-import { makeListUnavailableByDate } from "@/main/factories/usecases/schedule" // Note: This was in schedule usecases factory
+import { makeListUnavailableByDate } from "@/main/factories/usecases/user"
 import { Member } from "@/domain/models/Member"
 import { Plus, Search, Trash2, Calendar, Clock, Type, CheckCircle2, User, AlertCircle } from "lucide-react"
 import { format } from "date-fns"
@@ -72,6 +72,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
   const [searchTerm, setSearchTerm] = useState("")
   const [unavailableUserIds, setUnavailableUserIds] = useState<string[]>([])
   const [hasExistingScale, setHasExistingScale] = useState(false)
+  const [existingMassesFromDb, setExistingMassesFromDb] = useState<any[]>([])
 
   const monthRef = format(currentMonth, "yyyy-MM")
 
@@ -99,6 +100,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
         makeCheckMassExists().execute(d)
       ])
       setUnavailableUserIds(ids)
+      setExistingMassesFromDb(existingMasses)
       
       // Se não houver data inicial (nova escala) e já existirem missas, avisar
       if (!initialData && existingMasses.length > 0) {
@@ -125,8 +127,8 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
             id: s.id,
             roleType,
             roleLabel: s.role,
-            memberId: s.member_id || s.memberId,
-            memberName: s.reader_name || s.memberName || s.reader?.full_name,
+            memberId: s.memberId,
+            memberName: s.readerName || s.memberName || s.reader?.fullName,
             isOpen: false
           }
         })
@@ -135,7 +137,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
           dbId: item.id,
           tempId: Math.random().toString(36).substring(2, 9),
           time: item.time?.substring(0, 5) || "",
-          description: item.special_description || item.specialTitle || "",
+          description: item.specialDescription || item.specialTitle || "",
           slots: mappedSlots
         }
       })
@@ -173,7 +175,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
   }
 
   const checkPreference = (member: Member, massTime: string, massDate: string) => {
-    if (!member.claimed_user?.preferences?.day_preferences) return false
+    if (!member.claimedUser?.preferences?.day_preferences) return false
     
     // Obter dia da semana (0-6, 0 é domingo)
     try {
@@ -183,7 +185,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
       // O app usa "6" para Domingo nas preferências do perfil
       const dayKey = dayOfWeek === 0 ? "6" : dayOfWeek.toString()
       
-      const prefs = member.claimed_user.preferences.day_preferences[dayKey]
+      const prefs = member.claimedUser.preferences.day_preferences[dayKey]
       return Array.isArray(prefs) && (prefs.includes(massTime) || prefs.includes(massTime.substring(0, 5)))
     } catch {
       return false
@@ -244,7 +246,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
     setSessions(sessions.map(sess => {
       if (sess.tempId === sessionTempId) {
         const updatedSlots = sess.slots.map(s => 
-          s.id === slotId ? { ...s, memberId: member.id, memberName: member.full_name, isOpen: false } : s
+          s.id === slotId ? { ...s, memberId: member.id, memberName: member.fullName, isOpen: false } : s
         )
         return { ...sess, slots: updatedSlots }
       }
@@ -270,7 +272,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
       return
     }
 
-    // Validações
+    // Validações de campos
     for (const sess of sessions) {
       if (!sess.time) {
         toast.error("Preencha o horário de todas as missas")
@@ -285,6 +287,26 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
       }
     }
 
+    // Validação de duplicidade no formulário
+    const timesInForm = sessions.map(s => s.time)
+    const hasDuplicateInForm = timesInForm.some((t, i) => timesInForm.indexOf(t) !== i)
+    if (hasDuplicateInForm) {
+      toast.error("Existem missas com o mesmo horário neste formulário.")
+      return
+    }
+
+    // Validação de duplicidade contra o banco de dados
+    for (const sess of sessions) {
+      const conflict = existingMassesFromDb.find(m => 
+        m.time.substring(0, 5) === sess.time && m.id !== sess.dbId
+      )
+      
+      if (conflict) {
+        toast.error(`Já existe uma missa cadastrada para o horário ${sess.time} neste dia.`)
+        return
+      }
+    }
+
     setIsSaving(true)
     try {
       // Salva cada sessão sequencialmente
@@ -294,13 +316,13 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
         const massData = {
           date,
           time: `${sess.time}:00`,
-          special_description: sess.description,
-          month_reference: actualMonthRef
+          specialDescription: sess.description,
+          monthReference: actualMonthRef
         }
         
         const slotsData = sess.slots.map(s => ({
           role: s.roleLabel,
-          member_id: s.memberId
+          memberId: s.memberId
         }))
 
         if (sess.dbId) {
@@ -328,10 +350,11 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
           
           {/* Campo de Data (único para o card) */}
           <div className="space-y-1">
-            <Label className="text-[10px] uppercase font-bold text-stone-400 ml-1">Data da Escala</Label>
+            <Label htmlFor="scale-date" className="text-[10px] uppercase font-bold text-stone-400 ml-1">Data da Escala</Label>
             <div className="relative">
               <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
               <Input 
+                id="scale-date"
                 type="date" 
                 value={date}
                 onChange={(e) => {
@@ -378,10 +401,11 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
                     
                     <div className="flex items-center gap-2">
                       <div className="space-y-1">
-                        <Label className="text-[10px] uppercase font-bold text-stone-400 ml-1">Horário</Label>
+                        <Label htmlFor={`time-${sess.tempId}`} className="text-[10px] uppercase font-bold text-stone-400 ml-1">Horário</Label>
                         <div className="relative">
                           <Clock className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
                           <Input 
+                            id={`time-${sess.tempId}`}
                             type="time" 
                             value={sess.time}
                             onChange={(e) => updateSessionField(sess.tempId, 'time', e.target.value)}
@@ -463,24 +487,24 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
                                         const prefB = checkPreference(b, sess.time, date) ? 1 : 0
                                         if (prefA !== prefB) return prefB - prefA
 
-                                        const unA = a.claimed_by && unavailableUserIds.includes(a.claimed_by) ? 1 : 0
-                                        const unB = b.claimed_by && unavailableUserIds.includes(b.claimed_by) ? 1 : 0
+                                        const unA = a.claimedBy && unavailableUserIds.includes(a.claimedBy) ? 1 : 0
+                                        const unB = b.claimedBy && unavailableUserIds.includes(b.claimedBy) ? 1 : 0
                                         if (unA !== unB) return unA - unB
 
-                                        return a.full_name.localeCompare(b.full_name)
+                                        return a.fullName.localeCompare(b.fullName)
                                       })
 
                                       return sortedMembers.map((member) => {
-                                        const isUnavailable = member.claimed_by ? unavailableUserIds.includes(member.claimed_by) : false
+                                        const isUnavailable = member.claimedBy ? unavailableUserIds.includes(member.claimedBy) : false
                                         const isPreference = checkPreference(member, sess.time, date)
                                         
                                         return (
                                           <CommandItem
                                             key={member.id}
-                                            value={member.full_name}
+                                            value={member.fullName}
                                             onSelect={() => {
                                               if (isUnavailable) {
-                                                toast.warning(`${member.full_name} informou que não poderá participar nesta data.`, {
+                                                toast.warning(`${member.fullName} informou que não poderá participar nesta data.`, {
                                                   duration: 5000,
                                                   icon: <AlertCircle className="h-4 w-4 text-amber-600" />
                                                 })
@@ -495,7 +519,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
                                               isUnavailable && "text-red-500 font-bold",
                                               isPreference && !isUnavailable && "text-green-600 font-bold"
                                             )}>
-                                              {member.full_name}
+                                              {member.fullName}
                                               {isUnavailable && " (Indisponível)"}
                                               {isPreference && !isUnavailable && " (Preferência)"}
                                             </span>
