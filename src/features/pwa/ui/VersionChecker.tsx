@@ -37,17 +37,18 @@ export function VersionChecker() {
         // 2. Verificar se existe uma data de atualização forçada
         if (forceUpdateAt) {
           const forceDate = new Date(forceUpdateAt).getTime();
-          const lastCheck = localStorage.getItem('last_force_update_check');
+          const now = Date.now();
           
-          // Se nunca checou ou se a data do banco é posterior ao último check bem sucedido
-          if (!lastCheck || new Date(lastCheck).getTime() < forceDate) {
-            console.log("Detectada data de atualização forçada:", forceUpdateAt);
+          // Só processa se a data do force update já chegou ou passou
+          if (now >= forceDate) {
+            const processedUpdate = localStorage.getItem('last_processed_force_update');
             
-            // Registra o check ANTES de atualizar para evitar loop infinito se algo falhar
-            localStorage.setItem('last_force_update_check', new Date().toISOString());
-            
-            // Só forçamos se o app já estiver aberto há algum tempo ou se for a primeira vez
-            handleUpdate(true); 
+            // Se ainda não processamos esta exata data de force update
+            if (processedUpdate !== forceUpdateAt) {
+              console.log("Processando atualização forçada:", forceUpdateAt);
+              localStorage.setItem('last_processed_force_update', forceUpdateAt);
+              handleUpdate(true); 
+            }
           }
         }
       } catch (error: any) {
