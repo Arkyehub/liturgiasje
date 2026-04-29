@@ -194,9 +194,15 @@ export default function Home() {
           }
         }
       )
-      .subscribe((status) => {
-        if (status === 'CLOSED') {
-          console.warn('Realtime connection closed, retrying...')
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Realtime conectado com sucesso!')
+        }
+        if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Erro na conexão Realtime:', err)
+        }
+        if (status === 'TIMED_OUT') {
+          console.warn('⏳ Conexão Realtime expirou (timeout)')
         }
       })
 
