@@ -112,7 +112,7 @@ export default function Home() {
   const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1))
   const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1))
 
-  const monthName = format(currentDate, "MMMM yyyy", { locale: ptBR })
+  const monthName = isValid(currentDate) ? format(currentDate, "MMMM yyyy", { locale: ptBR }) : "Data Inválida"
 
   const handlePublish = async () => {
     try {
@@ -254,12 +254,14 @@ export default function Home() {
                     <button
                       key={swap.id}
                       onClick={() => {
-                        if (!swap.mass) return;
+                        const mDate = new Date(swap.mass.date + 'T00:00:00');
+                        if (!swap.mass || !isValid(mDate)) return;
+                        
                         // Navegar para o mês da troca se necessário
-                        const swapMonth = new Date(swap.mass.date).getMonth();
-                        const currentMonth = currentDate.getMonth();
-                        const swapYear = new Date(swap.mass.date).getFullYear();
-                        const currentYear = currentDate.getFullYear();
+                        const swapMonth = mDate.getMonth();
+                        const currentMonth = (isValid(currentDate) ? currentDate : new Date()).getMonth();
+                        const swapYear = mDate.getFullYear();
+                        const currentYear = (isValid(currentDate) ? currentDate : new Date()).getFullYear();
 
                         if (swapMonth !== currentMonth || swapYear !== currentYear) {
                           setCurrentDate(new Date(swapYear, swapMonth, 1));
@@ -615,9 +617,11 @@ export default function Home() {
                     return acc
                   }, {})
 
-                  const sortedDays = Object.values(grouped).sort((a: any, b: any) => 
-                    new Date(a.date).getTime() - new Date(b.date).getTime()
-                  )
+                  const sortedDays = Object.values(grouped).sort((a: any, b: any) => {
+                    const dateA = new Date(a.date + 'T00:00:00');
+                    const dateB = new Date(b.date + 'T00:00:00');
+                    return (isValid(dateA) ? dateA.getTime() : 0) - (isValid(dateB) ? dateB.getTime() : 0);
+                  })
 
                   // Pesos para ordenação litúrgica
                   const roleWeights: Record<string, number> = {
@@ -631,10 +635,10 @@ export default function Home() {
                   return sortedDays.map((day: any) => (
                     <ScheduleCard 
                       key={day.date} 
-                      date={isValid(new Date(day.date + 'T00:00:00'))
+                       date={isValid(new Date(day.date + 'T00:00:00'))
                         ? format(new Date(day.date + 'T00:00:00'), "EEEE, dd/MM", { locale: ptBR })
                         : "Data Inválida"}
-                      rawDate={new Date(day.date + 'T00:00:00')}
+                      rawDate={isValid(new Date(day.date + 'T00:00:00')) ? new Date(day.date + 'T00:00:00') : new Date()}
                       items={day.items.map((item: any) => ({
                         id: item.id,
                         time: item.time.substring(0, 5),
