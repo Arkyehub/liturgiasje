@@ -99,7 +99,7 @@ export default function AdminMembersPage() {
 
   const filteredMembers = useMemo(() => {
     return members.filter(m => 
-      m.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      m.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.whatsapp?.includes(searchTerm)
     )
   }, [members, searchTerm])
