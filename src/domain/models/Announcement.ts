@@ -19,6 +19,7 @@ export interface AnnouncementViewer {
   name: string
   at: string
   avatarUrl?: string | null
+  isClaimed?: boolean
 }
 
 export interface CreateAnnouncementData {

@@ -23,6 +23,7 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
       member: member ? { fullName: member.full_name } : null,
       readerName: user?.full_name || member?.full_name || "---",
       avatarUrl: user?.avatar_url || null,
+      isClaimed: !!user || !!member?.is_claimed,
       originalReader: slot.original_reader_id ? { 
         fullName: userNames[slot.original_reader_id]?.full_name, 
         avatarUrl: userNames[slot.original_reader_id]?.avatar_url 
@@ -65,9 +66,12 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
     }
 
     if (memberIds.size > 0) {
-      const { data: members } = await supabase.from('members').select('id, full_name, user:users!claimed_by(full_name)').in('id', Array.from(memberIds))
+      const { data: members } = await supabase.from('members').select('id, full_name, user:users!claimed_by(id)').in('id', Array.from(memberIds))
       if (members) {
-        memberNames = Object.fromEntries(members.map(m => [m.id, { full_name: (m as any).user?.full_name || m.full_name }]))
+        memberNames = Object.fromEntries(members.map(m => [m.id, { 
+          full_name: m.full_name, 
+          is_claimed: !!(m as any).user 
+        }]))
       }
     }
 

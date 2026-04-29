@@ -27,7 +27,8 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       viewers: ann.views?.map((v: any) => ({
         name: v.user?.full_name || 'Usuário',
         at: v.viewed_at,
-        avatarUrl: v.user?.avatar_url
+        avatarUrl: v.user?.avatar_url,
+        isClaimed: true
       })) || []
     }
   }

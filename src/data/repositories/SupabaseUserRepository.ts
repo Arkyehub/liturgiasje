@@ -109,7 +109,8 @@ export class SupabaseUserRepository implements UserRepository {
       id: u.id,
       fullName: u.full_name,
       avatarUrl: u.avatar_url,
-      birthDate: u.birth_date
+      birthDate: u.birth_date,
+      isClaimed: true
     }))
   }
 }

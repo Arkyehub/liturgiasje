@@ -18,4 +18,5 @@ export interface BirthdayInfo {
   fullName: string
   avatarUrl?: string | null
   birthDate: string
+  isClaimed?: boolean
 }

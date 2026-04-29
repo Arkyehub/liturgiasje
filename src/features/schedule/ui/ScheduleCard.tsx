@@ -8,6 +8,7 @@ import { Switch } from "@/shared/ui/switch"
 import { cn } from "@/shared/lib/utils"
 import { CalendarDays, Clock, RefreshCw, CheckCircle, UserPlus, Pencil, Trash2, ChevronDown, ChevronUp, X } from "lucide-react"
 import { isPast, isToday, startOfDay } from "date-fns"
+import { UserAvatar } from "@/shared/ui/UserAvatar"
 
 interface ReaderSlot {
   id: string
@@ -15,6 +16,7 @@ interface ReaderSlot {
   roleName?: string
   readerName?: string
   avatarUrl?: string
+  isClaimed?: boolean
   originalReaderName?: string
   isConfirmed: boolean
   isSwapRequested: boolean
@@ -184,10 +186,13 @@ export function ScheduleCard({
                           <span className="text-[13px] font-bold text-stone-800 leading-tight truncate">
                             {slot.readerName || "---"}
                           </span>
-                          {slot.avatarUrl && (
-                            <div className="h-6 w-6 shrink-0 overflow-hidden rounded-full border border-stone-100 shadow-sm ml-1">
-                              <img src={slot.avatarUrl} alt={slot.readerName} className="h-full w-full object-cover" />
-                            </div>
+                          {slot.readerName && slot.readerName !== "---" && (
+                            <UserAvatar 
+                              name={slot.readerName}
+                              src={slot.avatarUrl}
+                              isClaimed={slot.isClaimed}
+                              className="h-6 w-6 shrink-0 ml-1"
+                            />
                           )}
                           {slot.originalReaderName && slot.readerName !== slot.originalReaderName && (
                             <span className="text-[9px] font-medium text-stone-400 italic shrink-0">

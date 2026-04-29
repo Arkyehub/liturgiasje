@@ -68,13 +68,12 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
   const [sessions, setSessions] = useState<Session[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({})
+  const [activeMonthRef, setActiveMonthRef] = useState(format(currentMonth, "yyyy-MM"))
   const [isSaving, setIsSaving] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [unavailableUserIds, setUnavailableUserIds] = useState<string[]>([])
   const [hasExistingScale, setHasExistingScale] = useState(false)
   const [existingMassesFromDb, setExistingMassesFromDb] = useState<any[]>([])
-
-  const monthRef = format(currentMonth, "yyyy-MM")
 
   const createEmptySession = (): Session => ({
     tempId: Math.random().toString(36).substring(2, 9),
@@ -84,12 +83,23 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
   })
 
   useEffect(() => {
-    loadInitialData()
+    loadMembers()
+    loadUsage(activeMonthRef)
   }, [])
 
   useEffect(() => {
     if (date) {
       loadUnavailableForDate(date)
+      // Recarregar contadores se o mês da data selecionada for diferente do atual
+      try {
+        const newMonthRef = format(new Date(date + 'T00:00:00'), "yyyy-MM")
+        if (newMonthRef !== activeMonthRef) {
+          setActiveMonthRef(newMonthRef)
+          loadUsage(newMonthRef)
+        }
+      } catch (e) {
+        console.error("Erro ao processar data para contadores:", e)
+      }
     }
   }, [date])
 
@@ -147,16 +157,21 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
     }
   }, [initialData])
 
-  const loadInitialData = async () => {
+  const loadMembers = async () => {
     try {
-      const [membersList, counts] = await Promise.all([
-        makeListMembers().execute(),
-        makeGetMembersUsage().execute(monthRef)
-      ])
+      const membersList = await makeListMembers().execute()
       setMembers(membersList)
+    } catch (error) {
+      console.error("Erro ao carregar leitores:", error)
+    }
+  }
+
+  const loadUsage = async (mRef: string) => {
+    try {
+      const counts = await makeGetMembersUsage().execute(mRef)
       setUsageCounts(counts)
     } catch (error) {
-      console.error("Erro ao carregar dados:", error)
+      console.error("Erro ao carregar uso de membros:", error)
     }
   }
 

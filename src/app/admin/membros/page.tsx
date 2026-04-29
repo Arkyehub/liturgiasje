@@ -30,7 +30,7 @@ import {
 import { MemberForm } from "@/features/members/ui/MemberForm"
 import { Input } from "@/shared/ui/input"
 import { Button } from "@/shared/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar"
+import { UserAvatar } from "@/shared/ui/UserAvatar"
 import { Loader2, Search, Plus, Edit2, Trash2, UserCircle, UserKey } from "lucide-react"
 import { toast } from "sonner"
 
@@ -151,12 +151,12 @@ export default function AdminMembersPage() {
                 filteredMembers.map((member) => (
                   <div key={member.id} className="bg-white p-4 rounded-3xl border border-stone-100 shadow-sm flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 overflow-hidden">
-                      <Avatar className="h-10 w-10 shrink-0 border border-stone-100">
-                        <AvatarImage src={member.claimedUser?.avatarUrl || undefined} />
-                        <AvatarFallback className="bg-stone-50 text-stone-300">
-                          <UserCircle className="h-6 w-6" />
-                        </AvatarFallback>
-                      </Avatar>
+                      <UserAvatar 
+                        name={member.fullName}
+                        src={member.claimedUser?.avatarUrl}
+                        isClaimed={member.isClaimed}
+                        className="h-10 w-10 shrink-0"
+                      />
 
                       <div className="space-y-0.5 truncate">
                         <div className="flex items-center gap-2">

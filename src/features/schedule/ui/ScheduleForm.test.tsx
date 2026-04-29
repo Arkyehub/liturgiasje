@@ -109,4 +109,21 @@ describe("ScheduleForm Validation", () => {
       expect(toast.error).toHaveBeenCalledWith("Já existe uma missa cadastrada para o horário 19:00 neste dia.")
     })
   })
+
+  it("should re-fetch usage counts when date month changes", async () => {
+    const mockGetUsage = jest.fn().mockResolvedValue({ 'member-1': 2 })
+    ;(makeGetMembersUsage as jest.Mock).mockReturnValue({ execute: mockGetUsage })
+
+    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
+
+    // Primeiro carregamento (Abril) - baseado no mockCurrentMonth (2026-04-01)
+    await waitFor(() => expect(mockGetUsage).toHaveBeenCalledWith("2026-04"))
+
+    // Mudar para Junho
+    const dateInput = screen.getByLabelText(/Data da Escala/i)
+    fireEvent.change(dateInput, { target: { value: "2026-06-15" } })
+
+    // Deve chamar novamente com Junho
+    await waitFor(() => expect(mockGetUsage).toHaveBeenCalledWith("2026-06"))
+  })
 })

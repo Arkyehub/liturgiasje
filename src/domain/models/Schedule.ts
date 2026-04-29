@@ -28,6 +28,7 @@ export interface ScheduleSlot {
   } | null
   readerName?: string
   avatarUrl?: string | null
+  isClaimed?: boolean
   originalReader?: {
     fullName: string
     avatarUrl: string | null

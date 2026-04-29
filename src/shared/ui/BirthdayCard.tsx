@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Card } from "@/shared/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar"
+import { UserAvatar } from "@/shared/ui/UserAvatar"
 import { cn } from "@/shared/lib/utils"
 import { Cake, ChevronDown, ChevronUp, PartyPopper } from "lucide-react"
 import { format, isToday, parseISO } from "date-fns"
@@ -13,6 +13,7 @@ interface BirthdayMember {
   fullName: string
   avatarUrl?: string
   birthDate: string
+  isClaimed?: boolean
 }
 
 interface BirthdayCardProps {
@@ -55,12 +56,12 @@ export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
                 {todayBirthdays.map((m) => (
                   <div key={m.id} className="flex items-center gap-3">
                     <div className="relative">
-                      <Avatar className="h-9 w-9 border-2 border-amber-200">
-                        <AvatarImage src={m.avatarUrl} />
-                        <AvatarFallback className="bg-amber-50 text-amber-500 font-bold text-xs">
-                          {m.fullName.substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
+                      <UserAvatar 
+                        name={m.fullName}
+                        src={m.avatarUrl}
+                        isClaimed={m.isClaimed}
+                        className="h-9 w-9 border-2 border-amber-200"
+                      />
                       {/* Chapéu de Aniversário */}
                       <img 
                         src="/hat-birthday-svgrepo-com.svg" 
@@ -114,12 +115,12 @@ export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
                 <div key={m.id} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-stone-100 shadow-sm">
                   <div className="flex items-center gap-3">
                     <div className="relative">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={m.avatarUrl} />
-                        <AvatarFallback className="bg-stone-100 text-stone-400">
-                          {m.fullName.substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
+                      <UserAvatar 
+                        name={m.fullName}
+                        src={m.avatarUrl}
+                        isClaimed={m.isClaimed}
+                        className="h-10 w-10"
+                      />
                       {isTodayBirthday && (
                         <img 
                           src="/hat-birthday-svgrepo-com.svg" 

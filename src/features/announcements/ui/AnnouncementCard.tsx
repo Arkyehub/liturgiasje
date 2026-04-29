@@ -14,6 +14,7 @@ import { CheckCircle2, Megaphone, Music, Maximize2, Calendar as CalendarIcon, Cl
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/shared/lib/utils"
+import { UserAvatar } from "@/shared/ui/UserAvatar"
 
 interface AudioPlayerProps {
   url: string;
@@ -122,7 +123,7 @@ interface AnnouncementProps {
   isLoggedIn?: boolean
   authorName?: string
   authorId?: string
-  viewers?: { name: string; at: string; avatarUrl?: string | null }[]
+  viewers?: { name: string; at: string; avatarUrl?: string | null; isClaimed?: boolean }[]
   relatedScheduleSlotId?: string
   onRead?: (id: string) => void
   onUpdate?: (id: string, data: any) => void
@@ -197,13 +198,12 @@ export function AnnouncementCard({
                     <div className="grid grid-cols-2 gap-1">
                       {viewers.map((viewer, idx) => (
                         <div key={idx} className="flex items-center gap-2.5 px-2 py-2 hover:bg-stone-50 rounded-md border border-transparent hover:border-stone-100 transition-all">
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-stone-100 overflow-hidden border border-stone-200 shadow-sm transition-transform group-hover:scale-105">
-                            {viewer.avatarUrl ? (
-                              <img src={viewer.avatarUrl} alt={viewer.name} className="h-full w-full object-cover" />
-                            ) : (
-                              <UserIcon className="h-3.5 w-3.5 text-stone-400" />
-                            )}
-                          </div>
+                          <UserAvatar 
+                            name={viewer.name}
+                            src={viewer.avatarUrl}
+                            isClaimed={viewer.isClaimed}
+                            className="h-7 w-7 shrink-0 transition-transform group-hover:scale-105"
+                          />
                           <div className="flex flex-col min-w-0">
                             <span className="text-[11px] font-black text-stone-800 truncate leading-tight" title={viewer.name}>
                               {viewer.name}

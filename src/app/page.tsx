@@ -6,7 +6,7 @@ import { AnnouncementCard } from "@/features/announcements/ui/AnnouncementCard"
 import { ScheduleCard } from "@/features/schedule/ui/ScheduleCard"
 import { BirthdayCard } from "@/shared/ui/BirthdayCard"
 import { Button } from "@/shared/ui/button"
-import { ChevronLeft, ChevronRight, Loader2, Plus, RefreshCw, CalendarOff, CheckCircle, FileText } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, Plus, RefreshCw, Plane, CheckCircle, FileText } from "lucide-react"
 import { addMonths, format, subMonths } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import Link from "next/link"
@@ -68,7 +68,8 @@ export default function Home() {
     cancelSwap,
     acceptSwap,
     deleteMass,
-    publishMonth
+    publishMonth,
+    updateMassesStatus
   } = useSchedule()
 
   const { birthdays: allBirthdays, loadBirthdays } = useUser()
@@ -286,12 +287,12 @@ export default function Home() {
                             {requesterName}
                           </span>
                         </div>
-                        <Avatar className="h-6 w-6 shrink-0 border border-amber-50 shadow-sm">
-                          <AvatarImage src={requesterAvatar ?? undefined} />
-                          <AvatarFallback className="text-[8px] font-black bg-stone-100 text-stone-400">
-                            {requesterName.substring(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
+                        <UserAvatar 
+                          name={requesterName}
+                          src={requesterAvatar}
+                          isClaimed={swap.isClaimed}
+                          className="h-6 w-6 shrink-0"
+                        />
                       </div>
                       <p className="text-[11px] font-bold text-stone-800 leading-snug">
                         Solicitação para {format(massDate, "dd/MM (EEEE)", { locale: ptBR })} às {swap.mass?.time?.substring(0, 5) || '--:--'} - {roleName}
@@ -512,11 +513,11 @@ export default function Home() {
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-8 w-8 rounded-full text-red-500 hover:text-red-600 hover:bg-red-50"
+                    className="h-9 w-9 rounded-full bg-white text-red-600 border-2 border-red-600 shadow-sm hover:bg-red-50 hover:text-red-700 transition-all active:scale-95"
                     onClick={() => setIsUnavailableDrawerOpen(true)}
                     title="Meus Dias Indisponíveis"
                   >
-                    <CalendarOff className="h-4 w-4" />
+                    <Plane className="h-5 w-5" strokeWidth={2.5} />
                   </Button>
                 </div>
               )}
@@ -647,6 +648,7 @@ export default function Home() {
                           originalReaderName: s.originalReader?.fullName,
                           isConfirmed: s.isConfirmed,
                           isSwapRequested: s.isSwapRequested,
+                          isClaimed: s.isClaimed,
                           isMine: s.readerId ? s.readerId === user?.id : (member?.id && (s.memberId === member.id))
                         }))
                       }))}
@@ -666,6 +668,7 @@ export default function Home() {
                           toast.success(isPublished ? "Escala publicada!" : "Escala movida para rascunho")
                           loadSchedule(currentDate, profile?.role === "admin", true)
                         } catch (error) {
+                          console.error("Erro detalhado ao alterar status:", error)
                           toast.error("Erro ao alterar status.")
                         }
                       }}
