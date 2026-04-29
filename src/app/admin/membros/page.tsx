@@ -239,7 +239,8 @@ export default function AdminMembersPage() {
                 } else {
                   await makeCreateMember().execute({
                     fullName: data.full_name,
-                    whatsapp: data.whatsapp
+                    whatsapp: data.whatsapp,
+                    isClaimed: false
                   })
                   toast.success("Membro cadastrado!")
                 }
