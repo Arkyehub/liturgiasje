@@ -27,7 +27,7 @@ export function UserAvatar({ name, src, isClaimed, className, size = "default" }
           referrerPolicy="no-referrer"
         />
       )}
-      <AvatarFallback className={cn("font-bold tracking-tighter text-[9px] sm:text-[10px]", isClaimed ? `${bg} ${text}` : "bg-stone-50 text-stone-300")}>
+      <AvatarFallback className={cn("font-bold tracking-tighter", isClaimed ? `${bg} ${text}` : "bg-stone-50 text-stone-300")}>
         {isClaimed ? initials : <UserCircle className="h-2/3 w-2/3" />}
       </AvatarFallback>
     </Avatar>

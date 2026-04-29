@@ -496,8 +496,11 @@ export default function Home() {
                 const birthMonth = new Date(m.birthDate).getUTCMonth()
                 return birthMonth === currentDate.getMonth()
               }).map(m => ({
-                ...m,
-                avatarUrl: m.avatarUrl ?? undefined
+                id: m.id,
+                fullName: m.fullName,
+                birthDate: m.birthDate,
+                avatarUrl: m.avatarUrl ?? undefined,
+                isClaimed: true
               }))}
             />
           </section>
