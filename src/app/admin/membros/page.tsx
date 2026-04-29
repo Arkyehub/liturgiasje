@@ -279,9 +279,10 @@ export default function AdminMembersPage() {
                 className={`w-full font-bold h-12 rounded-xl ${roleChangeMember?.claimedUser?.role !== 'admin' ? 'bg-stone-800 hover:bg-black text-white' : ''}`}
                 disabled={isSubmittingRole}
                 onClick={async () => {
+                  if (!roleChangeMember) return
                   try {
                     const newRole = roleChangeMember.claimedUser?.role === 'admin' ? 'reader' : 'admin'
-                    await makeUpdateUserRole().execute(roleChangeMember.claimedBy, newRole)
+                    await makeUpdateUserRole().execute(roleChangeMember.claimedBy!, newRole)
                     toast.success(newRole === 'admin' ? "Novo administrador definido!" : "Permissões de administrador removidas.")
                     loadMembers()
                     setIsRoleDrawerOpen(false)

@@ -1,5 +1,5 @@
-import { AnnouncementRepository } from "../repositories/AnnouncementRepository"
-import { Announcement } from "../models/Announcement"
+import { AnnouncementRepository } from "../../repositories/AnnouncementRepository"
+import { Announcement } from "../../models/Announcement"
 
 export class GetAnnouncements {
   constructor(private readonly announcementRepository: AnnouncementRepository) {}

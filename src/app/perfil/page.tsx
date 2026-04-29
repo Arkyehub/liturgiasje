@@ -25,7 +25,7 @@ export default function ProfilePage() {
     whatsapp: "",
     birthDate: "",
     preferences: {
-      day_preferences: {} as Record<number, string[]>
+      day_preferences: {} as Record<string, string[]>
     }
   })
 
@@ -37,7 +37,7 @@ export default function ProfilePage() {
         fullName: profile.fullName || "",
         whatsapp: profile.whatsapp || "",
         birthDate: profile.birthDate || "",
-        preferences: profile.preferences || { day_preferences: {} }
+        preferences: { day_preferences: (profile.preferences?.day_preferences ?? {}) as Record<string, string[]> }
       })
     }
   }, [user, profile, loading])
@@ -103,7 +103,7 @@ export default function ProfilePage() {
       
       <main className="flex-1 overflow-auto">
         <div className="container max-w-md mx-auto px-4 py-8 space-y-8 pb-20">
-          {isMember && (!profile?.birthDate || !(profile?.preferences?.day_preferences?.[6]?.length > 0)) && (
+          {isMember && (!profile?.birthDate || !((profile?.preferences?.day_preferences?.[6]?.length ?? 0) > 0)) && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 animate-in fade-in slide-in-from-top-2">
               <h3 className="text-amber-800 font-bold text-sm">Complete seu perfil</h3>
               <p className="text-amber-700 text-xs mt-1">

@@ -39,6 +39,7 @@ import {
   DrawerDescription,
 } from "@/shared/ui/drawer"
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar"
+import { UserAvatar } from "@/shared/ui/UserAvatar"
 
 export default function Home() {
   const { user, profile, member, isMember, loading, signInWithGoogle, signOut } = useAuth()

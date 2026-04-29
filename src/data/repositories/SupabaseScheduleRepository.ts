@@ -171,7 +171,7 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
     if (error) throw error
     return (data || []).map(s => ({
       ...this.mapSlotToDomain(s, {}, {}),
-      mass: { date: s.mass.date, time: s.mass.time, specialDescription: s.mass.special_description }
+      mass: { date: (s.mass as any)[0]?.date, time: (s.mass as any)[0]?.time, specialDescription: (s.mass as any)[0]?.special_description }
     })) as SwapRequest[]
   }
 
