@@ -1,4 +1,4 @@
-import { ListSchedulesForMonth, ConfirmScheduleSlot, RequestScheduleSwap, CancelScheduleSwap, GetMembersUsage, CreateMassWithSlots, PublishScheduleMonth, UpdateMass, ListAllSwaps, DeleteMass, AcceptScheduleSwap, CheckMassExists, UpdateMassesStatus } from "@/domain/usecases/schedule"
+import { ListSchedulesForMonth, ConfirmScheduleSlot, RequestScheduleSwap, CancelScheduleSwap, GetMembersUsage, CreateMassWithSlots, PublishScheduleMonth, UpdateMass, ListAllSwaps, DeleteMass, AcceptScheduleSwap, CheckMassExists, UpdateMassesStatus, ListOccupiedDatesForMonth } from "@/domain/usecases/schedule"
 import { SupabaseScheduleRepository } from "@/data/repositories/SupabaseScheduleRepository"
 
 const repository = new SupabaseScheduleRepository()
@@ -16,3 +16,4 @@ export const makeDeleteMass = () => new DeleteMass(repository)
 export const makeAcceptScheduleSwap = () => new AcceptScheduleSwap(repository)
 export const makeCheckMassExists = () => new CheckMassExists(repository)
 export const makeUpdateMassesStatus = () => new UpdateMassesStatus(repository)
+export const makeListOccupiedDatesForMonth = () => new ListOccupiedDatesForMonth(repository)

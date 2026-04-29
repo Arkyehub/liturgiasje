@@ -91,3 +91,10 @@ export class UpdateMassesStatus {
     return this.scheduleRepository.updateMassesStatus(massIds, isPublished)
   }
 }
+
+export class ListOccupiedDatesForMonth {
+  constructor(private readonly scheduleRepository: ScheduleRepository) {}
+  async execute(monthReference: string): Promise<string[]> {
+    return this.scheduleRepository.listOccupiedDatesForMonth(monthReference)
+  }
+}

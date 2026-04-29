@@ -29,11 +29,12 @@ import {
   makeGetMembersUsage, 
   makeDeleteMass, 
   makeUpdateMass, 
-  makeCreateMassWithSlots 
+  makeCreateMassWithSlots,
+  makeListOccupiedDatesForMonth
 } from "@/main/factories/usecases/schedule"
 import { makeListUnavailableByDate } from "@/main/factories/usecases/user"
 import { Member } from "@/domain/models/Member"
-import { Plus, Search, Trash2, Calendar, Clock, Type, CheckCircle2, User, AlertCircle } from "lucide-react"
+import { Plus, Search, Trash2, Clock, Type, CheckCircle2, User, AlertCircle } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { toast } from "sonner"
@@ -74,6 +75,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
   const [unavailableUserIds, setUnavailableUserIds] = useState<string[]>([])
   const [hasExistingScale, setHasExistingScale] = useState(false)
   const [existingMassesFromDb, setExistingMassesFromDb] = useState<any[]>([])
+  const [occupiedDates, setOccupiedDates] = useState<string[]>([])
 
   const createEmptySession = (): Session => ({
     tempId: Math.random().toString(36).substring(2, 9),
@@ -85,6 +87,10 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
   useEffect(() => {
     loadMembers()
     loadUsage(activeMonthRef)
+    // Carrega os dias já com escala cadastrada para o mês atual
+    makeListOccupiedDatesForMonth().execute(format(currentMonth, "yyyy-MM"))
+      .then(setOccupiedDates)
+      .catch(console.error)
   }, [])
 
   useEffect(() => {
@@ -363,25 +369,66 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
       <div className="flex-1 overflow-y-auto space-y-4 px-6 pt-1 pb-8">
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
           
-          {/* Campo de Data (único para o card) */}
+          {/* Seletor de Dia */}
           <div className="space-y-1">
-            <Label htmlFor="scale-date" className="text-[10px] uppercase font-bold text-stone-400 ml-1">Data da Escala</Label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
-              <Input 
-                id="scale-date"
-                type="date" 
-                value={date}
-                onChange={(e) => {
-                  const val = e.target.value
-                  setDate(val)
-                  if (val && sessions.length === 0) {
-                    setSessions([createEmptySession()])
-                  }
-                }}
-                className="pl-10 h-10 rounded-xl bg-white border-stone-600 shadow-sm"
-              />
+            <div className="flex items-center justify-between ml-1">
+              <Label className="text-[10px] uppercase font-bold text-stone-400">Dia da Escala</Label>
+              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full capitalize">
+                {format(currentMonth, "MMMM 'de' yyyy", { locale: ptBR })}
+              </span>
             </div>
+
+            {/* Grade de Dias */}
+            {(() => {
+              const year = currentMonth.getFullYear()
+              const month = currentMonth.getMonth()
+              const daysInMonth = new Date(year, month + 1, 0).getDate()
+              const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+
+              return (
+                <div className="grid grid-cols-7 gap-1">
+                  {days.map(day => {
+                    const dayStr = String(day).padStart(2, '0')
+                    const monthStr = String(month + 1).padStart(2, '0')
+                    const fullDate = `${year}-${monthStr}-${dayStr}`
+                    const isSelected = date === fullDate
+                    const isOccupied = occupiedDates.includes(fullDate) && !isSelected
+
+                    return (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => {
+                          setDate(fullDate)
+                          if (sessions.length === 0) setSessions([createEmptySession()])
+                        }}
+                        className={cn(
+                          "h-9 w-full rounded-xl text-[12px] font-bold transition-all active:scale-95 border",
+                          isSelected
+                            ? "bg-stone-800 text-white border-stone-800 shadow-md"
+                            : isOccupied
+                              ? "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100"
+                              : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50 hover:border-stone-400"
+                        )}
+                        title={isOccupied ? "Já há escala neste dia" : undefined}
+                      >
+                        {day}
+                        {isOccupied && (
+                          <span className="block text-[7px] font-black leading-none -mt-0.5 text-amber-500">●</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+
+            {/* Data selecionada por extenso */}
+            {date && (
+              <p className="text-[10px] text-stone-500 font-medium ml-1 mt-1">
+                📅 {format(new Date(date + 'T00:00:00'), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+              </p>
+            )}
           </div>
 
           <div className="h-px bg-stone-100 mt-1" />

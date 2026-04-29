@@ -220,4 +220,14 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
     const { error } = await supabase.from('masses').update({ is_published: isPublished }).in('id', massIds)
     if (error) throw error
   }
+
+  async listOccupiedDatesForMonth(monthReference: string): Promise<string[]> {
+    const { data, error } = await supabase
+      .from('masses')
+      .select('date')
+      .eq('month_reference', monthReference)
+    if (error) throw error
+    // Retorna datas únicas (pode haver várias missas no mesmo dia)
+    return [...new Set((data || []).map(m => m.date))]
+  }
 }
