@@ -116,10 +116,17 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
   }
 
   async createMassWithSlots(massData: any, slots: any[]): Promise<Mass> {
-    const { data: mass, error: massError } = await supabase.from('masses').insert({ ...massData, is_published: false }).select().single()
+    const payload = {
+      date: massData.date,
+      time: massData.time,
+      special_description: massData.specialDescription,
+      month_reference: massData.monthReference,
+      is_published: false
+    }
+    const { data: mass, error: massError } = await supabase.from('masses').insert(payload).select().single()
     if (massError) throw massError
     if (slots.length > 0) {
-      const slotsToInsert = slots.map(slot => ({ mass_id: mass.id, role: slot.role, member_id: slot.member_id }))
+      const slotsToInsert = slots.map(slot => ({ mass_id: mass.id, role: slot.role, member_id: slot.memberId }))
       const { error: slotsError } = await supabase.from('schedule_slots').insert(slotsToInsert)
       if (slotsError) throw slotsError
     }
@@ -149,12 +156,19 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
   }
 
   async updateMass(massId: string, massData: any, slots: any[]): Promise<void> {
-    const { error: massError } = await supabase.from('masses').update({ ...massData, is_published: false }).eq('id', massId)
+    const payload = {
+      date: massData.date,
+      time: massData.time,
+      special_description: massData.specialDescription,
+      month_reference: massData.monthReference,
+      is_published: false
+    }
+    const { error: massError } = await supabase.from('masses').update(payload).eq('id', massId)
     if (massError) throw massError
     const { error: deleteError } = await supabase.from('schedule_slots').delete().eq('mass_id', massId)
     if (deleteError) throw deleteError
     if (slots.length > 0) {
-      const slotsToInsert = slots.map(slot => ({ mass_id: massId, role: slot.role, member_id: slot.member_id }))
+      const slotsToInsert = slots.map(slot => ({ mass_id: massId, role: slot.role, member_id: slot.memberId }))
       const { error: slotsError } = await supabase.from('schedule_slots').insert(slotsToInsert)
       if (slotsError) throw slotsError
     }

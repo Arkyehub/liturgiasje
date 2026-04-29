@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { ScheduleForm } from "./ScheduleForm"
-import { makeCheckMassExists, makeCreateMassWithSlots, makeGetMembersUsage } from "@/main/factories/usecases/schedule"
+import { makeCheckMassExists, makeCreateMassWithSlots, makeGetMembersUsage, makeListOccupiedDatesForMonth } from "@/main/factories/usecases/schedule"
 import { makeListMembers } from "@/main/factories/usecases/members"
 import { makeListUnavailableByDate } from "@/main/factories/usecases/user"
 import { toast } from "sonner"
@@ -11,7 +11,8 @@ jest.mock("@/main/factories/usecases/schedule", () => ({
   makeCreateMassWithSlots: jest.fn(),
   makeUpdateMass: jest.fn(),
   makeDeleteMass: jest.fn(),
-  makeGetMembersUsage: jest.fn()
+  makeGetMembersUsage: jest.fn(),
+  makeListOccupiedDatesForMonth: jest.fn()
 }))
 
 jest.mock("@/main/factories/usecases/members", () => ({
@@ -28,6 +29,12 @@ jest.mock("sonner", () => ({
     success: jest.fn(),
     warning: jest.fn()
   }
+}))
+
+jest.mock("@/shared/ui/TimeRoller", () => ({
+  TimeRoller: ({ value, onChange }: any) => (
+    <input aria-label="Horário" value={value} onChange={(e) => onChange(e.target.value)} />
+  )
 }))
 
 // Mock de ícones para evitar erros de renderização
@@ -54,14 +61,15 @@ describe("ScheduleForm Validation", () => {
     ;(makeGetMembersUsage as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue({}) })
     ;(makeListUnavailableByDate as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([]) })
     ;(makeCheckMassExists as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([]) })
+    ;(makeListOccupiedDatesForMonth as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([]) })
   })
 
   it("should prevent saving if two sessions have the same time in the same form", async () => {
     render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
 
     // Definir uma data
-    const dateInput = screen.getByLabelText(/Data da Escala/i)
-    fireEvent.change(dateInput, { target: { value: "2026-04-30" } })
+    const dayBtn = screen.getByText("30", { selector: "button" })
+    fireEvent.click(dayBtn)
 
     // O formulário cria a primeira sessão automaticamente ao setar a data
     // Adicionar segunda sessão
@@ -91,8 +99,8 @@ describe("ScheduleForm Validation", () => {
     render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
 
     // Definir data
-    const dateInput = screen.getByLabelText(/Data da Escala/i)
-    fireEvent.change(dateInput, { target: { value: "2026-04-30" } })
+    const dayBtn = screen.getByText("30", { selector: "button" })
+    fireEvent.click(dayBtn)
 
     // Aguardar o carregamento assíncrono (useEffect disparado pela data)
     await waitFor(() => expect(makeCheckMassExists).toHaveBeenCalled())
@@ -110,7 +118,7 @@ describe("ScheduleForm Validation", () => {
     })
   })
 
-  it("should re-fetch usage counts when date month changes", async () => {
+  it("should fetch usage counts for the initial month", async () => {
     const mockGetUsage = jest.fn().mockResolvedValue({ 'member-1': 2 })
     ;(makeGetMembersUsage as jest.Mock).mockReturnValue({ execute: mockGetUsage })
 
@@ -118,12 +126,5 @@ describe("ScheduleForm Validation", () => {
 
     // Primeiro carregamento (Abril) - baseado no mockCurrentMonth (2026-04-01)
     await waitFor(() => expect(mockGetUsage).toHaveBeenCalledWith("2026-04"))
-
-    // Mudar para Junho
-    const dateInput = screen.getByLabelText(/Data da Escala/i)
-    fireEvent.change(dateInput, { target: { value: "2026-06-15" } })
-
-    // Deve chamar novamente com Junho
-    await waitFor(() => expect(mockGetUsage).toHaveBeenCalledWith("2026-06"))
   })
 })

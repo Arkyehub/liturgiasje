@@ -80,7 +80,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
 
   const createEmptySession = (): Session => ({
     tempId: Math.random().toString(36).substring(2, 9),
-    time: "",
+    time: "07:00",
     description: "",
     slots: []
   })
@@ -382,7 +382,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
               const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
 
               return (
-                <div className="grid grid-cols-7 gap-1">
+                <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
                   {days.map(day => {
                     const dayStr = String(day).padStart(2, '0')
                     const monthStr = String(month + 1).padStart(2, '0')
@@ -450,32 +450,27 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
               {sessions.map((sess, sessIndex) => (
                 <div key={sess.tempId} className="space-y-3 p-4 rounded-2xl border border-stone-200 bg-white relative shadow-sm">
                   
-                  {/* Cabeçalho da Sessão */}
-                  <div className="flex items-center justify-between mb-2 pb-2 border-b border-stone-100">
-                    <h3 className="text-sm font-bold tracking-tight text-stone-500">
-                      Missa {sessIndex + 1}
-                    </h3>
-                    {sessions.length > 1 && (
-                      <button 
-                        type="button"
-                        className="h-8 w-8 flex items-center justify-center text-red-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors focus:outline-none"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          removeSession(sess.tempId, sess.dbId)
-                        }}
-                        title="Excluir Horário"
-                      >
-                        <Trash2 className="h-4 w-4 pointer-events-none" />
-                      </button>
-                    )}
-                  </div>
+                  {/* Botão excluir — absoluto no canto superior direito */}
+                  {sessions.length > 1 && (
+                    <button 
+                      type="button"
+                      className="absolute top-2 right-2 h-7 w-7 flex items-center justify-center text-red-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors focus:outline-none"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        removeSession(sess.tempId, sess.dbId)
+                      }}
+                      title="Excluir Horário"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 pointer-events-none" />
+                    </button>
+                  )}
 
-                  {/* Seletor de Horário em Roleta */}
-                  <div className="space-y-1">
-                    <Label className="text-[10px] uppercase font-bold text-stone-400 ml-1">Horário</Label>
+                  {/* Cabeçalho da Sessão + Seletor de Horário */}
+                  <div className="flex items-center justify-center mb-3">
                     <TimeRoller
                       value={sess.time || "07:00"}
+                      prefix="Missa das"
                       onChange={(val) => updateSessionField(sess.tempId, 'time', val)}
                     />
                   </div>
