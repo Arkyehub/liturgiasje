@@ -177,7 +177,7 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
   async listAllSwaps(): Promise<SwapRequest[]> {
     const { data, error } = await supabase
       .from('schedule_slots')
-      .select(`id, role, reader_id, member_id, is_swap_requested, reader:users!reader_id (full_name, avatar_url), member:members!member_id (full_name), mass:masses (date, time, special_description)`)
+      .select(`id, role, reader_id, member_id, is_swap_requested, reader:users!reader_id (full_name, avatar_url), member:members!member_id (full_name, user:users!claimed_by(avatar_url)), mass:masses (date, time, special_description)`)
       .eq('is_swap_requested', true)
       .gte('mass.date', new Date().toISOString().split('T')[0])
       .order('mass(date)', { ascending: true })
@@ -186,7 +186,7 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
     return (data || []).map(s => ({
       ...this.mapSlotToDomain(s, 
         s.reader ? { [s.reader_id]: s.reader } : {}, 
-        s.member ? { [s.member_id]: s.member } : {}
+        s.member ? { [s.member_id]: { ...s.member, avatar_url: (s.member as any).user?.avatar_url } } : {}
       ),
       mass: { 
         date: (s.mass as any)?.date, 
