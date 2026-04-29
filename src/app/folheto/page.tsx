@@ -1,6 +1,6 @@
 "use client"
 
-import { useAuth } from "@/hooks/useAuth"
+import { useAuth } from "@/shared/hooks/useAuth"
 import { Loader2 } from "lucide-react"
 import { useState, useEffect } from "react"
 

@@ -2,16 +2,16 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/hooks/useAuth"
-import { userService } from "@/services/userService"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { useAuth } from "@/shared/hooks/useAuth"
+import { makeUpdateUserProfile } from "@/main/factories/usecases/user"
+import { Button } from "@/shared/ui/button"
+import { Input } from "@/shared/ui/input"
 import { Loader2, ArrowLeft, Save, User as UserIcon, Calendar, MessageSquare, Clock } from "lucide-react"
 import { toast } from "sonner"
-import { maskPhone, cn } from "@/lib/utils"
-import { ProfileImageEditor } from "@/components/profile/ProfileImageEditor"
-import { BirthDatePicker } from "@/components/profile/BirthDatePicker"
-import { Badge } from "@/components/ui/badge"
+import { maskPhone, cn } from "@/shared/lib/utils"
+import { ProfileImageEditor } from "@/features/profile/ProfileImageEditor"
+import { BirthDatePicker } from "@/features/profile/BirthDatePicker"
+import { Badge } from "@/shared/ui/badge"
 
 const COMMON_TIMES = ["07:00", "09:00", "11:00", "19:00"]
 
@@ -21,9 +21,9 @@ export default function ProfilePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedDay] = useState(6) // Fixo Domingo
   const [formData, setFormData] = useState({
-    full_name: "",
+    fullName: "",
     whatsapp: "",
-    birth_date: "",
+    birthDate: "",
     preferences: {
       day_preferences: {} as Record<number, string[]>
     }
@@ -34,9 +34,9 @@ export default function ProfilePage() {
       router.push("/")
     } else if (profile) {
       setFormData({
-        full_name: profile.full_name || "",
+        fullName: profile.fullName || "",
         whatsapp: profile.whatsapp || "",
-        birth_date: profile.birth_date || "",
+        birthDate: profile.birthDate || "",
         preferences: profile.preferences || { day_preferences: {} }
       })
     }
@@ -64,9 +64,9 @@ export default function ProfilePage() {
   }
 
   const hasSelectedTimes = formData.preferences?.day_preferences?.[selectedDay]?.length > 0
-  const isFormValid = formData.full_name.trim() !== "" && 
+  const isFormValid = formData.fullName.trim() !== "" && 
                      formData.whatsapp.length >= 14 && 
-                     formData.birth_date !== "" && 
+                     formData.birthDate !== "" && 
                      hasSelectedTimes
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -74,7 +74,7 @@ export default function ProfilePage() {
     if (!user || !isFormValid) return
     setIsSubmitting(true)
     try {
-      await userService.updateProfile(user.id, formData)
+      await makeUpdateUserProfile().execute(user.id, formData)
       toast.success("Perfil atualizado com sucesso!")
       await refreshProfile()
       router.push("/")
@@ -127,8 +127,8 @@ export default function ProfilePage() {
                     <label className="text-[10px] font-bold uppercase tracking-widest">Nome e Sobrenome</label>
                   </div>
                   <Input 
-                    value={formData.full_name}
-                    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                    value={formData.fullName}
+                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                     placeholder="Seu nome"
                     className="rounded-2xl border-stone-100 focus-visible:ring-stone-200 h-12 text-stone-800 font-medium"
                     required
@@ -154,8 +154,8 @@ export default function ProfilePage() {
                     <label className="text-[10px] font-bold uppercase tracking-widest">Data de Nascimento</label>
                   </div>
                   <BirthDatePicker 
-                    value={formData.birth_date}
-                    onChange={(val) => setFormData({ ...formData, birth_date: val })}
+                    value={formData.birthDate}
+                    onChange={(val) => setFormData({ ...formData, birthDate: val })}
                   />
                 </div>
 

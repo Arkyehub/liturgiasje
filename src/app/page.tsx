@@ -2,55 +2,83 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { AnnouncementCard } from "@/components/AnnouncementCard"
-import { ScheduleCard } from "@/components/ScheduleCard"
-import { BirthdayCard } from "@/components/BirthdayCard"
-import { Button } from "@/components/ui/button"
+import { AnnouncementCard } from "@/features/announcements/ui/AnnouncementCard"
+import { ScheduleCard } from "@/features/schedule/ui/ScheduleCard"
+import { BirthdayCard } from "@/shared/ui/BirthdayCard"
+import { Button } from "@/shared/ui/button"
 import { ChevronLeft, ChevronRight, Loader2, Plus, RefreshCw, CalendarOff, CheckCircle, FileText } from "lucide-react"
 import { addMonths, format, subMonths } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import Link from "next/link"
 
-import { useAuth } from "@/hooks/useAuth"
-import { AnnouncementForm } from "@/components/AnnouncementForm"
-import { ScheduleForm } from "@/components/ScheduleForm"
-import { UnavailableForm } from "@/components/UnavailableForm"
-import { announcementService, Announcement } from "@/services/announcementService"
-import { scheduleService } from "@/services/scheduleService"
-import { userService } from "@/services/userService"
-import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/shared/hooks/useAuth"
+import { AnnouncementForm } from "@/features/announcements/ui/AnnouncementForm"
+import { ScheduleForm } from "@/features/schedule/ui/ScheduleForm"
+import { UnavailableForm } from "@/features/schedule/ui/UnavailableForm"
+import { useAnnouncements } from "@/features/announcements/hooks/useAnnouncements"
+import { useSchedule } from "@/features/schedule/hooks/useSchedule"
+import { useUser } from "@/features/profile/hooks/useUser"
+import { supabase } from "@/shared/api/supabase"
 import { toast } from "sonner"
-import { APP_VERSION } from "@/constants/version"
+import { APP_VERSION } from "@/shared/constants/version"
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
+} from "@/shared/ui/sheet"
 import {
   Drawer,
   DrawerClose,
   DrawerContent,
-  DrawerDescription,
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
-} from "@/components/ui/drawer"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+} from "@/shared/ui/drawer"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/shared/ui/alert-dialog"
 
 export default function Home() {
-  const { user, profile, member, isMember, loading, signInWithGoogle, signOut } = useAuth()
+  const { user, profile, member, isMember, signInWithGoogle, signOut } = useAuth()
   const router = useRouter()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [isSheetOpen, setIsSheetOpen] = useState(false)
-  const [announcements, setAnnouncements] = useState<Announcement[]>([])
-  const [swaps, setSwaps] = useState<any[]>([])
-  const [allBirthdays, setAllBirthdays] = useState<any[]>([])
-  const [schedule, setSchedule] = useState<any[]>([])
-  const [isLoadingAnnouncements, setIsLoadingAnnouncements] = useState(true)
-  const [isLoadingSwaps, setIsLoadingSwaps] = useState(true)
-  const [isLoadingSchedule, setIsLoadingSchedule] = useState(true)
+  
+  const { 
+    announcements, 
+    loading: isLoadingAnnouncements, 
+    loadAnnouncements, 
+    markAsRead, 
+    deleteAnnouncement,
+    createAnnouncement,
+    updateAnnouncement
+  } = useAnnouncements()
+
+  const {
+    schedule,
+    swaps,
+    loading: isLoadingSchedule,
+    loadingSwaps,
+    loadSchedule,
+    loadSwaps,
+    confirmSlot,
+    requestSwap,
+    cancelSwap,
+    acceptSwap,
+    deleteMass,
+    publishMonth
+  } = useSchedule()
+
+  const { birthdays: allBirthdays, loadBirthdays } = useUser()
+
   const [announcementToEdit, setAnnouncementToEdit] = useState<any | null>(null)
   const [announcementToDelete, setAnnouncementToDelete] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -67,57 +95,23 @@ export default function Home() {
   
   // Redirecionamento para Onboarding se não for membro
   useEffect(() => {
-    if (!loading && user && !isMember) {
+    if (user && !isMember) {
       router.push("/bemvindo")
     }
-  }, [user, isMember, loading, router])
+  }, [user, isMember, router])
 
   const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1))
   const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1))
 
   const monthName = format(currentDate, "MMMM yyyy", { locale: ptBR })
 
-  // 1. Carregar Avisos
-  const loadAnnouncements = async () => {
-    try {
-      setIsLoadingAnnouncements(true)
-      const data = await announcementService.list(user?.id)
-      setAnnouncements(data)
-    } finally {
-      setIsLoadingAnnouncements(false)
-    }
-  }
-
-  // 1.1 Carregar Solicitações de Troca
-  const loadSwaps = async () => {
-    try {
-      setIsLoadingSwaps(true)
-      const data = await scheduleService.listAllSwaps()
-      setSwaps(data)
-    } finally {
-      setIsLoadingSwaps(false)
-    }
-  }
-
-  // 2. Carregar Escala
-  const loadSchedule = async () => {
-    try {
-      setIsLoadingSchedule(true)
-      const isAdmin = profile?.role === "admin"
-      const data = await scheduleService.listForMonth(currentDate, isAdmin)
-      setSchedule(data)
-    } finally {
-      setIsLoadingSchedule(false)
-    }
-  }
-
   const handlePublish = async () => {
     try {
       setIsPublishing(true)
       const monthRef = format(currentDate, "yyyy-MM")
-      await scheduleService.publishMonth(monthRef)
+      await publishMonth(monthRef)
       toast.success("Escala publicada e notificações enviadas!")
-      loadSchedule()
+      loadSchedule(currentDate, profile?.role === "admin")
     } catch (error) {
       toast.error("Erro ao publicar escala.")
     } finally {
@@ -125,26 +119,16 @@ export default function Home() {
     }
   }
 
-  // 3. Carregar Aniversariantes
-  const loadBirthdays = async () => {
-    try {
-      const data = await userService.listBirthdays()
-      setAllBirthdays(data)
-    } catch (error) {
-      console.error("Erro ao carregar aniversários:", error)
-    }
-  }
-
   useEffect(() => {
-    loadAnnouncements()
+    loadAnnouncements(user?.id)
     loadSwaps()
     loadBirthdays()
-  }, [user?.id])
+  }, [user?.id, loadAnnouncements, loadSwaps, loadBirthdays])
 
   useEffect(() => {
     if (loading) return
-    loadSchedule()
-  }, [currentDate, profile?.role, loading])
+    loadSchedule(currentDate, profile?.role === "admin")
+  }, [currentDate, profile?.role, loading, loadSchedule])
 
   // Atualização em Tempo Real (Realtime)
   useEffect(() => {
@@ -299,17 +283,17 @@ export default function Home() {
                         return
                       }
                       try {
-                        await announcementService.markAsRead(id, user.id)
-                        loadAnnouncements()
+                        await markAsRead(id, user.id)
+                        loadAnnouncements(user.id)
                       } catch (error) {
                         console.error(error)
                       }
                     }}
                     onUpdate={async (id, data) => {
                       try {
-                        await announcementService.update(id, data)
+                        await updateAnnouncement(id, data)
                         toast.success("Aviso atualizado!")
-                        loadAnnouncements()
+                        loadAnnouncements(user?.id)
                       } catch (error) {
                         toast.error("Erro ao atualizar aviso.")
                       }
@@ -376,17 +360,17 @@ export default function Home() {
                         try {
                           if (data.id) {
                             // Atualização
-                            await announcementService.update(data.id, {
+                            await updateAnnouncement(data.id, {
                               ...data,
-                              expires_at: data.expires_at?.toISOString()
+                              expiresAt: data.expiresAt?.toISOString()
                             })
                             toast.success("Aviso atualizado!")
                           } else {
                             // Criação
-                            await announcementService.create({ ...data, type: 'Aviso' })
+                            await createAnnouncement({ ...data, type: 'Aviso' })
                             toast.success("Aviso publicado com sucesso!")
                           }
-                          loadAnnouncements()
+                          loadAnnouncements(user?.id)
                           setIsSheetOpen(false)
                           setAnnouncementToEdit(null)
                         } catch (error) {
@@ -424,9 +408,9 @@ export default function Home() {
                       if (!announcementToDelete) return
                       setIsDeleting(true)
                       try {
-                        await announcementService.delete(announcementToDelete)
+                        await deleteAnnouncement(announcementToDelete)
                         toast.success("Aviso excluído.")
-                        loadAnnouncements()
+                        loadAnnouncements(user?.id)
                         setAnnouncementToDelete(null)
                       } catch (error) {
                         toast.error("Erro ao excluir.")
@@ -581,9 +565,9 @@ export default function Home() {
                       onConfirm={async (slotId) => {
                         if (!user) return
                         try {
-                          await scheduleService.confirmSlot(slotId, user.id)
+                          await confirmSlot(slotId, user.id)
                           toast.success("Presença confirmada!")
-                          loadSchedule()
+                          loadSchedule(currentDate, profile?.role === "admin")
                         } catch (error) {
                           toast.error("Erro ao confirmar.")
                         }
@@ -610,10 +594,10 @@ export default function Home() {
                       }}
                       onCancelSwap={async (slotId) => {
                         try {
-                          await scheduleService.cancelSwapRequest(slotId)
+                          await cancelSwap(slotId)
                           toast.success("Pedido de troca cancelado!")
                           // Recarregar tanto a escala quanto o mural de trocas
-                          loadSchedule()
+                          loadSchedule(currentDate, profile?.role === "admin")
                           loadSwaps()
                         } catch (error) {
                           toast.error("Erro ao cancelar troca.")
@@ -680,7 +664,7 @@ export default function Home() {
                         currentMonth={currentDate}
                         initialData={scheduleToEdit}
                         onSuccess={() => {
-                          loadSchedule()
+                          loadSchedule(currentDate, profile?.role === "admin")
                         }}
                         onClose={() => {
                           setIsScheduleSheetOpen(false)
@@ -714,9 +698,9 @@ export default function Home() {
                       setIsDeletingSchedule(true)
                       try {
                         // Exclui todos os horários vinculados ao card (dia)
-                        await Promise.all(scheduleToDelete.map(id => scheduleService.deleteMass(id)))
+                        await Promise.all(scheduleToDelete.map(id => deleteMass(id)))
                         toast.success("Dia removido da escala.")
-                        loadSchedule()
+                        loadSchedule(currentDate, profile?.role === "admin")
                         setScheduleToDelete(null)
                       } catch (error) {
                         toast.error("Erro ao excluir horários do dia.")
@@ -756,10 +740,10 @@ export default function Home() {
                       if (!swapTargetSlot || !user) return
                       setIsRequestingSwap(true)
                       try {
-                        await scheduleService.requestSwap(swapTargetSlot.id)
+                        await requestSwap(swapTargetSlot.id)
                         
                         toast.success("Solicitação de troca publicada!")
-                        loadSchedule()
+                        loadSchedule(currentDate, profile?.role === "admin")
                         loadSwaps()
                         setSwapTargetSlot(null)
                       } catch (error) {
@@ -874,7 +858,7 @@ export default function Home() {
           </div>
  
           {/* Botão Flutuante de Publicação (Apenas para Admin se houver rascunhos) */}
-          {profile?.role === "admin" && schedule.some(mass => !mass.is_published) && (
+          {profile?.role === "admin" && schedule.some(mass => !mass.isPublished) && (
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-md">
               <Button 
                 className="w-full h-14 bg-green-600 hover:bg-green-700 text-white font-black rounded-2xl shadow-xl border-t border-white/20 animate-in fade-in slide-in-from-bottom-8 duration-500"

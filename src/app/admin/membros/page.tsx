@@ -2,14 +2,16 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/hooks/useAuth"
-import { memberService, Member } from "@/services/memberService"
-import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Loader2, Plus, ArrowLeft, Trash2, Edit2, Search, UserCircle, UserKey } from "lucide-react"
-import { toast } from "sonner"
-import { userService } from "@/services/userService"
-import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/shared/hooks/useAuth"
+import { 
+  makeListMembers, 
+  makeDeleteMember, 
+  makeCreateMember, 
+  makeUpdateMember 
+} from "@/main/factories/usecases/members"
+import { makeUpdateUserRole } from "@/main/factories/usecases/user"
+import { Member } from "@/domain/models/Member"
+import { Badge } from "@/shared/ui/badge"
 import {
   Drawer,
   DrawerClose,
@@ -18,15 +20,15 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
-} from "@/components/ui/drawer"
+} from "@/shared/ui/drawer"
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet"
-import { MemberForm } from "@/components/MemberForm"
-import { Input } from "@/components/ui/input"
+} from "@/shared/ui/sheet"
+import { MemberForm } from "@/features/members/ui/MemberForm"
+import { Input } from "@/shared/ui/input"
 
 export default function AdminMembersPage() {
   const { user, profile, loading } = useAuth()
@@ -57,7 +59,7 @@ export default function AdminMembersPage() {
   const loadMembers = async () => {
     try {
       setIsLoading(true)
-      const data = await memberService.listAll()
+      const data = await makeListMembers().execute()
       setMembers(data)
     } catch (error) {
       toast.error("Erro ao carregar membros.")
@@ -76,7 +78,7 @@ export default function AdminMembersPage() {
     
     try {
       setIsDeleting(true)
-      await memberService.delete(id)
+      await makeDeleteMember().execute(id)
       toast.success("Membro excluído.")
       // Não precisamos recarregar tudo de novo se a UI otimista funcionou,
       // mas podemos um loadMembers secundário se quisermos garantir sincronia total.
@@ -146,7 +148,7 @@ export default function AdminMembersPage() {
                   <div key={member.id} className="bg-white p-4 rounded-3xl border border-stone-100 shadow-sm flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 overflow-hidden">
                       <Avatar className="h-10 w-10 shrink-0 border border-stone-100">
-                        <AvatarImage src={member.claimed_user?.avatar_url || undefined} />
+                        <AvatarImage src={member.claimedUser?.avatar_url || undefined} />
                         <AvatarFallback className="bg-stone-50 text-stone-300">
                           <UserCircle className="h-6 w-6" />
                         </AvatarFallback>
@@ -154,13 +156,13 @@ export default function AdminMembersPage() {
 
                       <div className="space-y-0.5 truncate">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-bold text-stone-800 truncate">{member.full_name}</p>
-                          {member.claimed_user?.role === 'admin' && (
+                          <p className="text-sm font-bold text-stone-800 truncate">{member.fullName}</p>
+                          {member.claimedUser?.role === 'admin' && (
                             <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 font-bold text-[8px] tracking-wider px-1.5 py-0 rounded shrink-0 uppercase">
                               Admin
                             </Badge>
                           )}
-                          {member.is_claimed && member.claimed_user?.role !== 'admin' && (
+                          {member.isClaimed && member.claimedUser?.role !== 'admin' && (
                             <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 font-bold text-[8px] tracking-wider px-1.5 py-0 rounded shrink-0 uppercase">
                               Leitor
                             </Badge>
@@ -171,7 +173,7 @@ export default function AdminMembersPage() {
                     </div>
                     
                     <div className="flex items-center gap-1 shrink-0">
-                      {member.is_claimed && (
+                      {member.isClaimed && (
                         <Button 
                           variant="ghost" 
                           size="icon" 
@@ -179,13 +181,13 @@ export default function AdminMembersPage() {
                             setRoleChangeMember(member)
                             setIsRoleDrawerOpen(true)
                           }} 
-                          className={`h-8 w-8 ${member.claimed_user?.role === 'admin' ? 'text-amber-600 hover:text-amber-700' : 'text-stone-400 hover:text-stone-800'}`}
-                          title={member.claimed_user?.role === 'admin' ? "Remover Administrador" : "Tornar Administrador"}
+                          className={`h-8 w-8 ${member.claimedUser?.role === 'admin' ? 'text-amber-600 hover:text-amber-700' : 'text-stone-400 hover:text-stone-800'}`}
+                          title={member.claimedUser?.role === 'admin' ? "Remover Administrador" : "Tornar Administrador"}
                         >
                           <UserKey className="h-4 w-4" />
                         </Button>
                       )}
-                      {!member.is_claimed && (
+                      {!member.isClaimed && (
                         <Button variant="ghost" size="icon" onClick={() => {
                           setEditingMember(member)
                           setIsSheetOpen(true)
@@ -221,14 +223,20 @@ export default function AdminMembersPage() {
             </SheetTitle>
           </SheetHeader>
           <MemberForm 
-            initialData={editingMember ? { full_name: editingMember.full_name, whatsapp: editingMember.whatsapp } : undefined}
+            initialData={editingMember ? { full_name: editingmember.fullName, whatsapp: editingMember.whatsapp } : undefined}
             onSave={async (data) => {
               try {
                 if (editingMember) {
-                  await memberService.update(editingMember.id, data)
+                  await makeUpdateMember().execute(editingMember.id, {
+                    fullName: data.full_name,
+                    whatsapp: data.whatsapp
+                  })
                   toast.success("Membro atualizado!")
                 } else {
-                  await memberService.create(data)
+                  await makeCreateMember().execute({
+                    fullName: data.full_name,
+                    whatsapp: data.whatsapp
+                  })
                   toast.success("Membro cadastrado!")
                 }
                 loadMembers()
@@ -266,11 +274,9 @@ export default function AdminMembersPage() {
                 className={`w-full font-bold h-12 rounded-xl ${roleChangeMember?.claimed_user?.role !== 'admin' ? 'bg-stone-800 hover:bg-black text-white' : ''}`}
                 disabled={isSubmittingRole}
                 onClick={async () => {
-                  if (!roleChangeMember?.claimed_by) return
-                  setIsSubmittingRole(true)
                   try {
-                    const newRole = roleChangeMember.claimed_user?.role === 'admin' ? 'reader' : 'admin'
-                    await userService.updateRole(roleChangeMember.claimed_by, newRole)
+                    const newRole = roleChangeMember.claimedUser?.role === 'admin' ? 'reader' : 'admin'
+                    await makeUpdateUserRole().execute(roleChangeMember.claimedBy, newRole)
                     toast.success(newRole === 'admin' ? "Novo administrador definido!" : "Permissões de administrador removidas.")
                     loadMembers()
                     setIsRoleDrawerOpen(false)

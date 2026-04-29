@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/shared/ui/sonner";
 import Script from "next/script";
-import { GoogleOneTap } from "@/components/auth/GoogleOneTap";
-import { PWAHandler } from "@/components/PWAHandler";
+import { GoogleOneTap } from "@/features/auth/ui/GoogleOneTap";
+import { PWAHandler } from "@/features/pwa/ui/PWAHandler";
 import { SpeedInsights } from "@vercel/speed-insights/next";
-import { VersionChecker } from "@/components/VersionChecker";
-import { AuthProvider } from "@/providers/AuthProvider";
-import { PersistentHeader } from "@/components/PersistentHeader";
+import { VersionChecker } from "@/features/pwa/ui/VersionChecker";
+import { AuthProvider } from "@/app/providers/AuthProvider";
+import { PersistentHeader } from "@/shared/ui/PersistentHeader";
 
 const inter = Inter({ subsets: ["latin"] });
 

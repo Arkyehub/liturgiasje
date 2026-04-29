@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 // The client you created in Step 2
-import { createClient } from '@/lib/supabaseServer'
+import { createClient } from '@/shared/api/supabaseServer'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)

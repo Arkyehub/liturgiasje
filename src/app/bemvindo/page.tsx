@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/hooks/useAuth"
+import { useAuth } from "@/shared/hooks/useAuth"
 import { memberService, Member } from "@/services/memberService"
 import { userService } from "@/services/userService"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Button } from "@/shared/ui/button"
+import { Input } from "@/shared/ui/input"
 import { Loader2, Search, UserPlus } from "lucide-react"
 import { toast } from "sonner"
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/shared/api/supabase"
 
 export default function OnboardingPage() {
   const { user, profile, isMember, loading, refreshProfile } = useAuth()

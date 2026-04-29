@@ -1,4 +1,4 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
@@ -48,11 +48,14 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 
   @keyframes glow-pulse {
-    0%, 100% {
+
+    0%,
+    100% {
       box-shadow: 0 0 5px rgba(251, 191, 36, 0.2);
       border-color: rgba(251, 191, 36, 0.4);
       transform: scale(1);
     }
+
     50% {
       box-shadow: 0 0 20px rgba(251, 191, 36, 0.6), 0 0 10px rgba(251, 191, 36, 0.3);
       border-color: rgba(251, 191, 36, 1);
@@ -67,13 +70,13 @@
 
 
 :root {
-  --background: #FFFEE5; 
-  --foreground: oklch(0.35 0.05 45); 
+  --background: #FFFEE5;
+  --foreground: oklch(0.35 0.05 45);
   --card: oklch(0.99 0.005 45);
   --card-foreground: oklch(0.35 0.05 45);
   --popover: oklch(0.99 0.005 45);
   --popover-foreground: oklch(0.35 0.05 45);
-  --primary: oklch(0.45 0.15 145); 
+  --primary: oklch(0.45 0.15 145);
   --primary-foreground: oklch(0.98 0.01 145);
   --secondary: oklch(0.92 0.02 45);
   --secondary-foreground: oklch(0.35 0.05 45);
@@ -113,15 +116,19 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   html {
     @apply font-sans;
     font-size: 17px;
   }
+
   body {
     @apply bg-background text-foreground;
   }
 
-  header, [role="dialog"], .sheet-content {
+  header,
+  [role="dialog"],
+  .sheet-content {
     font-size: 16px;
   }
 }
