@@ -34,11 +34,12 @@ import {
 } from "@/main/factories/usecases/schedule"
 import { makeListUnavailableByDate } from "@/main/factories/usecases/user"
 import { Member } from "@/domain/models/Member"
-import { Plus, Search, Trash2, Clock, Type, CheckCircle2, User, AlertCircle } from "lucide-react"
+import { Plus, Search, Trash2, Type, CheckCircle2, User, AlertCircle } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { toast } from "sonner"
 import { cn } from "@/shared/lib/utils"
+import { TimeRoller } from "@/shared/ui/TimeRoller"
 
 interface ScheduleFormProps {
   currentMonth: Date
@@ -371,12 +372,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
           
           {/* Seletor de Dia */}
           <div className="space-y-1">
-            <div className="flex items-center justify-between ml-1">
-              <Label className="text-[10px] uppercase font-bold text-stone-400">Dia da Escala</Label>
-              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full capitalize">
-                {format(currentMonth, "MMMM 'de' yyyy", { locale: ptBR })}
-              </span>
-            </div>
+            <Label className="text-[10px] uppercase font-bold text-stone-400 ml-1">Dia da Escala</Label>
 
             {/* Grade de Dias */}
             {(() => {
@@ -425,7 +421,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
 
             {/* Data selecionada por extenso */}
             {date && (
-              <p className="text-[10px] text-stone-500 font-medium ml-1 mt-1">
+              <p className="text-xs font-semibold text-stone-600 ml-1 mt-1.5 capitalize">
                 📅 {format(new Date(date + 'T00:00:00'), "EEEE, dd 'de' MMMM", { locale: ptBR })}
               </p>
             )}
@@ -454,42 +450,34 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
               {sessions.map((sess, sessIndex) => (
                 <div key={sess.tempId} className="space-y-3 p-4 rounded-2xl border border-stone-200 bg-white relative shadow-sm">
                   
+                  {/* Cabeçalho da Sessão */}
                   <div className="flex items-center justify-between mb-2 pb-2 border-b border-stone-100">
-                    <div className="flex flex-col">
-                      <h3 className="text-sm font-bold tracking-tight text-stone-500 leading-tight">
-                        Missa<br />{sess.time || `#${sessIndex + 1}`}
-                      </h3>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor={`time-${sess.tempId}`} className="text-[10px] uppercase font-bold text-stone-400 ml-1">Horário</Label>
-                        <div className="relative">
-                          <Clock className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
-                          <Input 
-                            id={`time-${sess.tempId}`}
-                            type="time" 
-                            value={sess.time}
-                            onChange={(e) => updateSessionField(sess.tempId, 'time', e.target.value)}
-                            className="pl-10 h-10 w-32 rounded-xl bg-stone-50/50 border-stone-600"
-                          />
-                        </div>
-                      </div>
-                      {sessions.length > 1 && (
-                        <button 
-                          type="button"
-                          className="h-10 w-10 flex items-center justify-center text-red-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors focus:outline-none"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            removeSession(sess.tempId, sess.dbId)
-                          }}
-                          title="Excluir Horário"
-                        >
-                          <Trash2 className="h-4 w-4 pointer-events-none" />
-                        </button>
-                      )}
-                    </div>
+                    <h3 className="text-sm font-bold tracking-tight text-stone-500">
+                      Missa {sessIndex + 1}
+                    </h3>
+                    {sessions.length > 1 && (
+                      <button 
+                        type="button"
+                        className="h-8 w-8 flex items-center justify-center text-red-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors focus:outline-none"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          removeSession(sess.tempId, sess.dbId)
+                        }}
+                        title="Excluir Horário"
+                      >
+                        <Trash2 className="h-4 w-4 pointer-events-none" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Seletor de Horário em Roleta */}
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase font-bold text-stone-400 ml-1">Horário</Label>
+                    <TimeRoller
+                      value={sess.time || "07:00"}
+                      onChange={(val) => updateSessionField(sess.tempId, 'time', val)}
+                    />
                   </div>
 
                   <div className="space-y-1">
