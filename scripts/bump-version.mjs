@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const versionFilePath = path.join(__dirname, '..', 'src', 'constants', 'version.ts');
+const versionFilePath = path.join(__dirname, '..', 'src', 'shared', 'constants', 'version.ts');
 const packageJsonPath = path.join(__dirname, '..', 'package.json');
 
 function bumpVersion() {
