@@ -186,7 +186,7 @@ export function ScheduleCard({
                           <span className="text-[13px] font-bold text-stone-800 leading-tight truncate">
                             {slot.readerName || "---"}
                           </span>
-                          {slot.readerName && slot.readerName !== "---" && (
+                          {slot.readerName && slot.readerName !== "---" && slot.isConfirmed && (
                             <UserAvatar 
                               name={slot.readerName}
                               src={slot.avatarUrl}
