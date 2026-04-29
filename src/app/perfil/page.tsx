@@ -9,8 +9,8 @@ import { Input } from "@/shared/ui/input"
 import { Loader2, ArrowLeft, Save, User as UserIcon, Calendar, MessageSquare, Clock } from "lucide-react"
 import { toast } from "sonner"
 import { maskPhone, cn } from "@/shared/lib/utils"
-import { ProfileImageEditor } from "@/features/profile/ProfileImageEditor"
-import { BirthDatePicker } from "@/features/profile/BirthDatePicker"
+import { ProfileImageEditor } from "@/features/profile/ui/ProfileImageEditor"
+import { BirthDatePicker } from "@/features/profile/ui/BirthDatePicker"
 import { Badge } from "@/shared/ui/badge"
 
 const COMMON_TIMES = ["07:00", "09:00", "11:00", "19:00"]
