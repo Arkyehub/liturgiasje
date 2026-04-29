@@ -5,7 +5,7 @@ import { Card } from "@/shared/ui/card"
 import { UserAvatar } from "@/shared/ui/UserAvatar"
 import { cn } from "@/shared/lib/utils"
 import { Cake, ChevronDown, ChevronUp, PartyPopper } from "lucide-react"
-import { format, isToday, parseISO } from "date-fns"
+import { format, isToday, parseISO, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 interface BirthdayMember {
@@ -132,7 +132,7 @@ export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
                     <div>
                       <p className="text-sm font-bold text-stone-800">{m.fullName}</p>
                       <p className="text-[10px] text-stone-500 font-medium capitalize">
-                        Dia {format(birthDate, "dd 'de' MMMM", { locale: ptBR })}
+                        {isValid(birthDate) ? `Dia ${format(birthDate, "dd 'de' MMMM", { locale: ptBR })}` : "Data não informada"}
                       </p>
                     </div>
                   </div>

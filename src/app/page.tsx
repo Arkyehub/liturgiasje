@@ -7,7 +7,7 @@ import { ScheduleCard } from "@/features/schedule/ui/ScheduleCard"
 import { BirthdayCard } from "@/shared/ui/BirthdayCard"
 import { Button } from "@/shared/ui/button"
 import { ChevronLeft, ChevronRight, Loader2, Plus, RefreshCw, Plane, CheckCircle, FileText } from "lucide-react"
-import { addMonths, format, subMonths } from "date-fns"
+import { addMonths, format, subMonths, isToday, parseISO, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import Link from "next/link"
 
@@ -296,7 +296,7 @@ export default function Home() {
                         />
                       </div>
                       <p className="text-[11px] font-bold text-stone-800 leading-snug">
-                        Solicitação para {format(massDate, "dd/MM (EEEE)", { locale: ptBR })} às {swap.mass?.time?.substring(0, 5) || '--:--'} - {roleName}
+                        Solicitação para {isValid(massDate) ? format(massDate, "dd/MM (EEEE)", { locale: ptBR }) : "--/--"} às {swap.mass?.time?.substring(0, 5) || '--:--'} - {roleName}
                       </p>
                     </button>
                   );
@@ -368,7 +368,9 @@ export default function Home() {
                       if (swap && swap.mass) {
                         setTakeSwapTarget({
                           slotId,
-                          date: format(new Date(swap.mass.date + 'T00:00:00'), "dd/MM/yyyy"),
+                          date: isValid(new Date(swap.mass.date + 'T00:00:00')) 
+                            ? format(new Date(swap.mass.date + 'T00:00:00'), "dd/MM/yyyy")
+                            : "--/--/----",
                           time: swap.mass.time.substring(0, 5),
                           roleName: (({
                             'C': 'Comentarista',
@@ -629,7 +631,9 @@ export default function Home() {
                   return sortedDays.map((day: any) => (
                     <ScheduleCard 
                       key={day.date} 
-                      date={format(new Date(day.date + 'T00:00:00'), "EEEE, dd/MM", { locale: ptBR })}
+                      date={isValid(new Date(day.date + 'T00:00:00'))
+                        ? format(new Date(day.date + 'T00:00:00'), "EEEE, dd/MM", { locale: ptBR })
+                        : "Data Inválida"}
                       rawDate={new Date(day.date + 'T00:00:00')}
                       items={day.items.map((item: any) => ({
                         id: item.id,
@@ -735,7 +739,9 @@ export default function Home() {
                         if (targetMass && targetSlot) {
                           setTakeSwapTarget({
                             slotId,
-                            date: format(new Date(targetMass.date + 'T00:00:00'), "dd/MM/yyyy"),
+                            date: isValid(new Date(targetMass.date + 'T00:00:00'))
+                              ? format(new Date(targetMass.date + 'T00:00:00'), "dd/MM/yyyy")
+                              : "--/--/----",
                             time: targetMass.time.substring(0, 5),
                             roleName: (({
                               'C': 'Comentarista',

@@ -35,7 +35,7 @@ import {
 import { makeListUnavailableByDate } from "@/main/factories/usecases/user"
 import { Member } from "@/domain/models/Member"
 import { Plus, Search, Trash2, Type, CheckCircle2, User, AlertCircle } from "lucide-react"
-import { format } from "date-fns"
+import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { toast } from "sonner"
 import { cn } from "@/shared/lib/utils"
@@ -422,7 +422,9 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
             {/* Data selecionada por extenso */}
             {date && (
               <p className="text-xs font-semibold text-stone-600 ml-1 mt-1.5 capitalize">
-                📅 {format(new Date(date + 'T00:00:00'), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                📅 {isValid(new Date(date + 'T00:00:00')) 
+                  ? format(new Date(date + 'T00:00:00'), "EEEE, dd 'de' MMMM", { locale: ptBR })
+                  : "Data inválida"}
               </p>
             )}
           </div>

@@ -8,7 +8,7 @@ import { Textarea } from "@/shared/ui/textarea"
 import { Switch } from "@/shared/ui/switch"
 import { Calendar } from "@/shared/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover"
-import { format } from "date-fns"
+import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { CalendarIcon, Loader2, Image as ImageIcon, Music, X, Mic, Square } from "lucide-react"
 import { cn } from "@/shared/lib/utils"
@@ -371,7 +371,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {expirationDate ? format(expirationDate, "PPP", { locale: ptBR }) : <span>Selecione a data</span>}
+                    {expirationDate && isValid(expirationDate) ? format(expirationDate, "PPP", { locale: ptBR }) : <span>Selecione a data</span>}
                   </Button>
                 }
               />

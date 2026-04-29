@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/shared/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover"
 import { Calendar } from "@/shared/ui/calendar"
 import { CheckCircle2, Megaphone, Music, Maximize2, Calendar as CalendarIcon, Clock, Eye, Pencil, Trash2, User as UserIcon, RefreshCw, ChevronLeft, ChevronRight, Play, Pause, FastForward } from "lucide-react"
-import { format } from "date-fns"
+import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/shared/lib/utils"
 import { UserAvatar } from "@/shared/ui/UserAvatar"
@@ -209,7 +209,7 @@ export function AnnouncementCard({
                               {viewer.name}
                             </span>
                             <span className="text-[10px] font-bold text-stone-400 leading-tight">
-                              {format(new Date(viewer.at), "dd/MM HH:mm", { locale: ptBR })}
+                              {isValid(new Date(viewer.at)) ? format(new Date(viewer.at), "dd/MM HH:mm", { locale: ptBR }) : "--/-- --:--"}
                             </span>
                           </div>
                         </div>
@@ -236,7 +236,7 @@ export function AnnouncementCard({
               <PopoverTrigger render={
                 <button className="flex items-center gap-1.5 text-[10px] font-bold text-stone-600 hover:text-stone-900 bg-white px-2 py-0.5 rounded-lg border border-stone-200 transition-colors">
                   <Clock className="h-3 w-3 text-red-500" />
-                  {expiresAt ? `até ${format(new Date(expiresAt), "dd/MM/yyyy", { locale: ptBR })}` : "Sem expiração"}
+                  {expiresAt && isValid(new Date(expiresAt)) ? `até ${format(new Date(expiresAt), "dd/MM/yyyy", { locale: ptBR })}` : "Sem expiração"}
                 </button>
               } />
               <PopoverContent className="w-auto p-0" align="end">
@@ -383,7 +383,7 @@ export function AnnouncementCard({
               {/* Autor do Recado */}
               <div className="flex items-center justify-end px-1 pt-1">
                 <span className="text-[10px] font-medium text-stone-400 italic">
-                  Publicado por: {authorName || 'Administração'} {createdAt && ` em ${format(new Date(createdAt), "dd/MM 'às' HH:mm", { locale: ptBR })}`}
+                  Publicado por: {authorName || 'Administração'} {createdAt && isValid(new Date(createdAt)) && ` em ${format(new Date(createdAt), "dd/MM 'às' HH:mm", { locale: ptBR })}`}
                 </span>
               </div>
 
