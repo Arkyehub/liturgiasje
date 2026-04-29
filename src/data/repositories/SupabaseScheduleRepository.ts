@@ -184,7 +184,10 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
 
     if (error) throw error
     return (data || []).map(s => ({
-      ...this.mapSlotToDomain(s, {}, {}),
+      ...this.mapSlotToDomain(s, 
+        s.reader ? { [s.reader_id]: s.reader } : {}, 
+        s.member ? { [s.member_id]: s.member } : {}
+      ),
       mass: { 
         date: (s.mass as any)?.date, 
         time: (s.mass as any)?.time, 
