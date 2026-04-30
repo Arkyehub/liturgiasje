@@ -8,12 +8,12 @@ import { makeSearchMembers, makeClaimMember, makeCreateMember } from "@/main/fac
 import { makeUpdateUserProfile, makeCreateUserProfile } from "@/main/factories/usecases/user"
 import { Button } from "@/shared/ui/button"
 import { Input } from "@/shared/ui/input"
-import { Loader2, Search, UserPlus } from "lucide-react"
+import { Loader2, Search, UserPlus, LogOut } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/shared/api/supabase"
 
 export default function OnboardingPage() {
-  const { user, profile, isMember, loading, refreshProfile } = useAuth()
+  const { user, profile, isMember, loading, refreshProfile, signOut } = useAuth()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [searchResults, setSearchResults] = useState<Member[]>([])
@@ -158,6 +158,21 @@ export default function OnboardingPage() {
               Caso não esteja encontrando seus dados, entre em contato com a coordenação.
             </p>
           </div>
+        </div>
+        
+        <div className="text-center">
+          <button 
+            onClick={signOut}
+            className="bg-white border border-stone-200 rounded-2xl p-4 w-full shadow-sm hover:border-stone-300 transition-all flex flex-col items-center gap-1 group"
+          >
+            <div className="flex items-center gap-2 text-stone-900 font-bold text-sm">
+              <LogOut className="h-4 w-4 text-stone-400 group-hover:text-stone-600 transition-colors" />
+              Sair da Conta
+            </div>
+            <span className="text-stone-400 text-[10px] font-bold uppercase tracking-widest">
+              {user?.email}
+            </span>
+          </button>
         </div>
       </div>
     </div>
