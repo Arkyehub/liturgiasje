@@ -112,21 +112,23 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
 
-    // Filtrar apenas PDFs para garantir (MIME type ou extensão)
-    const validPdfs = files.filter(f => 
-      f.type === 'application/pdf' || 
-      f.name.toLowerCase().endsWith('.pdf')
-    )
+    // No mobile, o f.type pode vir vazio. Vamos ser mais flexíveis.
+    const validPdfs = files.filter(f => {
+      const isPdfType = f.type === 'application/pdf';
+      const isPdfExt = f.name.toLowerCase().endsWith('.pdf');
+      return isPdfType || isPdfExt || f.type === ''; // Aceita mesmo se o tipo for desconhecido, confiando no seletor do SO
+    })
     
-    if (validPdfs.length < files.length) {
-      // Opcional: avisar que alguns arquivos não são PDFs
+    if (validPdfs.length === 0) {
+      toast.error("O arquivo selecionado não parece ser um PDF válido.");
+      return;
     }
 
     const remainingSlots = 3 - (existingPdfs.length + pdfFiles.length)
     if (validPdfs.length > 0) {
       setPdfFiles(prev => [...prev, ...validPdfs.slice(0, remainingSlots)])
+      toast.success(`${validPdfs.length} PDF(s) anexado(s)`);
     }
-    // Limpar o valor do input para permitir selecionar o mesmo arquivo novamente
     e.target.value = ''
   }
 
@@ -312,8 +314,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
               />
               <Label
                 htmlFor="image-upload"
-                onClick={(e) => e.stopPropagation()}
-                className="flex flex-col items-center justify-center h-full w-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer transition-all hover:bg-stone-50 hover:border-stone-600"
+                className="flex flex-col items-center justify-center h-full w-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer transition-all hover:bg-stone-50 hover:border-stone-600 active:bg-stone-100"
               >
                 <ImageIcon className="h-5 w-5 text-stone-500" />
                 <span className="text-[8px] text-stone-500 font-bold mt-0.5 uppercase">Add</span>
@@ -363,8 +364,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
                   <input type="file" id="audio-upload" accept="audio/*" className="hidden" onChange={handleAudioChange} />
                   <Label 
                     htmlFor="audio-upload" 
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center justify-center h-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer text-[10px] font-bold text-stone-500 uppercase hover:bg-stone-50"
+                    className="flex items-center justify-center h-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer text-[10px] font-bold text-stone-500 uppercase hover:bg-stone-50 active:bg-stone-100"
                   >
                     Audio
                   </Label>
@@ -408,8 +408,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
                 />
                 <Label 
                   htmlFor="pdf-upload" 
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center justify-center h-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer text-[10px] font-bold text-stone-500 uppercase hover:bg-stone-50"
+                  className="flex items-center justify-center h-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer text-[10px] font-bold text-stone-500 uppercase hover:bg-stone-50 active:bg-stone-100"
                 >
                   Anexar PDF
                 </Label>
