@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { AnnouncementCard } from "@/features/announcements/ui/AnnouncementCard"
 import { ScheduleCard } from "@/features/schedule/ui/ScheduleCard"
+import { MyScheduleWidget } from "@/features/schedule/ui/MyScheduleWidget"
 import { BirthdayCard } from "@/shared/ui/BirthdayCard"
 import { Button } from "@/shared/ui/button"
 import { ChevronLeft, ChevronRight, Loader2, Plus, RefreshCw, Plane, CheckCircle, FileText } from "lucide-react"
@@ -530,6 +531,19 @@ export default function Home() {
                 </div>
               )}
             </div>
+
+            {/* Widget de Próxima Escala do Usuário */}
+            {user && (
+              <div className="w-full animate-in fade-in slide-in-from-top-2 duration-500">
+                <MyScheduleWidget 
+                  schedule={schedule} 
+                  userId={user.id} 
+                  memberId={member?.id}
+                  userName={profile?.fullName}
+                  userAvatar={profile?.avatarUrl}
+                />
+              </div>
+            )}
 
             <div className="flex items-center justify-between w-full bg-white rounded-full border border-stone-400 px-2 py-1.5 shadow-sm transition-colors hover:border-stone-600">
               <Button 

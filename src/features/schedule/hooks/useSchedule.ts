@@ -45,27 +45,71 @@ export function useSchedule() {
   }, [])
 
   const confirmSlot = async (slotId: string, userId: string) => {
-    await makeConfirmScheduleSlot().execute(slotId, userId)
+    // Atualização otimista da UI para dar feedback instantâneo ao usuário
+    setSchedule(prev => prev.map(mass => ({
+      ...mass,
+      slots: mass.slots.map(s => s.id === slotId ? { ...s, isConfirmed: true, readerId: userId } : s)
+    })))
+    
+    try {
+      await makeConfirmScheduleSlot().execute(slotId, userId)
+    } catch (error) {
+      console.error("Erro ao confirmar slot:", error)
+      throw error
+    }
   }
 
   const requestSwap = async (slotId: string) => {
-    await makeRequestScheduleSwap().execute(slotId)
+    // Atualização otimista
+    setSchedule(prev => prev.map(mass => ({
+      ...mass,
+      slots: mass.slots.map(s => s.id === slotId ? { ...s, isSwapRequested: true } : s)
+    })))
+    
+    try {
+      await makeRequestScheduleSwap().execute(slotId)
+    } catch (error) {
+      console.error("Erro ao pedir troca:", error)
+      throw error
+    }
   }
 
   const cancelSwap = async (slotId: string) => {
-    await makeCancelScheduleSwap().execute(slotId)
+    // Atualização otimista
+    setSchedule(prev => prev.map(mass => ({
+      ...mass,
+      slots: mass.slots.map(s => s.id === slotId ? { ...s, isSwapRequested: false } : s)
+    })))
+    
+    try {
+      await makeCancelScheduleSwap().execute(slotId)
+    } catch (error) {
+      console.error("Erro ao cancelar troca:", error)
+      throw error
+    }
   }
 
   const acceptSwap = async (slotId: string, userId: string, memberId?: string) => {
-    await makeAcceptScheduleSwap().execute(slotId, userId, memberId)
+    // Atualização otimista
+    setSchedule(prev => prev.map(mass => ({
+      ...mass,
+      slots: mass.slots.map(s => s.id === slotId ? { ...s, isSwapRequested: false, isConfirmed: true, readerId: userId, memberId: memberId || s.memberId } : s)
+    })))
+    
+    try {
+      await makeAcceptScheduleSwap().execute(slotId, userId, memberId)
+    } catch (error) {
+      console.error("Erro ao assumir troca:", error)
+      throw error
+    }
   }
 
   const deleteMass = async (massId: string) => {
     await makeDeleteMass().execute(massId)
   }
 
-  const publishMonth = async (monthRef: string) => {
-    await makePublishScheduleMonth().execute(monthRef)
+  const publishMonth = async (monthReference: string) => {
+    await makePublishScheduleMonth().execute(monthReference)
   }
 
   const updateMassesStatus = async (massIds: string[], isPublished: boolean) => {

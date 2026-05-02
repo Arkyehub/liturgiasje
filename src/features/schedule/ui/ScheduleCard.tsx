@@ -215,7 +215,11 @@ export function ScheduleCard({
                             >
                               TROCAR
                             </Button>
-                            {!slot.isConfirmed && (
+                            {slot.isConfirmed ? (
+                              <div className="flex items-center justify-center w-8 h-8 bg-green-100 text-green-700 rounded-full border border-green-200 animate-in fade-in zoom-in-95 duration-300 shadow-sm">
+                                <CheckCircle className="h-5 w-5" />
+                              </div>
+                            ) : (
                               <Button
                                 variant="ghost"
                                 size="sm"
