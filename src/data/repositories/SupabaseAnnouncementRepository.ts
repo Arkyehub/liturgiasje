@@ -45,9 +45,9 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
     if (data.imageFiles) {
       for (const file of data.imageFiles) {
         const fileExt = file.name.split('.').pop()
-        const fileName = `${Math.random()}.${fileExt}`
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`
         const filePath = `announcements/images/${fileName}`
-        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file)
+        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file, { upsert: true })
         if (error) throw error
         const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
         imageUrls.push(publicUrl)
@@ -57,9 +57,9 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
     if (data.audioFiles) {
       for (const file of data.audioFiles) {
         const fileExt = file.name.split('.').pop()
-        const fileName = `${Math.random()}.${fileExt}`
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`
         const filePath = `announcements/audio/${fileName}`
-        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file)
+        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file, { upsert: true })
         if (error) throw error
         const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
         audioUrls.push(publicUrl)
@@ -69,9 +69,9 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
     if (data.pdfFiles) {
       for (const file of data.pdfFiles) {
         const fileExt = file.name.split('.').pop()
-        const fileName = `${Math.random()}.${fileExt}`
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`
         const filePath = `announcements/pdfs/${fileName}`
-        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file)
+        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file, { upsert: true })
         if (error) throw error
         const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
         pdfUrls.push(publicUrl)
@@ -87,7 +87,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       audio_url: audioUrls[0] || "",
       audio_urls: audioUrls,
       pdf_urls: pdfUrls,
-      expires_at: data.expiresAt?.toISOString(),
+      expires_at: data.expiresAt instanceof Date ? data.expiresAt.toISOString() : data.expiresAt,
       created_by: user.id
     })
 
@@ -174,20 +174,18 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       ...rest,
       image_urls: imageUrls,
       audio_urls: audioUrls,
-      pdf_urls: pdfUrls
+      pdf_urls: pdfUrls,
+      expires_at: expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt
     }
 
-    if (expiresAt) {
-      finalData.expires_at = expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt
-    }
 
     if (imageFiles) {
       const newUrls: string[] = []
       for (const file of imageFiles) {
         const fileExt = file.name.split('.').pop()
-        const fileName = `${Math.random()}.${fileExt}`
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`
         const filePath = `announcements/images/${fileName}`
-        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file)
+        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file, { upsert: true })
         if (error) throw error
         const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
         newUrls.push(publicUrl)
@@ -203,9 +201,9 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       const newUrls: string[] = []
       for (const file of audioFiles) {
         const fileExt = file.name.split('.').pop()
-        const fileName = `${Math.random()}.${fileExt}`
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`
         const filePath = `announcements/audio/${fileName}`
-        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file)
+        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file, { upsert: true })
         if (error) throw error
         const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
         newUrls.push(publicUrl)
@@ -221,9 +219,9 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       const newUrls: string[] = []
       for (const file of pdfFiles) {
         const fileExt = file.name.split('.').pop()
-        const fileName = `${Math.random()}.${fileExt}`
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`
         const filePath = `announcements/pdfs/${fileName}`
-        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file)
+        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file, { upsert: true })
         if (error) throw error
         const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
         newUrls.push(publicUrl)

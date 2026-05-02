@@ -110,10 +110,19 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
 
   const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
-    const remainingSlots = 3 - (existingPdfs.length + pdfFiles.length)
-    if (files.length > 0) {
-      setPdfFiles(prev => [...prev, ...files.slice(0, remainingSlots)])
+    // Filtrar apenas PDFs para garantir
+    const validPdfs = files.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))
+    
+    if (validPdfs.length < files.length) {
+      // Opcional: avisar que alguns arquivos não são PDFs
     }
+
+    const remainingSlots = 3 - (existingPdfs.length + pdfFiles.length)
+    if (validPdfs.length > 0) {
+      setPdfFiles(prev => [...prev, ...validPdfs.slice(0, remainingSlots)])
+    }
+    // Limpar o valor do input para permitir selecionar o mesmo arquivo novamente
+    e.target.value = ''
   }
 
   const removeExistingImage = (url: string) => {
@@ -377,7 +386,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
             ))}
             {canAddMorePdfs && (
               <div className="h-10">
-                <input type="file" id="pdf-upload" accept=".pdf" className="hidden" onChange={handlePdfChange} multiple />
+                <input type="file" id="pdf-upload" accept="application/pdf" className="hidden" onChange={handlePdfChange} multiple />
                 <Label htmlFor="pdf-upload" className="flex items-center justify-center h-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer text-[10px] font-bold text-stone-500 uppercase hover:bg-stone-50">Anexar PDF</Label>
               </div>
             )}
