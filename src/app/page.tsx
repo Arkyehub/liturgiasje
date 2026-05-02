@@ -46,18 +46,7 @@ export default function Home() {
   const { user, profile, member, isMember, loading, signInWithGoogle, signOut } = useAuth()
   const router = useRouter()
   const [currentDate, setCurrentDate] = useState(new Date())
-  const currentDateRef = useRef(currentDate)
-  const profileRoleRef = useRef(profile?.role)
   const pendingScrollSlotId = useRef<string | null>(null)
-  
-  // Sincronizar refs com estado para uso em callbacks de Realtime sem re-subscrição
-  useEffect(() => {
-    currentDateRef.current = currentDate
-  }, [currentDate])
-
-  useEffect(() => {
-    profileRoleRef.current = profile?.role
-  }, [profile?.role])
 
   const [isSheetOpen, setIsSheetOpen] = useState(false)
   
@@ -194,85 +183,6 @@ export default function Home() {
     }
   }, [user?.id, member?.id, isMember, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate, profile?.role])
 
-  // Atualização em Tempo Real (Realtime)
-  useEffect(() => {
-    if (!user?.id) return
-
-    // Canal único por usuário para evitar conflitos de sessão
-    const channel = supabase
-      .channel(`db-realtime-${user.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'announcements' },
-        () => loadAnnouncements(user.id, true)
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'announcement_views' },
-        () => loadAnnouncements(user.id, true)
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'masses' },
-        () => {
-          loadSchedule(currentDateRef.current, profileRoleRef.current === "admin", true)
-          loadUpcomingSchedule(user.id, member?.id)
-          loadSwaps()
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'schedule_slots' },
-        () => {
-          loadSchedule(currentDateRef.current, profileRoleRef.current === "admin", true)
-          loadUpcomingSchedule(user.id, member?.id)
-          loadSwaps()
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'members' },
-        () => {
-          // Quando um membro é alterado (ex: claim de perfil), atualiza tudo
-          loadAnnouncements(user.id, true)
-          loadSchedule(currentDateRef.current, profileRoleRef.current === "admin", true)
-          loadUpcomingSchedule(user.id, member?.id)
-          loadBirthdays()
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'users' },
-        (payload: any) => {
-          // Se o próprio usuário mudou, ou outro usuário (admins veem nomes)
-          if (payload.new?.id === user.id) {
-            // Recarregar se for o próprio usuário para pegar novas preferências/role
-            loadAnnouncements(user.id, true)
-            loadSchedule(currentDateRef.current, profileRoleRef.current === "admin", true)
-            loadUpcomingSchedule(user.id, member?.id)
-          } else {
-            // Se for outro usuário, atualiza a escala para refletir nomes/avatares
-            loadSchedule(currentDateRef.current, profileRoleRef.current === "admin", true)
-            loadUpcomingSchedule(user.id, member?.id)
-          }
-        }
-      )
-      .subscribe((status, err) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Realtime conectado com sucesso!')
-        }
-        if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Erro na conexão Realtime:', err || 'Erro desconhecido')
-        }
-        if (status === 'TIMED_OUT') {
-          console.warn('⏳ Conexão Realtime expirou (timeout)')
-        }
-      })
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [user?.id, member?.id, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays])
 
   if (loading) {
     return (
