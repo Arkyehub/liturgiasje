@@ -110,8 +110,13 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
 
   const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
-    // Filtrar apenas PDFs para garantir
-    const validPdfs = files.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))
+    if (files.length === 0) return
+
+    // Filtrar apenas PDFs para garantir (MIME type ou extensão)
+    const validPdfs = files.filter(f => 
+      f.type === 'application/pdf' || 
+      f.name.toLowerCase().endsWith('.pdf')
+    )
     
     if (validPdfs.length < files.length) {
       // Opcional: avisar que alguns arquivos não são PDFs
@@ -307,6 +312,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
               />
               <Label
                 htmlFor="image-upload"
+                onClick={(e) => e.stopPropagation()}
                 className="flex flex-col items-center justify-center h-full w-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer transition-all hover:bg-stone-50 hover:border-stone-600"
               >
                 <ImageIcon className="h-5 w-5 text-stone-500" />
@@ -355,7 +361,13 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
                 </button>
                 <div className="flex-1 relative">
                   <input type="file" id="audio-upload" accept="audio/*" className="hidden" onChange={handleAudioChange} />
-                  <Label htmlFor="audio-upload" className="flex items-center justify-center h-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer text-[10px] font-bold text-stone-500 uppercase hover:bg-stone-50">Audio</Label>
+                  <Label 
+                    htmlFor="audio-upload" 
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center justify-center h-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer text-[10px] font-bold text-stone-500 uppercase hover:bg-stone-50"
+                  >
+                    Audio
+                  </Label>
                 </div>
               </div>
             )}
@@ -386,8 +398,21 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
             ))}
             {canAddMorePdfs && (
               <div className="h-10">
-                <input type="file" id="pdf-upload" accept="application/pdf" className="hidden" onChange={handlePdfChange} multiple />
-                <Label htmlFor="pdf-upload" className="flex items-center justify-center h-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer text-[10px] font-bold text-stone-500 uppercase hover:bg-stone-50">Anexar PDF</Label>
+                <input 
+                  type="file" 
+                  id="pdf-upload" 
+                  accept=".pdf,application/pdf" 
+                  className="hidden" 
+                  onChange={handlePdfChange} 
+                  multiple 
+                />
+                <Label 
+                  htmlFor="pdf-upload" 
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center justify-center h-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer text-[10px] font-bold text-stone-500 uppercase hover:bg-stone-50"
+                >
+                  Anexar PDF
+                </Label>
               </div>
             )}
           </div>
