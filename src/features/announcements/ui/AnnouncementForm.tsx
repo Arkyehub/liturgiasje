@@ -102,22 +102,29 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
   }
 
   const handleAudioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("Audio Selection triggered", e.target.files)
     const files = Array.from(e.target.files || [])
-    const remainingSlots = 3 - (existingAudios.length + audioFiles.length)
     if (files.length > 0) {
+      const remainingSlots = 3 - (existingAudios.length + audioFiles.length)
       setAudioFiles(prev => [...prev, ...files.slice(0, remainingSlots)])
+      toast.success(`${files.length} áudio(s) anexado(s)`)
     }
+    e.target.value = ''
   }
 
   const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("PDF Selection triggered", e.target.files)
     const files = Array.from(e.target.files || [])
-    if (files.length === 0) return
+    if (files.length === 0) {
+      console.log("No files selected")
+      return
+    }
 
-    // No mobile, o f.type pode vir vazio. Vamos ser mais flexíveis.
     const validPdfs = files.filter(f => {
       const isPdfType = f.type === 'application/pdf';
       const isPdfExt = f.name.toLowerCase().endsWith('.pdf');
-      return isPdfType || isPdfExt || f.type === ''; // Aceita mesmo se o tipo for desconhecido, confiando no seletor do SO
+      console.log(`File: ${f.name}, Type: ${f.type}, Size: ${f.size}`);
+      return isPdfType || isPdfExt || f.type === '';
     })
     
     if (validPdfs.length === 0) {
