@@ -74,7 +74,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
         const { error } = await supabase.storage.from('announcement_media').upload(filePath, file, { upsert: true })
         if (error) throw error
         const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
-        pdfUrls.push(publicUrl)
+        pdfUrls.push(`${publicUrl}?t=${Date.now()}`)
       }
     }
 
@@ -109,14 +109,12 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       .from('announcements')
       .select(`
         *,
-        author:users!created_by(full_name),
-        views:announcement_views(
-          user_id,
-          viewed_at,
-          user:users(full_name, avatar_url)
-        )
+        author:users!announcements_created_by_fkey(full_name),
+        views:announcement_views(user_id, viewed_at, user:users(full_name))
       `)
       .order('created_at', { ascending: false })
+      .limit(50)
+      .neq('id', '00000000-0000-0000-0000-000000000000')
 
     if (error) throw error
     
@@ -137,17 +135,17 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       const pathsToDelete: string[] = []
       const imgUrls = [...(ann.image_urls || []), ann.image_url].filter(Boolean) as string[]
       imgUrls.forEach(url => {
-        const path = this.extractPathFromUrl(url)
+        const path = this.extractPathFromUrl(url.split('?')[0])
         if (path) pathsToDelete.push(path)
       })
       const audUrls = [...(ann.audio_urls || []), ann.audio_url].filter(Boolean) as string[]
       audUrls.forEach(url => {
-        const path = this.extractPathFromUrl(url)
+        const path = this.extractPathFromUrl(url.split('?')[0])
         if (path) pathsToDelete.push(path)
       })
       const pdfUrls = (ann.pdf_urls || []) as string[]
       pdfUrls.forEach(url => {
-        const path = this.extractPathFromUrl(url)
+        const path = this.extractPathFromUrl(url.split('?')[0])
         if (path) pathsToDelete.push(path)
       })
       const uniquePaths = Array.from(new Set(pathsToDelete))

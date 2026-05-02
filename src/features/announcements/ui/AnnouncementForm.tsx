@@ -127,8 +127,9 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
 
     const remainingSlots = 3 - (existingPdfs.length + pdfFiles.length)
     if (validPdfs.length > 0) {
-      setPdfFiles(prev => [...prev, ...validPdfs.slice(0, remainingSlots)])
-      toast.success(`${validPdfs.length} PDF(s) anexado(s)`);
+      const filesToAdd = validPdfs.slice(0, remainingSlots)
+      setPdfFiles(prev => [...prev, ...filesToAdd])
+      toast.success(`${filesToAdd.length} PDF(s) anexado(s)`);
     }
     e.target.value = ''
   }
@@ -389,7 +390,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
               </div>
             ))}
             {pdfFiles.map((file, idx) => (
-              <div key={`new-pdf-${idx}`} className="flex items-center justify-between gap-2 rounded-md border border-green-200 p-2 bg-green-50/30">
+              <div key={`new-pdf-${idx}-${file.name}`} className="flex items-center justify-between gap-2 rounded-md border border-green-200 p-2 bg-green-50/30">
                 <div className="flex items-center gap-1.5 overflow-hidden">
                   <FileText className="h-3.5 w-3.5 text-blue-600" />
                   <span className="text-[10px] font-medium truncate text-stone-600">{file.name}</span>
