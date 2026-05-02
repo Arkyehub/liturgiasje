@@ -7,6 +7,7 @@ export interface Announcement {
   type: AnnouncementType
   imageUrls: string[]
   audioUrls: string[]
+  pdfUrls: string[]
   expiresAt?: string
   createdAt: string
   createdBy: string
@@ -29,6 +30,7 @@ export interface CreateAnnouncementData {
   expiresAt: Date | null
   imageFiles?: File[] | null
   audioFiles?: File[] | null
+  pdfFiles?: File[] | null
 }
 export interface UpdateAnnouncementData {
   title?: string
@@ -38,4 +40,6 @@ export interface UpdateAnnouncementData {
   imageUrls?: string[]
   audioFiles?: File[] | null
   audioUrls?: string[]
+  pdfFiles?: File[] | null
+  pdfUrls?: string[]
 }

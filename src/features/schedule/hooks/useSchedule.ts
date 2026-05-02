@@ -9,12 +9,14 @@ import {
   makeDeleteMass,
   makeAcceptScheduleSwap,
   makePublishScheduleMonth,
-  makeUpdateMassesStatus
+  makeUpdateMassesStatus,
+  makeListUpcomingSchedulesForUser
 } from "@/main/factories/usecases/schedule"
 import { toast } from "sonner"
 
 export function useSchedule() {
   const [schedule, setSchedule] = useState<Mass[]>([])
+  const [upcomingSchedule, setUpcomingSchedule] = useState<Mass[]>([])
   const [swaps, setSwaps] = useState<SwapRequest[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingSwaps, setLoadingSwaps] = useState(false)
@@ -29,6 +31,15 @@ export function useSchedule() {
       toast.error("Erro ao carregar escala")
     } finally {
       if (!silent) setLoading(false)
+    }
+  }, [])
+
+  const loadUpcomingSchedule = useCallback(async (userId: string, memberId?: string) => {
+    try {
+      const data = await makeListUpcomingSchedulesForUser().execute(userId, memberId)
+      setUpcomingSchedule(data)
+    } catch (error) {
+      console.error("Erro ao carregar próximas leituras:", error)
     }
   }, [])
 
@@ -118,10 +129,12 @@ export function useSchedule() {
   
   return {
     schedule,
+    upcomingSchedule,
     swaps,
     loading,
     loadingSwaps,
     loadSchedule,
+    loadUpcomingSchedule,
     loadSwaps,
     confirmSlot,
     requestSwap,

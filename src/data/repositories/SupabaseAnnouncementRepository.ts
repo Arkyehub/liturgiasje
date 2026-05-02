@@ -19,6 +19,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       type: ann.type,
       imageUrls: ann.image_urls || [],
       audioUrls: ann.audio_urls || [],
+      pdfUrls: ann.pdf_urls || [],
       expiresAt: ann.expires_at,
       createdAt: ann.created_at,
       createdBy: ann.created_by,
@@ -39,6 +40,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
 
     const imageUrls: string[] = []
     const audioUrls: string[] = []
+    const pdfUrls: string[] = []
 
     if (data.imageFiles) {
       for (const file of data.imageFiles) {
@@ -64,6 +66,18 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       }
     }
 
+    if (data.pdfFiles) {
+      for (const file of data.pdfFiles) {
+        const fileExt = file.name.split('.').pop()
+        const fileName = `${Math.random()}.${fileExt}`
+        const filePath = `announcements/pdfs/${fileName}`
+        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file)
+        if (error) throw error
+        const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
+        pdfUrls.push(publicUrl)
+      }
+    }
+
     const { error } = await supabase.from('announcements').insert({
       title: data.title,
       content: data.content,
@@ -72,6 +86,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       image_urls: imageUrls,
       audio_url: audioUrls[0] || "",
       audio_urls: audioUrls,
+      pdf_urls: pdfUrls,
       expires_at: data.expiresAt?.toISOString(),
       created_by: user.id
     })
@@ -114,7 +129,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
   async delete(id: string): Promise<void> {
     const { data: ann } = await supabase
       .from('announcements')
-      .select('image_url, image_urls, audio_url, audio_urls')
+      .select('image_url, image_urls, audio_url, audio_urls, pdf_urls')
       .eq('id', id)
       .single()
 
@@ -127,6 +142,11 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       })
       const audUrls = [...(ann.audio_urls || []), ann.audio_url].filter(Boolean) as string[]
       audUrls.forEach(url => {
+        const path = this.extractPathFromUrl(url)
+        if (path) pathsToDelete.push(path)
+      })
+      const pdfUrls = (ann.pdf_urls || []) as string[]
+      pdfUrls.forEach(url => {
         const path = this.extractPathFromUrl(url)
         if (path) pathsToDelete.push(path)
       })
@@ -149,8 +169,17 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
   }
 
   async update(id: string, data: any): Promise<void> {
-    const { imageFiles, audioFiles, ...rest } = data
-    const finalData = { ...rest }
+    const { imageFiles, audioFiles, pdfFiles, imageUrls, audioUrls, pdfUrls, expiresAt, ...rest } = data
+    const finalData: any = { 
+      ...rest,
+      image_urls: imageUrls,
+      audio_urls: audioUrls,
+      pdf_urls: pdfUrls
+    }
+
+    if (expiresAt) {
+      finalData.expires_at = expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt
+    }
 
     if (imageFiles) {
       const newUrls: string[] = []
@@ -163,7 +192,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
         const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
         newUrls.push(publicUrl)
       }
-      finalData.image_urls = [...(rest.image_urls || []), ...newUrls]
+      finalData.image_urls = [...(finalData.image_urls || []), ...newUrls]
     }
     
     if (finalData.image_urls) {
@@ -181,14 +210,28 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
         const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
         newUrls.push(publicUrl)
       }
-      finalData.audio_urls = [...(rest.audio_urls || []), ...newUrls]
+      finalData.audio_urls = [...(finalData.audio_urls || []), ...newUrls]
     }
 
     if (finalData.audio_urls) {
       finalData.audio_url = finalData.audio_urls[0] || ""
     }
 
-    const { data: oldAnn } = await supabase.from('announcements').select('image_urls, audio_urls').eq('id', id).single()
+    if (pdfFiles) {
+      const newUrls: string[] = []
+      for (const file of pdfFiles) {
+        const fileExt = file.name.split('.').pop()
+        const fileName = `${Math.random()}.${fileExt}`
+        const filePath = `announcements/pdfs/${fileName}`
+        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file)
+        if (error) throw error
+        const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
+        newUrls.push(publicUrl)
+      }
+      finalData.pdf_urls = [...(finalData.pdf_urls || []), ...newUrls]
+    }
+
+    const { data: oldAnn } = await supabase.from('announcements').select('image_urls, audio_urls, pdf_urls').eq('id', id).single()
     if (oldAnn) {
       const removedFiles: string[] = []
       if (oldAnn.image_urls && Array.isArray(oldAnn.image_urls)) {
@@ -203,6 +246,15 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       if (oldAnn.audio_urls && Array.isArray(oldAnn.audio_urls)) {
         const newUrls = finalData.audio_urls || []
         oldAnn.audio_urls.forEach((oldUrl: string) => {
+          if (!newUrls.includes(oldUrl)) {
+            const path = this.extractPathFromUrl(oldUrl)
+            if (path) removedFiles.push(path)
+          }
+        })
+      }
+      if (oldAnn.pdf_urls && Array.isArray(oldAnn.pdf_urls)) {
+        const newUrls = finalData.pdf_urls || []
+        oldAnn.pdf_urls.forEach((oldUrl: string) => {
           if (!newUrls.includes(oldUrl)) {
             const path = this.extractPathFromUrl(oldUrl)
             if (path) removedFiles.push(path)

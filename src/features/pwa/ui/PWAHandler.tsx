@@ -129,17 +129,27 @@ export function PWAHandler() {
           
           await subscribeToNotifications(registration);
 
+          let lastUpdateCheck = Date.now();
+
           const intervalId = setInterval(() => {
             registration.update();
+            lastUpdateCheck = Date.now();
           }, 5 * 60 * 1000);
 
           const focusHandler = () => {
-            registration.update();
+            const now = Date.now();
+            // Verifica no máximo uma vez a cada 2 minutos ao ganhar foco
+            if (now - lastUpdateCheck > 2 * 60 * 1000) {
+              lastUpdateCheck = now;
+              registration.update();
+            }
           };
           window.addEventListener('focus', focusHandler);
 
           const visibilityHandler = () => {
-            if (document.visibilityState === 'visible') {
+            const now = Date.now();
+            if (document.visibilityState === 'visible' && (now - lastUpdateCheck > 2 * 60 * 1000)) {
+              lastUpdateCheck = now;
               registration.update();
             }
           };
@@ -153,7 +163,7 @@ export function PWAHandler() {
       }
 
       let cleanup: any = null;
-      if (process.env.NODE_ENV === 'production' || window.location.hostname === 'localhost') {
+      if (process.env.NODE_ENV === 'production') {
         registerServiceWorker().then(c => cleanup = c);
       }
 

@@ -98,3 +98,9 @@ export class ListOccupiedDatesForMonth {
     return this.scheduleRepository.listOccupiedDatesForMonth(monthReference)
   }
 }
+export class ListUpcomingSchedulesForUser {
+  constructor(private readonly scheduleRepository: ScheduleRepository) {}
+  async execute(userId: string, memberId?: string): Promise<Mass[]> {
+    return this.scheduleRepository.listUpcomingForUser(userId, memberId)
+  }
+}

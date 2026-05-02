@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { AnnouncementCard } from "@/features/announcements/ui/AnnouncementCard"
 import { ScheduleCard } from "@/features/schedule/ui/ScheduleCard"
@@ -46,6 +46,19 @@ export default function Home() {
   const { user, profile, member, isMember, loading, signInWithGoogle, signOut } = useAuth()
   const router = useRouter()
   const [currentDate, setCurrentDate] = useState(new Date())
+  const currentDateRef = useRef(currentDate)
+  const profileRoleRef = useRef(profile?.role)
+  const pendingScrollSlotId = useRef<string | null>(null)
+  
+  // Sincronizar refs com estado para uso em callbacks de Realtime sem re-subscrição
+  useEffect(() => {
+    currentDateRef.current = currentDate
+  }, [currentDate])
+
+  useEffect(() => {
+    profileRoleRef.current = profile?.role
+  }, [profile?.role])
+
   const [isSheetOpen, setIsSheetOpen] = useState(false)
   
   const { 
@@ -60,10 +73,12 @@ export default function Home() {
 
   const {
     schedule,
+    upcomingSchedule,
     swaps,
     loading: isLoadingSchedule,
     loadingSwaps,
     loadSchedule,
+    loadUpcomingSchedule,
     loadSwaps,
     confirmSlot,
     requestSwap,
@@ -129,16 +144,56 @@ export default function Home() {
     }
   }
 
+  // Lógica de Scroll Pendente (para navegação entre meses)
   useEffect(() => {
-    loadAnnouncements(user?.id)
-    loadSwaps()
-    loadBirthdays()
-  }, [user?.id, loadAnnouncements, loadSwaps, loadBirthdays])
+    if (pendingScrollSlotId.current && !isLoadingSchedule) {
+      const slotId = pendingScrollSlotId.current
+      // Pequeno timeout para garantir que o DOM renderizou
+      const timer = setTimeout(() => {
+        const element = document.getElementById(`slot-${slotId}`)
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          element.classList.add('ring-4', 'ring-emerald-500', 'ring-offset-2', 'transition-all', 'duration-500')
+          setTimeout(() => {
+            element.classList.remove('ring-4', 'ring-emerald-500', 'ring-offset-2')
+          }, 3000)
+          pendingScrollSlotId.current = null
+        }
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [schedule, isLoadingSchedule])
+
+  const handleNavigateToSlot = useCallback((slotId: string, dateStr: string) => {
+    const slotDate = parseISO(dateStr)
+    const isDifferentMonth = format(slotDate, 'yyyy-MM') !== format(currentDate, 'yyyy-MM')
+
+    if (isDifferentMonth) {
+      pendingScrollSlotId.current = slotId
+      setCurrentDate(slotDate)
+    } else {
+      // Se for o mesmo mês, rola direto
+      const element = document.getElementById(`slot-${slotId}`)
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        element.classList.add('ring-4', 'ring-emerald-500', 'ring-offset-2', 'transition-all', 'duration-500')
+        setTimeout(() => {
+          element.classList.remove('ring-4', 'ring-emerald-500', 'ring-offset-2')
+        }, 3000)
+      }
+    }
+  }, [currentDate])
 
   useEffect(() => {
-    loadSchedule(currentDate, profile?.role === "admin")
-  }, [currentDate, profile?.role, loadSchedule])
-  
+    if (user?.id && isMember) {
+      loadAnnouncements(user?.id)
+      loadSchedule(currentDate, profile?.role === "admin")
+      loadUpcomingSchedule(user.id, member?.id)
+      loadSwaps()
+      loadBirthdays()
+    }
+  }, [user?.id, member?.id, isMember, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate, profile?.role])
+
   // Atualização em Tempo Real (Realtime)
   useEffect(() => {
     if (!user?.id) return
@@ -160,7 +215,8 @@ export default function Home() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'masses' },
         () => {
-          loadSchedule(currentDate, profile?.role === "admin", true)
+          loadSchedule(currentDateRef.current, profileRoleRef.current === "admin", true)
+          loadUpcomingSchedule(user.id, member?.id)
           loadSwaps()
         }
       )
@@ -168,7 +224,8 @@ export default function Home() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'schedule_slots' },
         () => {
-          loadSchedule(currentDate, profile?.role === "admin", true)
+          loadSchedule(currentDateRef.current, profileRoleRef.current === "admin", true)
+          loadUpcomingSchedule(user.id, member?.id)
           loadSwaps()
         }
       )
@@ -178,7 +235,8 @@ export default function Home() {
         () => {
           // Quando um membro é alterado (ex: claim de perfil), atualiza tudo
           loadAnnouncements(user.id, true)
-          loadSchedule(currentDate, profile?.role === "admin", true)
+          loadSchedule(currentDateRef.current, profileRoleRef.current === "admin", true)
+          loadUpcomingSchedule(user.id, member?.id)
           loadBirthdays()
         }
       )
@@ -190,10 +248,12 @@ export default function Home() {
           if (payload.new?.id === user.id) {
             // Recarregar se for o próprio usuário para pegar novas preferências/role
             loadAnnouncements(user.id, true)
-            loadSchedule(currentDate, profile?.role === "admin", true)
+            loadSchedule(currentDateRef.current, profileRoleRef.current === "admin", true)
+            loadUpcomingSchedule(user.id, member?.id)
           } else {
             // Se for outro usuário, atualiza a escala para refletir nomes/avatares
-            loadSchedule(currentDate, profile?.role === "admin", true)
+            loadSchedule(currentDateRef.current, profileRoleRef.current === "admin", true)
+            loadUpcomingSchedule(user.id, member?.id)
           }
         }
       )
@@ -202,7 +262,7 @@ export default function Home() {
           console.log('✅ Realtime conectado com sucesso!')
         }
         if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Erro na conexão Realtime:', err)
+          console.error('❌ Erro na conexão Realtime:', err || 'Erro desconhecido')
         }
         if (status === 'TIMED_OUT') {
           console.warn('⏳ Conexão Realtime expirou (timeout)')
@@ -212,7 +272,7 @@ export default function Home() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [user?.id, currentDate, profile?.role, loadAnnouncements, loadSchedule, loadSwaps, loadBirthdays])
+  }, [user?.id, member?.id, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays])
 
   if (loading) {
     return (
@@ -225,8 +285,22 @@ export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-stone-50/30">
       
-      <main className="flex-1 overflow-hidden">
-        <div className="h-full overflow-y-auto px-4 py-6 space-y-8 pb-20">
+      <main className="flex-1 overflow-hidden flex flex-col">
+        {/* Tarja de Próxima Escala (Colada ao Header) */}
+        {user && (
+          <div className="shrink-0 animate-in fade-in slide-in-from-top-4 duration-500 z-40">
+            <MyScheduleWidget 
+              schedule={upcomingSchedule} 
+              userId={user.id} 
+              memberId={member?.id}
+              userName={profile?.fullName}
+              userAvatar={profile?.avatarUrl}
+              onNavigateToSlot={handleNavigateToSlot}
+            />
+          </div>
+        )}
+        
+        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-8 pb-20">
           
           {/* Seção Nova: Solicitações de Troca */}
           {swaps.filter(s => s.mass).length > 0 && (
@@ -532,18 +606,6 @@ export default function Home() {
               )}
             </div>
 
-            {/* Widget de Próxima Escala do Usuário */}
-            {user && (
-              <div className="w-full animate-in fade-in slide-in-from-top-2 duration-500">
-                <MyScheduleWidget 
-                  schedule={schedule} 
-                  userId={user.id} 
-                  memberId={member?.id}
-                  userName={profile?.fullName}
-                  userAvatar={profile?.avatarUrl}
-                />
-              </div>
-            )}
 
             <div className="flex items-center justify-between w-full bg-white rounded-full border border-stone-400 px-2 py-1.5 shadow-sm transition-colors hover:border-stone-600">
               <Button 

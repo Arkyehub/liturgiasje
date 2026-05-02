@@ -252,4 +252,82 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
     // Retorna datas únicas (pode haver várias missas no mesmo dia)
     return [...new Set((data || []).map(m => m.date))]
   }
+
+  async listUpcomingForUser(userId: string, memberId?: string): Promise<Mass[]> {
+    const today = new Date().toISOString().split('T')[0]
+    
+    // 1. Buscar slots vinculados ao usuário ou membro
+    let query = supabase
+      .from('schedule_slots')
+      .select(`
+        *,
+        mass:masses!inner(*)
+      `)
+      .eq('mass.is_published', true)
+      .gte('mass.date', today)
+
+    if (memberId) {
+      query = query.or(`reader_id.eq."${userId}",member_id.eq."${memberId}"`)
+    } else {
+      query = query.eq('reader_id', userId)
+    }
+
+    const { data: slots, error } = await query
+      .order('mass(date)', { ascending: true })
+      .order('mass(time)', { ascending: true })
+
+    if (error) throw error
+    if (!slots || slots.length === 0) return []
+
+    // 2. Buscar nomes para os envolvidos
+    const readerIds = new Set<string>()
+    const memberIds = new Set<string>()
+    slots.forEach(s => {
+      if (s.reader_id) readerIds.add(s.reader_id)
+      if (s.member_id) memberIds.add(s.member_id)
+    })
+
+    let userNames: Record<string, any> = {}
+    let memberNames: Record<string, any> = {}
+
+    if (readerIds.size > 0) {
+      const { data: users } = await supabase.from('users').select('id, full_name, avatar_url').in('id', Array.from(readerIds))
+      if (users) userNames = Object.fromEntries(users.map(u => [u.id, u]))
+    }
+
+    if (memberIds.size > 0) {
+      const { data: members } = await supabase.from('members').select('id, full_name, user:users!claimed_by(avatar_url)').in('id', Array.from(memberIds))
+      if (members) {
+        memberNames = Object.fromEntries(members.map(m => [m.id, { 
+          full_name: m.full_name, 
+          is_claimed: !!(m as any).user,
+          avatar_url: (m as any).user?.avatar_url
+        }]))
+      }
+    }
+
+    // 3. Agrupar em formato de Mass (como o widget espera)
+    // No widget, cada slot vira um item de lista, mas aqui agrupamos por missa se houver várias leituras na mesma missa
+    const massMap = new Map<string, Mass>()
+
+    slots.forEach(s => {
+      const massData = s.mass as any
+      if (!massMap.has(massData.id)) {
+        massMap.set(massData.id, {
+          id: massData.id,
+          date: massData.date,
+          time: massData.time,
+          specialDescription: massData.special_description,
+          monthReference: massData.month_reference,
+          isPublished: massData.is_published,
+          slots: []
+        })
+      }
+      
+      const mass = massMap.get(massData.id)!
+      mass.slots.push(this.mapSlotToDomain(s, userNames, memberNames))
+    })
+
+    return Array.from(massMap.values())
+  }
 }

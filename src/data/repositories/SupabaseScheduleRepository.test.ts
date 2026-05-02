@@ -152,4 +152,42 @@ describe("SupabaseScheduleRepository", () => {
     expect(mockFrom).toHaveBeenCalledWith('schedule_slots')
     expect(global.fetch).toHaveBeenCalled()
   })
+
+  it("should list upcoming schedules for a user globally", async () => {
+    const userId = "user-1"
+    const memberId = "member-1"
+    const mockFrom = supabase.from as jest.Mock
+    
+    const mockChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      order: jest.fn().mockReturnThis(),
+      then: jest.fn((resolve) => resolve({ 
+        data: [
+          {
+            id: 'slot-1',
+            role: '1L',
+            is_confirmed: false,
+            mass: {
+              id: 'mass-1',
+              date: '2026-06-01',
+              time: '08:00:00',
+              is_published: true
+            }
+          }
+        ], 
+        error: null 
+      }))
+    }
+
+    mockFrom.mockReturnValue(mockChain)
+
+    const result = await repository.listUpcomingForUser(userId, memberId)
+
+    expect(mockFrom).toHaveBeenCalledWith('schedule_slots')
+    expect(result).toHaveLength(1)
+    expect(result[0].date).toBe('2026-06-01')
+  })
 })

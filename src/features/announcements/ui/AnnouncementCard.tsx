@@ -10,7 +10,7 @@ import { Card } from "@/shared/ui/card"
 import { Dialog, DialogContent, DialogTrigger } from "@/shared/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover"
 import { Calendar } from "@/shared/ui/calendar"
-import { CheckCircle2, Megaphone, Music, Maximize2, Calendar as CalendarIcon, Clock, Eye, Pencil, Trash2, User as UserIcon, RefreshCw, ChevronLeft, ChevronRight, Play, Pause, FastForward } from "lucide-react"
+import { CheckCircle2, Megaphone, Music, Maximize2, Calendar as CalendarIcon, Clock, Eye, Pencil, Trash2, User as UserIcon, RefreshCw, ChevronLeft, ChevronRight, Play, Pause, FastForward, FileText, Download } from "lucide-react"
 import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/shared/lib/utils"
@@ -116,6 +116,7 @@ interface AnnouncementProps {
   type: "Aviso" | "Troca"
   imageUrls?: string[]
   audioUrls?: string[]
+  pdfUrls?: string[]
   expiresAt?: string
   createdAt?: string
   isRead?: boolean
@@ -140,6 +141,7 @@ export function AnnouncementCard({
   type,
   imageUrls = [],
   audioUrls = [],
+  pdfUrls = [],
   expiresAt,
   createdAt,
   isRead,
@@ -161,9 +163,7 @@ export function AnnouncementCard({
 
   const allImages = imageUrls.filter(Boolean) as string[]
   const allAudios = audioUrls.filter(Boolean) as string[]
-
-  // Para fins de comparação, assumimos que se o usuário pode ver o botão, ele está logado.
-  // No page.tsx passaremos o ID do usuário logado se necessário, mas aqui usaremosauthorId.
+  const allPdfs = pdfUrls.filter(Boolean) as string[]
 
   // Só mostra animação se estiver logado e não tiver lido
   const shouldShowGlow = isLoggedIn && !isRead;
@@ -224,7 +224,7 @@ export function AnnouncementCard({
           {/* Direita: Ações */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onEdit?.({ id, title, content, expiresAt, imageUrls, audioUrls })}
+              onClick={() => onEdit?.({ id, title, content, expiresAt, imageUrls, audioUrls, pdfUrls })}
               className="p-1.5 hover:bg-amber-100 rounded-lg text-stone-500 hover:text-stone-800 transition-colors"
               title="Editar"
             >
@@ -323,7 +323,7 @@ export function AnnouncementCard({
                 </div>
               )}
 
-              {/* Lightbox / Diálogo Expandido Único */}
+              {/* Lightbox */}
               <Dialog
                 open={activeImageIndex !== null}
                 onOpenChange={(open) => !open && setActiveImageIndex(null)}
@@ -370,6 +370,33 @@ export function AnnouncementCard({
                   )}
                 </DialogContent>
               </Dialog>
+
+              {/* Renderização de PDFs */}
+              {allPdfs.length > 0 && (
+                <div className="flex flex-col gap-2 pt-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 px-1">Documentos Anexados</span>
+                  {allPdfs.map((url, idx) => (
+                    <div key={idx} className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50/50 p-2.5 transition-all hover:bg-white hover:shadow-sm">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <div className="bg-blue-100 p-1.5 rounded-lg">
+                          <FileText className="h-3.5 w-3.5 text-blue-600" />
+                        </div>
+                        <span className="text-xs font-bold text-stone-700 truncate">Documento {idx + 1}.pdf</span>
+                      </div>
+                      <a 
+                        href={url} 
+                        download={`documento-${idx + 1}.pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1.5 bg-white border border-stone-200 px-2.5 py-1.5 rounded-lg text-[10px] font-black text-stone-600 hover:bg-stone-50 active:scale-95 transition-all"
+                      >
+                        <Download className="h-3 w-3" />
+                        BAIXAR
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Renderização de Áudios */}
               {allAudios.length > 0 && (
