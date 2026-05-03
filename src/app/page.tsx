@@ -376,7 +376,7 @@ export default function Home() {
 
             {profile?.role === "admin" && (
               <div className="pt-2">
-                <Sheet open={isSheetOpen} onOpenChange={(open) => {
+                <Sheet open={isSheetOpen} modal={false} onOpenChange={(open) => {
                   setIsSheetOpen(open);
                   if (!open) setAnnouncementToEdit(null);
                 }}>
