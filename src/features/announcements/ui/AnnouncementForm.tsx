@@ -252,7 +252,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         console.error("Erro ao carregar rascunho", e);
       }
     }
-  }, [initialData]);
+  }, [initialData, title, content]);
 
   // Salvar rascunho ao alterar campos
   useEffect(() => {
@@ -346,7 +346,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
                 id="image-upload"
                 accept="image/*"
                 multiple
-                className="hidden"
+                style={{ position: 'absolute', opacity: 0, width: 1, height: 1, pointerEvents: 'none' }}
                 onChange={handleImageChange}
               />
               <Button
@@ -408,7 +408,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
                     ref={audioInputRef}
                     id="audio-upload" 
                     accept="audio/*" 
-                    className="hidden" 
+                    style={{ position: 'absolute', opacity: 0, width: 1, height: 1, pointerEvents: 'none' }}
                     onChange={handleAudioChange} 
                   />
                   <Button 
@@ -457,7 +457,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
                   ref={pdfInputRef}
                   id="pdf-upload" 
                   accept=".pdf,application/pdf" 
-                  className="hidden" 
+                  style={{ position: 'absolute', opacity: 0, width: 1, height: 1, pointerEvents: 'none' }}
                   onChange={handlePdfChange} 
                 />
                 <Button 
