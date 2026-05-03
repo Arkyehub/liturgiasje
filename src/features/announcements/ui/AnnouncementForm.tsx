@@ -264,30 +264,44 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
   const clearDraft = () => localStorage.removeItem('announcement_draft');
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 pt-4 text-stone-900">
+    <form 
+      onSubmit={handleSubmit} 
+      onReset={(e) => e.preventDefault()}
+      className="space-y-6 pt-4 text-stone-900"
+      autoComplete="off"
+    >
+      {/* Honeypots para atrair o Autofill do Android e deixá-lo longe dos campos reais */}
+      <div style={{ display: 'none' }} aria-hidden="true">
+        <input type="text" name="username" tabIndex={-1} />
+        <input type="password" name="password" tabIndex={-1} />
+        <input type="text" name="creditcard" tabIndex={-1} />
+      </div>
+
       <div className="space-y-2">
-        <Label htmlFor="ann_t_field" className="text-stone-700">Título do Aviso</Label>
+        <Label htmlFor="ann_subject_x1" className="text-stone-700">Assunto do Mural</Label>
         <Input
-          id="ann_t_field"
-          placeholder="Ex: Reunião Geral"
+          id="ann_subject_x1"
+          name={`subject_${Math.random().toString(36).substring(7)}`}
+          placeholder="Ex: Comunicado Geral"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
-          autoComplete="off"
+          autoComplete="new-subject-field"
           data-form-type="other"
           className="border-stone-600 focus-visible:ring-stone-400 font-medium"
         />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="ann_c_field" className="text-stone-700">Conteúdo</Label>
+        <Label htmlFor="ann_desc_x2" className="text-stone-700">Mensagem</Label>
         <Textarea
-          id="ann_c_field"
-          placeholder="Descreva o aviso aqui..."
+          id="ann_desc_x2"
+          name={`desc_${Math.random().toString(36).substring(7)}`}
+          placeholder="Escreva os detalhes aqui..."
           value={content}
           onChange={(e) => setContent(e.target.value)}
           required
-          autoComplete="off"
+          autoComplete="new-description-field"
           data-form-type="other"
           className="min-h-[120px] border-stone-600 focus-visible:ring-stone-400 font-medium"
         />
