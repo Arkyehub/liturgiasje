@@ -266,25 +266,29 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
   return (
     <form onSubmit={handleSubmit} className="space-y-6 pt-4 text-stone-900">
       <div className="space-y-2">
-        <Label htmlFor="title" className="text-stone-700">Título do Aviso</Label>
+        <Label htmlFor="ann_t_field" className="text-stone-700">Título do Aviso</Label>
         <Input
-          id="title"
+          id="ann_t_field"
           placeholder="Ex: Reunião Geral"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
+          autoComplete="off"
+          data-form-type="other"
           className="border-stone-600 focus-visible:ring-stone-400 font-medium"
         />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="content" className="text-stone-700">Conteúdo</Label>
+        <Label htmlFor="ann_c_field" className="text-stone-700">Conteúdo</Label>
         <Textarea
-          id="content"
+          id="ann_c_field"
           placeholder="Descreva o aviso aqui..."
           value={content}
           onChange={(e) => setContent(e.target.value)}
           required
+          autoComplete="off"
+          data-form-type="other"
           className="min-h-[120px] border-stone-600 focus-visible:ring-stone-400 font-medium"
         />
       </div>
