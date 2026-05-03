@@ -40,6 +40,11 @@ interface AnnouncementFormProps {
 }
 
 export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementFormProps) {
+  useEffect(() => {
+    console.log("AnnouncementForm montado");
+    return () => console.log("AnnouncementForm desmontado");
+  }, []);
+
   const [title, setTitle] = useState(initialData?.title || "")
   const [content, setContent] = useState(initialData?.content || "")
   const [hasExpiration, setHasExpiration] = useState(!!initialData?.expiresAt)
@@ -338,7 +343,10 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         {/* Áudios */}
         <div className="space-y-2">
           <Label className="text-stone-700">Áudios</Label>
-          <div className="space-y-1.5">
+          <div className={cn(
+            "space-y-1.5 min-h-[40px] rounded-lg p-1",
+            audioFiles.length > 0 ? "bg-green-50/20 ring-1 ring-green-100" : ""
+          )}>
             {existingAudios.map((url, idx) => (
               <div key={`existing-audio-${idx}`} className="flex items-center justify-between gap-2 rounded-md border border-stone-200 p-2 bg-stone-50">
                 <div className="flex items-center gap-1.5 overflow-hidden">
@@ -386,7 +394,10 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         {/* PDFs */}
         <div className="space-y-2">
           <Label className="text-stone-700">Documentos (PDF)</Label>
-          <div className="space-y-1.5">
+          <div className={cn(
+            "space-y-1.5 min-h-[40px] rounded-lg p-1",
+            pdfFiles.length > 0 ? "bg-blue-50/20 ring-1 ring-blue-100" : ""
+          )}>
             {existingPdfs.map((url, idx) => (
               <div key={`existing-pdf-${idx}`} className="flex items-center justify-between gap-2 rounded-md border border-stone-200 p-2 bg-stone-50">
                 <div className="flex items-center gap-1.5 overflow-hidden">
