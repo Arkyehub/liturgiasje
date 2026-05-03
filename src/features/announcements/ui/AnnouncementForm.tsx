@@ -10,9 +10,10 @@ import { Calendar } from "@/shared/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover"
 import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { CalendarIcon, Loader2, Image as ImageIcon, Music, X, Mic, Square, FileText } from "lucide-react"
+import { CalendarIcon, Loader2, Image as ImageIcon, Music, X, Mic, Square, FileText, Upload } from "lucide-react"
 import { cn } from "@/shared/lib/utils"
 import { toast } from "sonner"
+import { useRef } from "react"
 
 interface AnnouncementFormProps {
   initialData?: {
@@ -40,6 +41,10 @@ interface AnnouncementFormProps {
 }
 
 export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementFormProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     console.log("AnnouncementForm montado");
     return () => console.log("AnnouncementForm desmontado");
@@ -320,19 +325,22 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
             <div className="h-16 w-16">
               <input
                 type="file"
+                ref={fileInputRef}
                 id="image-upload"
                 accept="image/*"
                 multiple
                 className="hidden"
                 onChange={handleImageChange}
               />
-              <Label
-                htmlFor="image-upload"
-                className="flex flex-col items-center justify-center h-full w-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer transition-all hover:bg-stone-50 hover:border-stone-600 active:bg-stone-100"
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex flex-col items-center justify-center h-full w-full rounded-md border border-dashed border-stone-400 bg-white transition-all hover:bg-stone-50 hover:border-stone-600 active:bg-stone-100 p-0"
               >
                 <ImageIcon className="h-5 w-5 text-stone-500" />
                 <span className="text-[8px] text-stone-500 font-bold mt-0.5 uppercase">Add</span>
-              </Label>
+              </Button>
             </div>
           )}
         </div>
@@ -378,13 +386,22 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
                   {isRecording ? <Square className="h-4 w-4 text-red-500 fill-red-500" /> : <Mic className="h-4 w-4 text-red-500" />}
                 </button>
                 <div className="flex-1 relative">
-                  <input type="file" id="audio-upload" accept="audio/*" className="hidden" onChange={handleAudioChange} />
-                  <Label 
-                    htmlFor="audio-upload" 
-                    className="flex items-center justify-center h-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer text-[10px] font-bold text-stone-500 uppercase hover:bg-stone-50 active:bg-stone-100"
+                  <input 
+                    type="file" 
+                    ref={audioInputRef}
+                    id="audio-upload" 
+                    accept="audio/*" 
+                    className="hidden" 
+                    onChange={handleAudioChange} 
+                  />
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    onClick={() => audioInputRef.current?.click()}
+                    className="w-full h-full border-dashed border-stone-400 bg-white text-[10px] font-bold text-stone-500 uppercase hover:bg-stone-50 active:bg-stone-100"
                   >
                     Audio
-                  </Label>
+                  </Button>
                 </div>
               </div>
             )}
@@ -420,18 +437,21 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
               <div className="h-10">
                 <input 
                   type="file" 
+                  ref={pdfInputRef}
                   id="pdf-upload" 
                   accept=".pdf,application/pdf" 
                   className="hidden" 
                   onChange={handlePdfChange} 
-                  multiple 
                 />
-                <Label 
-                  htmlFor="pdf-upload" 
-                  className="flex items-center justify-center h-full rounded-md border border-dashed border-stone-400 bg-white cursor-pointer text-[10px] font-bold text-stone-500 uppercase hover:bg-stone-50 active:bg-stone-100"
+                <Button 
+                  type="button"
+                  variant="outline"
+                  onClick={() => pdfInputRef.current?.click()}
+                  className="w-full h-full border-dashed border-stone-400 bg-white text-[10px] font-bold text-stone-500 uppercase hover:bg-stone-50 active:bg-stone-100"
                 >
+                  <Upload className="h-3 w-3 mr-2" />
                   Anexar PDF
-                </Label>
+                </Button>
               </div>
             )}
           </div>
