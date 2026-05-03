@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect, useCallback, useId } from "react"
 import { Button } from "@/shared/ui/button"
 import { Input } from "@/shared/ui/input"
 import { Textarea } from "@/shared/ui/textarea"
@@ -12,7 +12,7 @@ import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import {
   CalendarIcon, Loader2, Image as ImageIcon,
-  Music, X, Mic, Square, FileText, Upload
+  Music, X, Mic, Square, FileText
 } from "lucide-react"
 import { cn } from "@/shared/lib/utils"
 import { toast } from "sonner"
@@ -49,8 +49,8 @@ interface AnnouncementFormProps {
 }
 
 // ─── Sub-componente: FilePickerButton ────────────────────────────────────────
-// O input[type=file] fica sobreposto ao botão com opacity:0, garantindo que
-// o toque no mobile acione o seletor de arquivos nativamente — sem .click().
+// Usa a abordagem clássica Label + input[type=file][className="hidden"]
+// que é a mais compatível com Android Chrome e todos os browsers mobile.
 
 interface FilePickerButtonProps {
   accept: string
@@ -64,6 +64,9 @@ interface FilePickerButtonProps {
 function FilePickerButton({
   accept, multiple = false, disabled = false, onChange, children, className
 }: FilePickerButtonProps) {
+  // useId garante um ID único mesmo com múltiplos FilePickerButtons na tela
+  const id = useId()
+
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
     if (files.length > 0) onChange(files)
@@ -72,22 +75,25 @@ function FilePickerButton({
   }, [onChange])
 
   return (
-    <div className={cn("relative overflow-hidden", className)}>
-      {/* Camada visual — o que o usuário vê */}
-      <div className="pointer-events-none flex h-full w-full items-center justify-center">
-        {children}
-      </div>
-      {/* Input real sobreposto — toque vai direto aqui no mobile */}
+    <>
+      {/* Input escondido — abordagem clássica que funciona em todos os browsers */}
       <input
         type="file"
+        id={id}
         accept={accept}
         multiple={multiple}
         disabled={disabled}
         onChange={handleChange}
-        aria-hidden="true"
-        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        className="hidden"
       />
-    </div>
+      {/* Label vinculado — o clique/toque aqui abre o seletor nativamente */}
+      <Label
+        htmlFor={id}
+        className={cn("cursor-pointer", className)}
+      >
+        {children}
+      </Label>
+    </>
   )
 }
 
@@ -113,7 +119,7 @@ function AttachmentItem({ label, icon, isNew = false, onRemove }: AttachmentItem
       <button
         type="button"
         onClick={onRemove}
-        className="flex-shrink-0 text-stone-400 hover:text-red-500 transition-colors"
+        className="flex-shrink-0 text-stone-400 transition-colors hover:text-red-500"
         aria-label={`Remover ${label}`}
       >
         <X className="h-3 w-3" />
@@ -159,9 +165,7 @@ function useAudioRecorder(onRecordingComplete: (file: File) => void) {
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
-    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [])
 
   const formatTime = (seconds: number) => {
@@ -175,15 +179,11 @@ function useAudioRecorder(onRecordingComplete: (file: File) => void) {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
       })
-
       const mediaRecorder = new MediaRecorder(stream, { audioBitsPerSecond: 128000 })
       mediaRecorderRef.current = mediaRecorder
       chunksRef.current = []
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data)
-      }
-
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType })
         const ext = mediaRecorder.mimeType.includes("mp4") ? "mp4" : "webm"
@@ -223,14 +223,12 @@ function useDraft(initialData?: InitialData) {
     try {
       const raw = localStorage.getItem(DRAFT_KEY)
       if (raw) return JSON.parse(raw)
-    } catch { /* ignorar erros de parse */ }
+    } catch { /* ignorar */ }
     return { title: "", content: "" }
   }
 
   const save = (title: string, content: string) => {
-    if (!initialData) {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, content }))
-    }
+    if (!initialData) localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, content }))
   }
 
   const clear = () => localStorage.removeItem(DRAFT_KEY)
@@ -246,7 +244,6 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
   const draft = useDraft(initialData)
   const initialDraft = draft.load()
 
-  // Estado do formulário
   const [title, setTitle] = useState(initialDraft.title)
   const [content, setContent] = useState(initialDraft.content)
   const [hasExpiration, setHasExpiration] = useState(!!initialData?.expiresAt)
@@ -255,7 +252,6 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
   )
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Estado dos anexos
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [existingImages, setExistingImages] = useState<string[]>(initialData?.imageUrls ?? [])
   const [audioFiles, setAudioFiles] = useState<File[]>([])
@@ -264,9 +260,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
   const [existingPdfs, setExistingPdfs] = useState<string[]>(initialData?.pdfUrls ?? [])
 
   // Persistência de rascunho
-  useEffect(() => {
-    draft.save(title, content)
-  }, [title, content])
+  useEffect(() => { draft.save(title, content) }, [title, content])
 
   // Gravação de áudio
   const handleRecordingComplete = useCallback((file: File) => {
@@ -338,7 +332,6 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
     }
   }
 
-  // ── Contadores ──────────────────────────────────────────────────────────────
   const canAddImages = existingImages.length + imageFiles.length < MAX_ATTACHMENTS
   const canAddAudios = existingAudios.length + audioFiles.length < MAX_ATTACHMENTS
   const canAddPdfs = existingPdfs.length + pdfFiles.length < MAX_ATTACHMENTS
@@ -346,12 +339,8 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      onReset={(e) => e.preventDefault()}
-      autoComplete="off"
-      className="space-y-6 pt-4 text-stone-900"
-    >
+    <form onSubmit={handleSubmit} className="space-y-6 pt-4 text-stone-900">
+
       {/* Campos de texto */}
       <div className="space-y-4">
         <div className="space-y-1.5">
@@ -364,8 +353,6 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Ex: Comunicado Geral"
             required
-            autoComplete="one-time-code"
-            data-form-type="other"
             className="border-stone-300 focus-visible:ring-stone-400 font-medium"
           />
         </div>
@@ -380,17 +367,18 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
             onChange={(e) => setContent(e.target.value)}
             placeholder="Escreva os detalhes aqui..."
             required
-            autoComplete="one-time-code"
-            data-form-type="other"
             className="min-h-[120px] border-stone-300 focus-visible:ring-stone-400 font-medium"
           />
         </div>
       </div>
 
-      {/* Seção de Imagens */}
+      {/* Imagens */}
       <div className="space-y-2">
         <Label className="text-stone-700 font-semibold">
-          Imagens <span className="text-stone-400 font-normal text-xs">({existingImages.length + imageFiles.length}/{MAX_ATTACHMENTS})</span>
+          Imagens{" "}
+          <span className="text-xs font-normal text-stone-400">
+            ({existingImages.length + imageFiles.length}/{MAX_ATTACHMENTS})
+          </span>
         </Label>
         <div className="flex flex-wrap gap-2">
           {existingImages.map((url, i) => (
@@ -413,27 +401,28 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
               accept="image/*"
               multiple
               onChange={addImages}
-              className="h-16 w-16 rounded-md border border-dashed border-stone-400 bg-white hover:bg-stone-50 active:bg-stone-100 transition-colors"
+              className="flex h-16 w-16 flex-col items-center justify-center rounded-md border border-dashed border-stone-400 bg-white transition-all hover:bg-stone-50 active:bg-stone-100"
             >
-              <div className="flex flex-col items-center gap-0.5">
-                <ImageIcon className="h-5 w-5 text-stone-500" />
-                <span className="text-[8px] font-bold uppercase text-stone-400">Add</span>
-              </div>
+              <ImageIcon className="h-5 w-5 text-stone-500" />
+              <span className="mt-0.5 text-[8px] font-bold uppercase text-stone-400">Add</span>
             </FilePickerButton>
           )}
         </div>
       </div>
 
-      {/* Seção de Áudios e PDFs */}
+      {/* Áudios e PDFs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 
         {/* Áudios */}
         <div className="space-y-2">
           <Label className="text-stone-700 font-semibold">
-            Áudios <span className="text-stone-400 font-normal text-xs">({existingAudios.length + audioFiles.length}/{MAX_ATTACHMENTS})</span>
+            Áudios{" "}
+            <span className="text-xs font-normal text-stone-400">
+              ({existingAudios.length + audioFiles.length}/{MAX_ATTACHMENTS})
+            </span>
           </Label>
           <div className="space-y-1.5">
-            {existingAudios.map((url, i) => (
+            {existingAudios.map((_, i) => (
               <AttachmentItem
                 key={`existing-audio-${i}`}
                 label={`Áudio ${i + 1}`}
@@ -452,7 +441,6 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
             ))}
             {canAddAudios && (
               <div className="flex h-10 gap-1.5">
-                {/* Botão de Gravação */}
                 <button
                   type="button"
                   onClick={isRecording ? stopRecording : startRecording}
@@ -462,7 +450,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
                       ? "border-red-400 bg-red-50 text-red-500"
                       : "border-stone-300 bg-white text-stone-500 hover:bg-stone-50"
                   )}
-                  aria-label={isRecording ? "Parar gravação" : "Iniciar gravação"}
+                  aria-label={isRecording ? "Parar gravação" : "Gravar áudio"}
                 >
                   {isRecording
                     ? <Square className="h-4 w-4 fill-red-500" />
@@ -478,7 +466,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
                   <FilePickerButton
                     accept="audio/*"
                     onChange={addAudios}
-                    className="flex-1 rounded-md border border-dashed border-stone-400 bg-white hover:bg-stone-50 active:bg-stone-100 transition-colors h-10"
+                    className="flex flex-1 items-center justify-center rounded-md border border-dashed border-stone-400 bg-white transition-all hover:bg-stone-50 active:bg-stone-100 h-10"
                   >
                     <span className="text-[10px] font-bold uppercase text-stone-500">
                       Arquivo
@@ -493,10 +481,13 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         {/* PDFs */}
         <div className="space-y-2">
           <Label className="text-stone-700 font-semibold">
-            Documentos <span className="text-stone-400 font-normal text-xs">({existingPdfs.length + pdfFiles.length}/{MAX_ATTACHMENTS})</span>
+            Documentos{" "}
+            <span className="text-xs font-normal text-stone-400">
+              ({existingPdfs.length + pdfFiles.length}/{MAX_ATTACHMENTS})
+            </span>
           </Label>
           <div className="space-y-1.5">
-            {existingPdfs.map((url, i) => (
+            {existingPdfs.map((_, i) => (
               <AttachmentItem
                 key={`existing-pdf-${i}`}
                 label={`Doc ${i + 1}`}
@@ -517,14 +508,12 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
               <FilePickerButton
                 accept=".pdf,application/pdf"
                 onChange={addPdfs}
-                className="h-10 w-full rounded-md border border-dashed border-stone-400 bg-white hover:bg-stone-50 active:bg-stone-100 transition-colors"
+                className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-stone-400 bg-white transition-all hover:bg-stone-50 active:bg-stone-100"
               >
-                <div className="flex items-center gap-1.5">
-                  <Upload className="h-3.5 w-3.5 text-stone-500" />
-                  <span className="text-[10px] font-bold uppercase text-stone-500">
-                    Anexar PDF
-                  </span>
-                </div>
+                <FileText className="h-3.5 w-3.5 text-stone-500" />
+                <span className="text-[10px] font-bold uppercase text-stone-500">
+                  Anexar PDF
+                </span>
               </FilePickerButton>
             )}
           </div>
