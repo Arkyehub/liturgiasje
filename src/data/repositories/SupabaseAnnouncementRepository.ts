@@ -77,8 +77,6 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       .order('created_at', { ascending: false })
       .limit(50)
       .neq('id', '00000000-0000-0000-0000-000000000000')
-      // Garante que o Supabase não use cache
-      .not('id', 'is', null) 
 
     if (error) throw error
     

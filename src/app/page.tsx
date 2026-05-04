@@ -104,12 +104,12 @@ export default function Home() {
   const [refreshSignal, setRefreshSignal] = useState(0)
 
   const triggerRefresh = useCallback(() => {
-    // Delay maior para garantir propagação no banco em conexões lentas
+    // Pequeno delay (100ms) para o microtask queue limpar após o await
     setTimeout(() => {
       setRefreshSignal(prev => prev + 1)
-      // Força uma nova referência de data para disparar o useEffect como se fosse uma troca de mês
+      // Força uma nova referência de data para disparar o useEffect
       setCurrentDate(prev => new Date(prev.getTime()))
-    }, 800)
+    }, 100)
   }, [])
 
   // Pull to Refresh
@@ -257,7 +257,7 @@ export default function Home() {
         </div>
       </div>
 
-      <main key={refreshSignal} className="flex-1 overflow-hidden flex flex-col">
+      <main className="flex-1 overflow-hidden flex flex-col">
         {/* Tarja de Próxima Escala (Colada ao Header) */}
         {user && (
           <div className="shrink-0 animate-in fade-in slide-in-from-top-4 duration-500 z-40">
