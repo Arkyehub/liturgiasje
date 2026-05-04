@@ -272,7 +272,12 @@ export function AnnouncementCard({
             hideChevron={!isLoggedIn}
           >
             <div className="flex items-center gap-2 text-left w-full pr-2">
-              <div className={`rounded-full p-2 shrink-0 ${type === 'Troca' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+              <div className={cn(
+                "rounded-full p-2 shrink-0 transition-all duration-500",
+                isRead 
+                  ? "bg-green-100 text-green-700" 
+                  : "bg-red-100 text-red-600 animate-pulse ring-4 ring-red-50/50"
+              )}>
                 {type === 'Troca' ? <RefreshCw className="h-4 w-4" /> : <Megaphone className="h-4 w-4" />}
               </div>
               <div className="flex flex-col flex-1 min-w-0">
