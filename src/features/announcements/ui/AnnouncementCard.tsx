@@ -170,7 +170,7 @@ export function AnnouncementCard({
 
   return (
     <Card className={`overflow-hidden p-0 gap-0 transition-all duration-500 ${shouldShowGlow
-        ? `${isExpanded ? "border-amber-400 bg-white shadow-sm" : "border-amber-400 bg-white shadow-md animate-glow-pulse ring-2 ring-amber-100 ring-offset-1"}`
+        ? `${isExpanded ? "border-red-200 bg-white shadow-sm" : "border-red-400 bg-white shadow-md animate-alert-glow ring-2 ring-red-100 ring-offset-1"}`
         : isRead ? "border-green-500 bg-white shadow-sm hover:bg-white/90" : "border-stone-200 bg-white shadow-sm"
       }`}>
       {/* Barra de Ações Administrativas (Admin Only) */}

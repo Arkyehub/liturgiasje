@@ -62,10 +62,28 @@
       transform: scale(1.01);
     }
   }
+
+  @keyframes alert-glow {
+
+    0%,
+    100% {
+      box-shadow: 0 0 5px rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+
+    50% {
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.4), 0 0 5px rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.6);
+    }
+  }
 }
 
 .animate-glow-pulse {
   animation: glow-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-alert-glow {
+  animation: alert-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 
