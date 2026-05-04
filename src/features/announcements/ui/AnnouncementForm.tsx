@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/shared/lib/utils"
 import { toast } from "sonner"
+import { useAnnouncementStore } from "../store/useAnnouncementStore"
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -213,44 +214,45 @@ function useAudioRecorder(onRecordingComplete: (file: File) => void) {
   return { isRecording, recordingTime, formatTime, startRecording, stopRecording }
 }
 
-// ─── Hook: useDraft ───────────────────────────────────────────────────────────
-
-const DRAFT_KEY = "announcement_draft"
-
-function useDraft(initialData?: InitialData) {
-  const load = (): { title: string; content: string } => {
-    if (initialData) return { title: initialData.title, content: initialData.content }
-    try {
-      const raw = localStorage.getItem(DRAFT_KEY)
-      if (raw) return JSON.parse(raw)
-    } catch { /* ignorar */ }
-    return { title: "", content: "" }
-  }
-
-  const save = (title: string, content: string) => {
-    if (!initialData) localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, content }))
-  }
-
-  const clear = () => localStorage.removeItem(DRAFT_KEY)
-
-  return { load, save, clear }
-}
-
 // ─── Componente Principal: AnnouncementForm ───────────────────────────────────
 
 const MAX_ATTACHMENTS = 3
 
 export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementFormProps) {
-  const draft = useDraft(initialData)
-  const initialDraft = draft.load()
+  const {
+    editingId, setEditingId,
+    title, setTitle,
+    content, setContent,
+    hasExpiration, setHasExpiration,
+    expirationDate, setExpirationDate,
+    clearDraft
+  } = useAnnouncementStore()
 
-  const [title, setTitle] = useState(initialDraft.title)
-  const [content, setContent] = useState(initialDraft.content)
-  const [hasExpiration, setHasExpiration] = useState(!!initialData?.expiresAt)
-  const [expirationDate, setExpirationDate] = useState<Date | undefined>(
-    initialData?.expiresAt ? new Date(initialData.expiresAt) : undefined
-  )
+  const [isHydrated, setIsHydrated] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Persistência de rascunho e hidratação
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
+
+  // Inicializar store com initialData se estiver editando
+  useEffect(() => {
+    if (initialData) {
+      if (editingId !== initialData.id) {
+        setEditingId(initialData.id)
+        setTitle(initialData.title)
+        setContent(initialData.content)
+        setHasExpiration(!!initialData.expiresAt)
+        setExpirationDate(initialData.expiresAt ? new Date(initialData.expiresAt) : null)
+      }
+    } else if (editingId !== null) {
+      // Se não há initialData mas o store tem um ID, estamos vindo de uma edição para um novo
+      clearDraft()
+    }
+  }, [initialData, editingId, setEditingId, setTitle, setContent, setHasExpiration, setExpirationDate, clearDraft])
+
+  const expirationDateValue = expirationDate ? new Date(expirationDate) : undefined
 
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [existingImages, setExistingImages] = useState<string[]>(initialData?.imageUrls ?? [])
@@ -258,9 +260,6 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
   const [existingAudios, setExistingAudios] = useState<string[]>(initialData?.audioUrls ?? [])
   const [pdfFiles, setPdfFiles] = useState<File[]>([])
   const [existingPdfs, setExistingPdfs] = useState<string[]>(initialData?.pdfUrls ?? [])
-
-  // Persistência de rascunho
-  useEffect(() => { draft.save(title, content) }, [title, content])
 
   // Gravação de áudio
   const handleRecordingComplete = useCallback((file: File) => {
@@ -314,7 +313,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         id: initialData?.id,
         title: title.trim(),
         content: content.trim(),
-        expiresAt: hasExpiration ? (expirationDate ?? null) : null,
+        expiresAt: hasExpiration ? (expirationDateValue ?? null) : null,
         imageFiles: imageFiles.length > 0 ? imageFiles : null,
         imageUrls: existingImages,
         audioFiles: audioFiles.length > 0 ? audioFiles : null,
@@ -322,7 +321,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         pdfFiles: pdfFiles.length > 0 ? pdfFiles : null,
         pdfUrls: existingPdfs,
       })
-      draft.clear()
+      clearDraft()
       onClose()
     } catch (error) {
       console.error("Erro ao salvar aviso:", error)
@@ -337,6 +336,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
   const canAddPdfs = existingPdfs.length + pdfFiles.length < MAX_ATTACHMENTS
 
   // ── Render ──────────────────────────────────────────────────────────────────
+  if (!isHydrated) return null
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 pt-4 text-stone-900">
@@ -544,22 +544,22 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {expirationDate && isValid(expirationDate)
-                      ? format(expirationDate, "PPP", { locale: ptBR })
+                    {expirationDateValue && isValid(expirationDateValue)
+                      ? format(expirationDateValue, "PPP", { locale: ptBR })
                       : "Selecione a data"
                     }
                   </Button>
                 }
               />
               <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={expirationDate}
-                  onSelect={setExpirationDate}
-                  initialFocus
-                  locale={ptBR}
-                  disabled={(date) => date < new Date()}
-                />
+                  <Calendar
+                    mode="single"
+                    selected={expirationDateValue}
+                    onSelect={(date) => setExpirationDate(date ?? null)}
+                    initialFocus
+                    locale={ptBR}
+                    disabled={(date) => date < new Date()}
+                  />
               </PopoverContent>
             </Popover>
           </div>
@@ -571,7 +571,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         <Button
           type="button"
           variant="ghost"
-          onClick={() => { draft.clear(); onClose() }}
+          onClick={() => { clearDraft(); onClose() }}
           disabled={isSubmitting}
           className="flex-1 text-stone-500 hover:bg-stone-100"
         >
