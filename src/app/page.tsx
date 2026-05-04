@@ -101,6 +101,14 @@ export default function Home() {
   const [isAcceptingSwap, setIsAcceptingSwap] = useState(false)
   const [isUnavailableDrawerOpen, setIsUnavailableDrawerOpen] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
+  const [refreshSignal, setRefreshSignal] = useState(0)
+
+  const triggerRefresh = useCallback(() => {
+    // Pequeno delay para garantir que o banco terminou de processar a escrita
+    setTimeout(() => {
+      setRefreshSignal(prev => prev + 1)
+    }, 300)
+  }, [])
 
   // Pull to Refresh
   const handleRefreshAll = useCallback(async () => {
@@ -149,7 +157,7 @@ export default function Home() {
       const monthRef = format(currentDate, "yyyy-MM")
       await publishMonth(monthRef)
       toast.success("Escala publicada e notificações enviadas!")
-      loadSchedule(currentDate, profile?.role === "admin")
+      triggerRefresh()
     } catch (error) {
       toast.error("Erro ao publicar escala.")
     } finally {
@@ -199,13 +207,13 @@ export default function Home() {
 
   useEffect(() => {
     if (user?.id && isMember) {
-      loadAnnouncements(user?.id)
-      loadSchedule(currentDate, profile?.role === "admin")
+      loadAnnouncements(user?.id, refreshSignal > 0)
+      loadSchedule(currentDate, profile?.role === "admin", refreshSignal > 0)
       loadUpcomingSchedule(user.id, member?.id)
       loadSwaps()
       loadBirthdays()
     }
-  }, [user?.id, member?.id, isMember, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate, profile?.role])
+  }, [user?.id, member?.id, isMember, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate, profile?.role, refreshSignal])
 
   // Recarregar dados ao focar na janela (volta ao PWA ou aba)
   useEffect(() => {
@@ -468,8 +476,7 @@ export default function Home() {
                             })
                             toast.success("Aviso publicado com sucesso!")
                           }
-                          // Aguarda o recarregamento dos dados antes de fechar o formulário
-                          await loadAnnouncements(user?.id, true)
+                          triggerRefresh()
                           setIsFormOpen(false)
                           setAnnouncementToEdit(null)
                         } catch (error) {
@@ -509,7 +516,7 @@ export default function Home() {
                       try {
                         await deleteAnnouncement(announcementToDelete)
                         toast.success("Aviso excluído.")
-                        await loadAnnouncements(user?.id, true)
+                        triggerRefresh()
                         setAnnouncementToDelete(null)
                       } catch (error) {
                         toast.error("Erro ao excluir.")
@@ -717,7 +724,7 @@ export default function Home() {
                           const massIds = day.items.map((item: any) => item.id)
                           await updateMassesStatus(massIds, isPublished)
                           toast.success(isPublished ? "Escala publicada!" : "Escala movida para rascunho")
-                          await loadSchedule(currentDate, profile?.role === "admin", true)
+                          triggerRefresh()
                         } catch (error) {
                           console.error("Erro detalhado ao alterar status:", error)
                           toast.error("Erro ao alterar status.")
@@ -728,7 +735,7 @@ export default function Home() {
                         try {
                           await confirmSlot(slotId, user.id)
                           toast.success("Presença confirmada!")
-                          await loadSchedule(currentDate, profile?.role === "admin", true)
+                          triggerRefresh()
                         } catch (error) {
                           toast.error("Erro ao confirmar.")
                         }
@@ -757,9 +764,7 @@ export default function Home() {
                         try {
                           await cancelSwap(slotId)
                           toast.success("Pedido de troca cancelado!")
-                          // Recarregar tanto a escala quanto o mural de trocas
-                          await loadSchedule(currentDate, profile?.role === "admin", true)
-                          await loadSwaps()
+                          triggerRefresh()
                         } catch (error) {
                           toast.error("Erro ao cancelar troca.")
                         }
@@ -825,7 +830,7 @@ export default function Home() {
                         // Exclui todos os horários vinculados ao card (dia)
                         await Promise.all(scheduleToDelete.map(id => deleteMass(id)))
                         toast.success("Dia removido da escala.")
-                        await loadSchedule(currentDate, profile?.role === "admin", true)
+                        triggerRefresh()
                         setScheduleToDelete(null)
                       } catch (error) {
                         toast.error("Erro ao excluir horários do dia.")
@@ -868,8 +873,7 @@ export default function Home() {
                         await requestSwap(swapTargetSlot.id)
                         
                         toast.success("Solicitação de troca publicada!")
-                        await loadSchedule(currentDate, profile?.role === "admin", true)
-                        await loadSwaps()
+                        triggerRefresh()
                         setSwapTargetSlot(null)
                       } catch (error) {
                         toast.error("Erro ao processar solicitação.")
@@ -927,8 +931,7 @@ export default function Home() {
                         try {
                           await acceptSwap(takeSwapTarget.slotId, user.id, member?.id)
                           toast.success("Você assumiu a escala! Presença confirmada.")
-                          await loadSchedule(currentDate, profile?.role === "admin", true)
-                          await loadSwaps()
+                          triggerRefresh()
                           setTakeSwapTarget(null)
                         } catch (error) {
                         toast.error("Erro ao assumir troca.")
