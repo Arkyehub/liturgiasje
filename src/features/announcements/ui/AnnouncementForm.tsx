@@ -276,31 +276,34 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
   // ── Handlers de arquivos ────────────────────────────────────────────────────
 
   const addImages = useCallback((files: File[]) => {
-    setImageFiles((prev) => {
-      const slots = MAX_ATTACHMENTS - existingImages.length - prev.length
-      return slots > 0 ? [...prev, ...files.slice(0, slots)] : prev
-    })
-  }, [existingImages.length])
+    const slots = MAX_ATTACHMENTS - existingImages.length - imageFiles.length
+    if (slots <= 0) return
+    const toAdd = files.slice(0, slots)
+    setImageFiles((prev) => [...prev, ...toAdd])
+    if (toAdd.length > 0) {
+      toast.success(`${toAdd.length} imagem(ns) anexada(s)`)
+    }
+  }, [existingImages.length, imageFiles.length])
 
   const addAudios = useCallback((files: File[]) => {
-    setAudioFiles((prev) => {
-      const slots = MAX_ATTACHMENTS - existingAudios.length - prev.length
-      if (slots <= 0) return prev
-      const toAdd = files.slice(0, slots)
+    const slots = MAX_ATTACHMENTS - existingAudios.length - audioFiles.length
+    if (slots <= 0) return
+    const toAdd = files.slice(0, slots)
+    setAudioFiles((prev) => [...prev, ...toAdd])
+    if (toAdd.length > 0) {
       toast.success(`${toAdd.length} áudio(s) anexado(s)`)
-      return [...prev, ...toAdd]
-    })
-  }, [existingAudios.length])
+    }
+  }, [existingAudios.length, audioFiles.length])
 
   const addPdfs = useCallback((files: File[]) => {
-    setPdfFiles((prev) => {
-      const slots = MAX_ATTACHMENTS - existingPdfs.length - prev.length
-      if (slots <= 0) return prev
-      const toAdd = files.slice(0, slots)
-      toast.success(`${toAdd.length} PDF(s) anexado(s)`)
-      return [...prev, ...toAdd]
-    })
-  }, [existingPdfs.length])
+    const slots = MAX_ATTACHMENTS - existingPdfs.length - pdfFiles.length
+    if (slots <= 0) return
+    const toAdd = files.slice(0, slots)
+    setPdfFiles((prev) => [...prev, ...toAdd])
+    if (toAdd.length > 0) {
+      toast.success(`${toAdd.length} documento(s) anexado(s)`)
+    }
+  }, [existingPdfs.length, pdfFiles.length])
 
   // ── Submit ──────────────────────────────────────────────────────────────────
 

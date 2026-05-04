@@ -20,10 +20,11 @@ export function PWAHandler() {
       // 1. Recarregar a página quando um novo Service Worker assume o controle
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing) {
-          refreshing = true;
-          window.location.reload();
-        }
+        // Só recarrega se já houver um controller (indicando uma atualização de versão)
+        // Se for a primeira vez que o SW assume (página limpa), não precisamos recarregar
+        if (refreshing || !navigator.serviceWorker.controller) return;
+        refreshing = true;
+        window.location.reload();
       });
 
       const subscribeToNotifications = async (registration: ServiceWorkerRegistration) => {
