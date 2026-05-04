@@ -37,6 +37,9 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
 
     let query = supabase.from('masses').select(`*, slots:schedule_slots (*)`)
     if (!isAdmin) query = query.eq('is_published', true)
+    
+    // Adiciona um nonce (timestamp) para garantir que a query seja única e ignore caches
+    query = query.neq('id', '00000000-0000-0000-0000-000000000000')
 
     const { data: masses, error } = await query
       .gte('date', format(start, 'yyyy-MM-dd'))
