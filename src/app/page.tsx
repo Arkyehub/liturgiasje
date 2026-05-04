@@ -376,7 +376,7 @@ export default function Home() {
                       }
                       try {
                         await markAsRead(id, user.id)
-                        loadAnnouncements(user.id, true)
+                        await loadAnnouncements(user.id, true)
                       } catch (error) {
                         console.error(error)
                       }
@@ -385,7 +385,7 @@ export default function Home() {
                       try {
                         await updateAnnouncement(id, data)
                         toast.success("Aviso atualizado!")
-                        loadAnnouncements(user?.id, true)
+                        await loadAnnouncements(user?.id, true)
                       } catch (error) {
                         toast.error("Erro ao atualizar aviso.")
                       }
@@ -618,8 +618,8 @@ export default function Home() {
                       <ScheduleForm 
                         currentMonth={currentDate}
                         initialData={scheduleToEdit}
-                        onSuccess={() => {
-                          loadSchedule(currentDate, profile?.role === "admin")
+                        onSuccess={async () => {
+                          await loadSchedule(currentDate, profile?.role === "admin", true)
                         }}
                         onClose={() => {
                           setIsScheduleSheetOpen(false)
@@ -717,7 +717,7 @@ export default function Home() {
                           const massIds = day.items.map((item: any) => item.id)
                           await updateMassesStatus(massIds, isPublished)
                           toast.success(isPublished ? "Escala publicada!" : "Escala movida para rascunho")
-                          loadSchedule(currentDate, profile?.role === "admin", true)
+                          await loadSchedule(currentDate, profile?.role === "admin", true)
                         } catch (error) {
                           console.error("Erro detalhado ao alterar status:", error)
                           toast.error("Erro ao alterar status.")
@@ -728,7 +728,7 @@ export default function Home() {
                         try {
                           await confirmSlot(slotId, user.id)
                           toast.success("Presença confirmada!")
-                          loadSchedule(currentDate, profile?.role === "admin", true)
+                          await loadSchedule(currentDate, profile?.role === "admin", true)
                         } catch (error) {
                           toast.error("Erro ao confirmar.")
                         }
@@ -758,8 +758,8 @@ export default function Home() {
                           await cancelSwap(slotId)
                           toast.success("Pedido de troca cancelado!")
                           // Recarregar tanto a escala quanto o mural de trocas
-                          loadSchedule(currentDate, profile?.role === "admin")
-                          loadSwaps()
+                          await loadSchedule(currentDate, profile?.role === "admin", true)
+                          await loadSwaps()
                         } catch (error) {
                           toast.error("Erro ao cancelar troca.")
                         }
@@ -868,8 +868,8 @@ export default function Home() {
                         await requestSwap(swapTargetSlot.id)
                         
                         toast.success("Solicitação de troca publicada!")
-                        loadSchedule(currentDate, profile?.role === "admin")
-                        loadSwaps()
+                        await loadSchedule(currentDate, profile?.role === "admin", true)
+                        await loadSwaps()
                         setSwapTargetSlot(null)
                       } catch (error) {
                         toast.error("Erro ao processar solicitação.")
@@ -927,8 +927,8 @@ export default function Home() {
                         try {
                           await acceptSwap(takeSwapTarget.slotId, user.id, member?.id)
                           toast.success("Você assumiu a escala! Presença confirmada.")
-                          loadSchedule(currentDate, profile?.role === "admin")
-                          loadSwaps()
+                          await loadSchedule(currentDate, profile?.role === "admin", true)
+                          await loadSwaps()
                           setTakeSwapTarget(null)
                         } catch (error) {
                         toast.error("Erro ao assumir troca.")
