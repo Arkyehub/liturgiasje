@@ -1,5 +1,5 @@
 // Basic Service Worker for PWA
-const CACHE_NAME = 'liturgia-sje-v3';
+const CACHE_NAME = 'liturgia-sje-v4';
 const ASSETS_TO_CACHE = [
   '/',
   '/icons/android-chrome-192x192.png',
@@ -46,7 +46,10 @@ self.addEventListener('fetch', (event) => {
   // 2. Apenas lidar com requisições GET
   if (event.request.method !== 'GET') return;
 
-  // 3. Estratégia Network-First para navegações (HTML principal)
+  // 3. NÃO cachear requisições de API (Supabase, etc)
+  if (url.hostname.includes('supabase.co') || url.pathname.startsWith('/api/')) return;
+
+  // 4. Estratégia Network-First para navegações (HTML principal)
   // Isso garante que se houver internet, ele sempre pega o HTML mais novo do servidor.
   if (event.request.mode === 'navigate' || (url.origin === self.location.origin && url.pathname === '/')) {
     event.respondWith(
