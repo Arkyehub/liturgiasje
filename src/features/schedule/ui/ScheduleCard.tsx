@@ -165,7 +165,7 @@ export function ScheduleCard({
                     id={`slot-${slot.id}`}
                     className={cn(
                       "flex items-center justify-between py-1.5 px-3 rounded-xl border border-stone-100/10 transition-all",
-                      isDatePast && slot.isSwapRequested ? "bg-red-50 border-l-4 border-l-red-400" :
+                      slot.isSwapRequested ? "bg-red-50/70 border-l-4 border-l-red-200" :
                         slot.isConfirmed && slot.isMine ? "bg-green-50" : "bg-stone-50/40"
                     )}
                   >
@@ -174,7 +174,7 @@ export function ScheduleCard({
                         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-black border transition-all ${isDatePast && slot.isSwapRequested
                             ? "bg-red-100 text-red-700 border-red-200"
                             : slot.isSwapRequested
-                              ? "bg-amber-100 text-amber-700 border-amber-200 animate-pulse"
+                              ? "bg-red-100 text-red-700 border-red-200 animate-pulse"
                               : slot.isConfirmed
                                 ? "bg-green-100 text-green-700 border-green-600"
                                 : "bg-stone-50 text-stone-600 border-stone-400"
@@ -246,17 +246,14 @@ export function ScheduleCard({
 
                         {isPublished && slot.isMine && slot.isSwapRequested && (
                           <div className="flex items-center gap-1.5">
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "text-[9px] font-black",
-                                isDatePast
-                                  ? "bg-red-50 text-red-700 border-red-200"
-                                  : "bg-amber-50 text-amber-700 border-amber-200 animate-pulse"
-                              )}
-                            >
-                              {isDatePast ? "Troca Não Realizada" : "TROCA SOLICITADA"}
-                            </Badge>
+                            {isDatePast && (
+                              <Badge
+                                variant="outline"
+                                className="text-[9px] font-black bg-red-50 text-red-700 border-red-200"
+                              >
+                                Troca Não Realizada
+                              </Badge>
+                            )}
                             {!isDatePast && (
                               <Button
                                 variant="ghost"
@@ -264,7 +261,7 @@ export function ScheduleCard({
                                 className="h-8 px-2 text-[10px] font-bold text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
                                 onClick={() => onCancelSwap?.(slot.id)}
                               >
-                                CANCELAR
+                                CANCELAR TROCA
                               </Button>
                             )}
                           </div>
