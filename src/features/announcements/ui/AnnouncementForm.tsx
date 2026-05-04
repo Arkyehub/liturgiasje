@@ -91,6 +91,7 @@ function FilePickerButton({
       <Label
         htmlFor={id}
         className={cn("cursor-pointer", className)}
+        onClick={(e) => e.stopPropagation()}
       >
         {children}
       </Label>
@@ -506,7 +507,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
             ))}
             {canAddPdfs && (
               <FilePickerButton
-                accept=".pdf,application/pdf"
+                accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                 onChange={addPdfs}
                 className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-stone-400 bg-white transition-all hover:bg-stone-50 active:bg-stone-100"
               >

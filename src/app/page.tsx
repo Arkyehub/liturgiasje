@@ -14,6 +14,7 @@ import Link from "next/link"
 
 import { useAuth } from "@/shared/hooks/useAuth"
 import { AnnouncementForm } from "@/features/announcements/ui/AnnouncementForm"
+import { useAnnouncementStore } from "@/features/announcements/store/useAnnouncementStore"
 import { ScheduleForm } from "@/features/schedule/ui/ScheduleForm"
 import { UnavailableForm } from "@/features/schedule/ui/UnavailableForm"
 import { useAnnouncements } from "@/features/announcements/hooks/useAnnouncements"
@@ -48,7 +49,12 @@ export default function Home() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const pendingScrollSlotId = useRef<string | null>(null)
 
-  const [isSheetOpen, setIsSheetOpen] = useState(false)
+  const { isFormOpen, setIsFormOpen } = useAnnouncementStore()
+  const [isHydrated, setIsHydrated] = useState(false)
+
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
   
   const { 
     announcements, 
@@ -341,7 +347,7 @@ export default function Home() {
                     onDelete={(id) => setAnnouncementToDelete(id)}
                     onEdit={(ann) => {
                       setAnnouncementToEdit(ann)
-                      setIsSheetOpen(true)
+                      setIsFormOpen(true)
                     }}
                     onAcceptSwap={async (slotId) => {
                       if (!user) {
@@ -376,8 +382,8 @@ export default function Home() {
 
             {profile?.role === "admin" && (
               <div className="pt-2">
-                <Sheet open={isSheetOpen} modal={false} onOpenChange={(open) => {
-                  setIsSheetOpen(open);
+                <Sheet open={isHydrated && isFormOpen} modal={false} onOpenChange={(open) => {
+                  setIsFormOpen(open);
                   if (!open) setAnnouncementToEdit(null);
                 }}>
                   <SheetTrigger render={
@@ -417,7 +423,7 @@ export default function Home() {
                             toast.success("Aviso publicado com sucesso!")
                           }
                           loadAnnouncements(user?.id)
-                          setIsSheetOpen(false)
+                          setIsFormOpen(false)
                           setAnnouncementToEdit(null)
                         } catch (error) {
                           toast.error("Erro ao salvar aviso. Tente novamente.")
@@ -425,7 +431,7 @@ export default function Home() {
                         }
                       }}
                       onClose={() => {
-                        setIsSheetOpen(false)
+                        setIsFormOpen(false)
                         setAnnouncementToEdit(null)
                       }}
                     />

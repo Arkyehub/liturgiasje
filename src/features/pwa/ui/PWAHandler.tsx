@@ -39,19 +39,28 @@ export function PWAHandler() {
 
           // 3. Se ainda não há permissão (default), podemos mostrar um convite
           if (Notification.permission === 'default') {
-            toast.info("Deseja receber notificações?", {
-              description: "Fique por dentro de novos recados e escalas.",
-              action: {
-                label: "Ativar",
-                onClick: async () => {
-                  const permission = await Notification.requestPermission();
-                  if (permission === 'granted') {
-                    await performSubscription(registration);
+            const lastPrompt = sessionStorage.getItem('notification_prompt_shown');
+            if (lastPrompt) return;
+
+            // Pequeno delay para não aparecer imediatamente no reload do Android
+            setTimeout(() => {
+              toast.info("Deseja receber notificações?", {
+                description: "Fique por dentro de novos recados e escalas.",
+                action: {
+                  label: "Ativar",
+                  onClick: async () => {
+                    const permission = await Notification.requestPermission();
+                    if (permission === 'granted') {
+                      await performSubscription(registration);
+                    }
                   }
-                }
-              },
-              duration: 10000,
-            });
+                },
+                onDismiss: () => {
+                  sessionStorage.setItem('notification_prompt_shown', 'true');
+                },
+                duration: 10000,
+              });
+            }, 3000);
             return;
           }
 
