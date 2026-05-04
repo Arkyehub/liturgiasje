@@ -21,6 +21,7 @@ import { useAnnouncements } from "@/features/announcements/hooks/useAnnouncement
 import { useSchedule } from "@/features/schedule/hooks/useSchedule"
 import { useUser } from "@/features/profile/hooks/useUser"
 import { supabase } from "@/shared/api/supabase"
+import { cn } from "@/shared/lib/utils"
 import { toast } from "sonner"
 import { APP_VERSION } from "@/shared/constants/version"
 import { usePullToRefresh } from "@/shared/hooks/usePullToRefresh"
