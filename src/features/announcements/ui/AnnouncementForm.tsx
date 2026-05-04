@@ -17,6 +17,7 @@ import {
 import { cn } from "@/shared/lib/utils"
 import { toast } from "sonner"
 import { useAnnouncementStore } from "../store/useAnnouncementStore"
+import { storageService } from "@/shared/api/storage"
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -35,11 +36,8 @@ interface SavePayload {
   title: string
   content: string
   expiresAt: Date | null
-  imageFiles?: File[] | null
   imageUrls?: string[]
-  audioFiles?: File[] | null
   audioUrls?: string[]
-  pdfFiles?: File[] | null
   pdfUrls?: string[]
 }
 
@@ -116,13 +114,15 @@ function AttachmentItem({ label, icon, isNew = false, onRemove }: AttachmentItem
     )}>
       <div className="flex items-center gap-1.5 overflow-hidden">
         {icon}
-        <span className="truncate text-[10px] font-medium text-stone-600">{label}</span>
+        <span className="truncate text-[10px] font-medium text-stone-600">
+          {label.startsWith('http') ? 'Anexo' : label}
+        </span>
       </div>
       <button
         type="button"
         onClick={onRemove}
         className="flex-shrink-0 text-stone-400 transition-colors hover:text-red-500"
-        aria-label={`Remover ${label}`}
+        aria-label={`Remover anexo`}
       >
         <X className="h-3 w-3" />
       </button>
@@ -226,11 +226,19 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
     content, setContent,
     hasExpiration, setHasExpiration,
     expirationDate, setExpirationDate,
+    imageUrls, setImageUrls,
+    audioUrls, setAudioUrls,
+    pdfUrls, setPdfUrls,
     clearDraft
   } = useAnnouncementStore()
 
   const [isHydrated, setIsHydrated] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [uploadingStatus, setUploadingStatus] = useState({
+    images: false,
+    audios: false,
+    pdfs: false
+  })
 
   // Persistência de rascunho e hidratação
   useEffect(() => {
@@ -246,70 +254,109 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         setContent(initialData.content)
         setHasExpiration(!!initialData.expiresAt)
         setExpirationDate(initialData.expiresAt ? new Date(initialData.expiresAt) : null)
+        setImageUrls(initialData.imageUrls ?? [])
+        setAudioUrls(initialData.audioUrls ?? [])
+        setPdfUrls(initialData.pdfUrls ?? [])
       }
     } else if (editingId !== null) {
       // Se não há initialData mas o store tem um ID, estamos vindo de uma edição para um novo
       clearDraft()
     }
-  }, [initialData, editingId, setEditingId, setTitle, setContent, setHasExpiration, setExpirationDate, clearDraft])
+  }, [initialData, editingId, setEditingId, setTitle, setContent, setHasExpiration, setExpirationDate, setImageUrls, setAudioUrls, setPdfUrls, clearDraft])
 
   const expirationDateValue = expirationDate ? new Date(expirationDate) : undefined
 
-  const [imageFiles, setImageFiles] = useState<File[]>([])
-  const [existingImages, setExistingImages] = useState<string[]>(initialData?.imageUrls ?? [])
-  const [audioFiles, setAudioFiles] = useState<File[]>([])
-  const [existingAudios, setExistingAudios] = useState<string[]>(initialData?.audioUrls ?? [])
-  const [pdfFiles, setPdfFiles] = useState<File[]>([])
-  const [existingPdfs, setExistingPdfs] = useState<string[]>(initialData?.pdfUrls ?? [])
-
   // Gravação de áudio
-  const handleRecordingComplete = useCallback((file: File) => {
-    setAudioFiles((prev) => {
-      const slots = MAX_ATTACHMENTS - existingAudios.length - prev.length
-      return slots > 0 ? [...prev, file] : prev
-    })
-  }, [existingAudios.length])
+  const handleRecordingComplete = useCallback(async (file: File) => {
+    if (audioUrls.length >= MAX_ATTACHMENTS) return
+    
+    setUploadingStatus(prev => ({ ...prev, audios: true }))
+    try {
+      const url = await storageService.uploadFile(file, { path: `announcements/audio/rec-${Date.now()}.webm` })
+      setAudioUrls(prev => [...prev, url])
+      toast.success("Gravação anexada")
+    } catch (error) {
+      console.error(error)
+      toast.error("Erro ao fazer upload da gravação")
+    } finally {
+      setUploadingStatus(prev => ({ ...prev, audios: false }))
+    }
+  }, [audioUrls.length, setAudioUrls])
 
   const { isRecording, recordingTime, formatTime, startRecording, stopRecording } =
     useAudioRecorder(handleRecordingComplete)
 
   // ── Handlers de arquivos ────────────────────────────────────────────────────
 
-  const addImages = useCallback((files: File[]) => {
-    const slots = MAX_ATTACHMENTS - existingImages.length - imageFiles.length
+  const addImages = useCallback(async (files: File[]) => {
+    const slots = MAX_ATTACHMENTS - imageUrls.length
     if (slots <= 0) return
     const toAdd = files.slice(0, slots)
-    setImageFiles((prev) => [...prev, ...toAdd])
-    if (toAdd.length > 0) {
-      toast.success(`${toAdd.length} imagem(ns) anexada(s)`)
+    
+    setUploadingStatus(prev => ({ ...prev, images: true }))
+    try {
+      const uploadedUrls = await Promise.all(
+        toAdd.map(file => storageService.uploadFile(file, { path: `announcements/images/${Date.now()}-${file.name}` }))
+      )
+      setImageUrls(prev => [...prev, ...uploadedUrls])
+      toast.success(`${uploadedUrls.length} imagem(ns) anexada(s)`)
+    } catch (error) {
+      console.error(error)
+      toast.error("Erro ao fazer upload das imagens")
+    } finally {
+      setUploadingStatus(prev => ({ ...prev, images: false }))
     }
-  }, [existingImages.length, imageFiles.length])
+  }, [imageUrls.length, setImageUrls])
 
-  const addAudios = useCallback((files: File[]) => {
-    const slots = MAX_ATTACHMENTS - existingAudios.length - audioFiles.length
+  const addAudios = useCallback(async (files: File[]) => {
+    const slots = MAX_ATTACHMENTS - audioUrls.length
     if (slots <= 0) return
     const toAdd = files.slice(0, slots)
-    setAudioFiles((prev) => [...prev, ...toAdd])
-    if (toAdd.length > 0) {
-      toast.success(`${toAdd.length} áudio(s) anexado(s)`)
-    }
-  }, [existingAudios.length, audioFiles.length])
 
-  const addPdfs = useCallback((files: File[]) => {
-    const slots = MAX_ATTACHMENTS - existingPdfs.length - pdfFiles.length
+    setUploadingStatus(prev => ({ ...prev, audios: true }))
+    try {
+      const uploadedUrls = await Promise.all(
+        toAdd.map(file => storageService.uploadFile(file, { path: `announcements/audio/${Date.now()}-${file.name}` }))
+      )
+      setAudioUrls(prev => [...prev, ...uploadedUrls])
+      toast.success(`${uploadedUrls.length} áudio(s) anexado(s)`)
+    } catch (error) {
+      console.error(error)
+      toast.error("Erro ao fazer upload dos áudios")
+    } finally {
+      setUploadingStatus(prev => ({ ...prev, audios: false }))
+    }
+  }, [audioUrls.length, setAudioUrls])
+
+  const addPdfs = useCallback(async (files: File[]) => {
+    const slots = MAX_ATTACHMENTS - pdfUrls.length
     if (slots <= 0) return
     const toAdd = files.slice(0, slots)
-    setPdfFiles((prev) => [...prev, ...toAdd])
-    if (toAdd.length > 0) {
-      toast.success(`${toAdd.length} documento(s) anexado(s)`)
+
+    setUploadingStatus(prev => ({ ...prev, pdfs: true }))
+    try {
+      const uploadedUrls = await Promise.all(
+        toAdd.map(file => storageService.uploadFile(file, { path: `announcements/pdfs/${Date.now()}-${file.name}` }))
+      )
+      setPdfUrls(prev => [...prev, ...uploadedUrls])
+      toast.success(`${uploadedUrls.length} documento(s) anexado(s)`)
+    } catch (error) {
+      console.error(error)
+      toast.error("Erro ao fazer upload dos documentos")
+    } finally {
+      setUploadingStatus(prev => ({ ...prev, pdfs: false }))
     }
-  }, [existingPdfs.length, pdfFiles.length])
+  }, [pdfUrls.length, setPdfUrls])
 
   // ── Submit ──────────────────────────────────────────────────────────────────
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim() || !content.trim()) return
+    if (Object.values(uploadingStatus).some(Boolean)) {
+      toast.error("Aguarde o upload dos arquivos terminar")
+      return
+    }
 
     setIsSubmitting(true)
     try {
@@ -318,12 +365,9 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         title: title.trim(),
         content: content.trim(),
         expiresAt: hasExpiration ? (expirationDateValue ?? null) : null,
-        imageFiles: imageFiles.length > 0 ? imageFiles : null,
-        imageUrls: existingImages,
-        audioFiles: audioFiles.length > 0 ? audioFiles : null,
-        audioUrls: existingAudios,
-        pdfFiles: pdfFiles.length > 0 ? pdfFiles : null,
-        pdfUrls: existingPdfs,
+        imageUrls: imageUrls,
+        audioUrls: audioUrls,
+        pdfUrls: pdfUrls,
       })
       clearDraft()
       onClose()
@@ -335,9 +379,9 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
     }
   }
 
-  const canAddImages = existingImages.length + imageFiles.length < MAX_ATTACHMENTS
-  const canAddAudios = existingAudios.length + audioFiles.length < MAX_ATTACHMENTS
-  const canAddPdfs = existingPdfs.length + pdfFiles.length < MAX_ATTACHMENTS
+  const canAddImages = imageUrls.length < MAX_ATTACHMENTS
+  const canAddAudios = audioUrls.length < MAX_ATTACHMENTS
+  const canAddPdfs = pdfUrls.length < MAX_ATTACHMENTS
 
   // ── Render ──────────────────────────────────────────────────────────────────
   if (!isHydrated) return null
@@ -381,23 +425,18 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         <Label className="text-stone-700 font-semibold">
           Imagens{" "}
           <span className="text-xs font-normal text-stone-400">
-            ({existingImages.length + imageFiles.length}/{MAX_ATTACHMENTS})
+            ({imageUrls.length}/{MAX_ATTACHMENTS})
           </span>
+          {uploadingStatus.images && (
+            <Loader2 className="ml-2 h-3 w-3 animate-spin inline text-stone-400" />
+          )}
         </Label>
         <div className="flex flex-wrap gap-2">
-          {existingImages.map((url, i) => (
+          {imageUrls.map((url, i) => (
             <ImagePreview
-              key={`existing-img-${i}`}
+              key={`img-${i}`}
               src={url}
-              onRemove={() => setExistingImages((p) => p.filter((_, idx) => idx !== i))}
-            />
-          ))}
-          {imageFiles.map((file, i) => (
-            <ImagePreview
-              key={`new-img-${i}`}
-              src={URL.createObjectURL(file)}
-              isNew
-              onRemove={() => setImageFiles((p) => p.filter((_, idx) => idx !== i))}
+              onRemove={() => setImageUrls((p) => p.filter((_, idx) => idx !== i))}
             />
           ))}
           {canAddImages && (
@@ -422,25 +461,19 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
           <Label className="text-stone-700 font-semibold">
             Áudios{" "}
             <span className="text-xs font-normal text-stone-400">
-              ({existingAudios.length + audioFiles.length}/{MAX_ATTACHMENTS})
+              ({audioUrls.length}/{MAX_ATTACHMENTS})
             </span>
+            {uploadingStatus.audios && (
+              <Loader2 className="ml-2 h-3 w-3 animate-spin inline text-stone-400" />
+            )}
           </Label>
           <div className="space-y-1.5">
-            {existingAudios.map((_, i) => (
+            {audioUrls.map((url, i) => (
               <AttachmentItem
-                key={`existing-audio-${i}`}
-                label={`Áudio ${i + 1}`}
+                key={`audio-${i}`}
+                label={url.split('/').pop()?.split('?')[0] || `Áudio ${i + 1}`}
                 icon={<Music className="h-3.5 w-3.5 flex-shrink-0 text-stone-400" />}
-                onRemove={() => setExistingAudios((p) => p.filter((_, idx) => idx !== i))}
-              />
-            ))}
-            {audioFiles.map((file, i) => (
-              <AttachmentItem
-                key={`new-audio-${i}`}
-                label={file.name}
-                icon={<Music className="h-3.5 w-3.5 flex-shrink-0 text-green-600" />}
-                isNew
-                onRemove={() => setAudioFiles((p) => p.filter((_, idx) => idx !== i))}
+                onRemove={() => setAudioUrls((p) => p.filter((_, idx) => idx !== i))}
               />
             ))}
             {canAddAudios && (
@@ -487,25 +520,19 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
           <Label className="text-stone-700 font-semibold">
             Documentos{" "}
             <span className="text-xs font-normal text-stone-400">
-              ({existingPdfs.length + pdfFiles.length}/{MAX_ATTACHMENTS})
+              ({pdfUrls.length}/{MAX_ATTACHMENTS})
             </span>
+            {uploadingStatus.pdfs && (
+              <Loader2 className="ml-2 h-3 w-3 animate-spin inline text-stone-400" />
+            )}
           </Label>
           <div className="space-y-1.5">
-            {existingPdfs.map((_, i) => (
+            {pdfUrls.map((url, i) => (
               <AttachmentItem
-                key={`existing-pdf-${i}`}
-                label={`Doc ${i + 1}`}
+                key={`pdf-${i}`}
+                label={url.split('/').pop()?.split('?')[0] || `Doc ${i + 1}`}
                 icon={<FileText className="h-3.5 w-3.5 flex-shrink-0 text-stone-400" />}
-                onRemove={() => setExistingPdfs((p) => p.filter((_, idx) => idx !== i))}
-              />
-            ))}
-            {pdfFiles.map((file, i) => (
-              <AttachmentItem
-                key={`new-pdf-${i}`}
-                label={file.name}
-                icon={<FileText className="h-3.5 w-3.5 flex-shrink-0 text-blue-600" />}
-                isNew
-                onRemove={() => setPdfFiles((p) => p.filter((_, idx) => idx !== i))}
+                onRemove={() => setPdfUrls((p) => p.filter((_, idx) => idx !== i))}
               />
             ))}
             {canAddPdfs && (

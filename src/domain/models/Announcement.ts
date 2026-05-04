@@ -29,9 +29,13 @@ export interface CreateAnnouncementData {
   type: AnnouncementType
   expiresAt: Date | null
   imageFiles?: File[] | null
+  imageUrls?: string[]
   audioFiles?: File[] | null
+  audioUrls?: string[]
   pdfFiles?: File[] | null
+  pdfUrls?: string[]
 }
+
 export interface UpdateAnnouncementData {
   title?: string
   content?: string

@@ -38,56 +38,18 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error("Usuário não autenticado")
 
-    const imageUrls: string[] = []
-    const audioUrls: string[] = []
-    const pdfUrls: string[] = []
-
-    if (data.imageFiles) {
-      for (const file of data.imageFiles) {
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`
-        const filePath = `announcements/images/${fileName}`
-        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file, { upsert: true })
-        if (error) throw error
-        const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
-        imageUrls.push(publicUrl)
-      }
-    }
-
-    if (data.audioFiles) {
-      for (const file of data.audioFiles) {
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`
-        const filePath = `announcements/audio/${fileName}`
-        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file, { upsert: true })
-        if (error) throw error
-        const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
-        audioUrls.push(publicUrl)
-      }
-    }
-
-    if (data.pdfFiles) {
-      for (const file of data.pdfFiles) {
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`
-        const filePath = `announcements/pdfs/${fileName}`
-        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file, { upsert: true })
-        if (error) throw error
-        const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
-        pdfUrls.push(`${publicUrl}?t=${Date.now()}`)
-      }
-    }
+    const { title, content, type, expiresAt, imageUrls = [], audioUrls = [], pdfUrls = [] } = data
 
     const { error } = await supabase.from('announcements').insert({
-      title: data.title,
-      content: data.content,
-      type: data.type,
+      title,
+      content,
+      type,
       image_url: imageUrls[0] || "",
       image_urls: imageUrls,
       audio_url: audioUrls[0] || "",
       audio_urls: audioUrls,
       pdf_urls: pdfUrls,
-      expires_at: data.expiresAt instanceof Date ? data.expiresAt.toISOString() : data.expiresAt,
+      expires_at: expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt,
       created_by: user.id
     })
 
@@ -97,7 +59,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       method: 'POST',
       body: JSON.stringify({
         title: 'Novo Recado',
-        body: data.title,
+        body: title,
         url: '/'
       }),
       headers: { 'Content-Type': 'application/json' }
@@ -168,6 +130,8 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
 
   async update(id: string, data: any): Promise<void> {
     const { imageFiles, audioFiles, pdfFiles, imageUrls, audioUrls, pdfUrls, expiresAt, ...rest } = data
+    
+    // Preparar dados finais
     const finalData: any = { 
       ...rest,
       image_urls: imageUrls,
@@ -176,55 +140,11 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       expires_at: expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt
     }
 
-
-    if (imageFiles) {
-      const newUrls: string[] = []
-      for (const file of imageFiles) {
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`
-        const filePath = `announcements/images/${fileName}`
-        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file, { upsert: true })
-        if (error) throw error
-        const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
-        newUrls.push(publicUrl)
-      }
-      finalData.image_urls = [...(finalData.image_urls || []), ...newUrls]
-    }
-    
     if (finalData.image_urls) {
       finalData.image_url = finalData.image_urls[0] || ""
     }
-
-    if (audioFiles) {
-      const newUrls: string[] = []
-      for (const file of audioFiles) {
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`
-        const filePath = `announcements/audio/${fileName}`
-        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file, { upsert: true })
-        if (error) throw error
-        const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
-        newUrls.push(publicUrl)
-      }
-      finalData.audio_urls = [...(finalData.audio_urls || []), ...newUrls]
-    }
-
     if (finalData.audio_urls) {
       finalData.audio_url = finalData.audio_urls[0] || ""
-    }
-
-    if (pdfFiles) {
-      const newUrls: string[] = []
-      for (const file of pdfFiles) {
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`
-        const filePath = `announcements/pdfs/${fileName}`
-        const { error } = await supabase.storage.from('announcement_media').upload(filePath, file, { upsert: true })
-        if (error) throw error
-        const { data: { publicUrl } } = supabase.storage.from('announcement_media').getPublicUrl(filePath)
-        newUrls.push(publicUrl)
-      }
-      finalData.pdf_urls = [...(finalData.pdf_urls || []), ...newUrls]
     }
 
     const { data: oldAnn } = await supabase.from('announcements').select('image_urls, audio_urls, pdf_urls').eq('id', id).single()
