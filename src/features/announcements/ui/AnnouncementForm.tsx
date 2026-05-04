@@ -219,6 +219,15 @@ function useAudioRecorder(onRecordingComplete: (file: File) => void) {
 
 const MAX_ATTACHMENTS = 3
 
+const sanitizeFilename = (name: string) => {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove acentos
+    .replace(/\s+/g, "-") // Substitui espaços por hífens
+    .replace(/[^a-zA-Z0-9.\-]/g, "") // Remove caracteres especiais
+    .toLowerCase()
+}
+
 export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementFormProps) {
   const {
     editingId, setEditingId,
@@ -296,7 +305,9 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
     setUploadingStatus(prev => ({ ...prev, images: true }))
     try {
       const uploadedUrls = await Promise.all(
-        toAdd.map(file => storageService.uploadFile(file, { path: `announcements/images/${Date.now()}-${file.name}` }))
+        toAdd.map(file => storageService.uploadFile(file, { 
+          path: `announcements/images/${Date.now()}-${sanitizeFilename(file.name)}` 
+        }))
       )
       setImageUrls(prev => [...prev, ...uploadedUrls])
       toast.success(`${uploadedUrls.length} imagem(ns) anexada(s)`)
@@ -316,7 +327,9 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
     setUploadingStatus(prev => ({ ...prev, audios: true }))
     try {
       const uploadedUrls = await Promise.all(
-        toAdd.map(file => storageService.uploadFile(file, { path: `announcements/audio/${Date.now()}-${file.name}` }))
+        toAdd.map(file => storageService.uploadFile(file, { 
+          path: `announcements/audio/${Date.now()}-${sanitizeFilename(file.name)}` 
+        }))
       )
       setAudioUrls(prev => [...prev, ...uploadedUrls])
       toast.success(`${uploadedUrls.length} áudio(s) anexado(s)`)
@@ -336,7 +349,9 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
     setUploadingStatus(prev => ({ ...prev, pdfs: true }))
     try {
       const uploadedUrls = await Promise.all(
-        toAdd.map(file => storageService.uploadFile(file, { path: `announcements/pdfs/${Date.now()}-${file.name}` }))
+        toAdd.map(file => storageService.uploadFile(file, { 
+          path: `announcements/pdfs/${Date.now()}-${sanitizeFilename(file.name)}` 
+        }))
       )
       setPdfUrls(prev => [...prev, ...uploadedUrls])
       toast.success(`${uploadedUrls.length} documento(s) anexado(s)`)
