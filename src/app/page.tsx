@@ -23,6 +23,7 @@ import { useUser } from "@/features/profile/hooks/useUser"
 import { supabase } from "@/shared/api/supabase"
 import { toast } from "sonner"
 import { APP_VERSION } from "@/shared/constants/version"
+import { usePullToRefresh } from "@/shared/hooks/usePullToRefresh"
 import {
   Sheet,
   SheetContent,
@@ -99,6 +100,22 @@ export default function Home() {
   const [isAcceptingSwap, setIsAcceptingSwap] = useState(false)
   const [isUnavailableDrawerOpen, setIsUnavailableDrawerOpen] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
+
+  // Pull to Refresh
+  const handleRefreshAll = useCallback(async () => {
+    if (user?.id && isMember) {
+      await Promise.all([
+        loadAnnouncements(user.id, true),
+        loadSchedule(currentDate, profile?.role === "admin", true),
+        loadUpcomingSchedule(user.id, member?.id),
+        loadSwaps(),
+        loadBirthdays()
+      ])
+      toast.success("Dados atualizados")
+    }
+  }, [user?.id, isMember, currentDate, profile?.role, member?.id, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays])
+
+  const { isRefreshing, pullDistance } = usePullToRefresh(handleRefreshAll)
   
   // Lógica de Redirecionamento e Onboarding
   useEffect(() => {
@@ -189,6 +206,19 @@ export default function Home() {
     }
   }, [user?.id, member?.id, isMember, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate, profile?.role])
 
+  // Recarregar dados ao focar na janela (volta ao PWA ou aba)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user?.id && isMember) {
+        loadAnnouncements(user.id, true)
+        loadSchedule(currentDate, profile?.role === "admin", true)
+        loadSwaps()
+      }
+    }
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [user?.id, isMember, currentDate, profile?.role, loadAnnouncements, loadSchedule, loadSwaps])
+
 
   if (loading) {
     return (
@@ -199,8 +229,23 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-stone-50/30">
+    <div className="flex min-h-screen flex-col bg-stone-50/30 relative">
       
+      {/* Indicador de Pull to Refresh */}
+      <div 
+        className="absolute left-0 right-0 flex justify-center pointer-events-none z-50 overflow-hidden"
+        style={{ 
+          height: `${pullDistance}px`, 
+          top: '0',
+          opacity: pullDistance > 20 ? 1 : 0,
+          transition: isRefreshing ? 'none' : 'height 0.2s ease, opacity 0.2s ease'
+        }}
+      >
+        <div className="bg-white rounded-full p-2 shadow-lg border border-stone-100 mt-2">
+          <Loader2 className={cn("h-5 w-5 text-amber-600", isRefreshing && "animate-spin")} />
+        </div>
+      </div>
+
       <main className="flex-1 overflow-hidden flex flex-col">
         {/* Tarja de Próxima Escala (Colada ao Header) */}
         {user && (
@@ -463,7 +508,7 @@ export default function Home() {
                       try {
                         await deleteAnnouncement(announcementToDelete)
                         toast.success("Aviso excluído.")
-                        loadAnnouncements(user?.id)
+                        await loadAnnouncements(user?.id, true)
                         setAnnouncementToDelete(null)
                       } catch (error) {
                         toast.error("Erro ao excluir.")
@@ -779,7 +824,7 @@ export default function Home() {
                         // Exclui todos os horários vinculados ao card (dia)
                         await Promise.all(scheduleToDelete.map(id => deleteMass(id)))
                         toast.success("Dia removido da escala.")
-                        loadSchedule(currentDate, profile?.role === "admin")
+                        await loadSchedule(currentDate, profile?.role === "admin", true)
                         setScheduleToDelete(null)
                       } catch (error) {
                         toast.error("Erro ao excluir horários do dia.")
