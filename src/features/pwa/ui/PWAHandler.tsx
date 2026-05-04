@@ -46,6 +46,7 @@ export function PWAHandler() {
             // Pequeno delay para não aparecer imediatamente no reload do Android
             setTimeout(() => {
               toast.info("Deseja receber notificações?", {
+                id: 'pwa-notification-prompt',
                 description: "Fique por dentro de novos recados e escalas.",
                 action: {
                   label: "Ativar",
@@ -107,6 +108,7 @@ export function PWAHandler() {
           // Função para mostrar o aviso de atualização
           const showUpdateToast = (waitingWorker: ServiceWorker) => {
             toast.info("Nova versão disponível!", {
+              id: 'pwa-update-available',
               description: "Deseja atualizar o aplicativo agora?",
               action: {
                 label: "Atualizar",

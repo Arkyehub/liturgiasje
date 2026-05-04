@@ -123,7 +123,6 @@ export default function Home() {
         loadSwaps(),
         loadBirthdays()
       ])
-      toast.success("Dados atualizados")
     }
   }, [user?.id, isMember, currentDate, profile?.role, member?.id, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays])
 
