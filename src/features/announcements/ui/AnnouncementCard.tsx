@@ -375,26 +375,42 @@ export function AnnouncementCard({
               {allPdfs.length > 0 && (
                 <div className="flex flex-col gap-2 pt-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 px-1">Documentos Anexados</span>
-                  {allPdfs.map((url, idx) => (
-                    <div key={idx} className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50/50 p-2.5 transition-all hover:bg-white hover:shadow-sm">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <div className="bg-blue-100 p-1.5 rounded-lg">
-                          <FileText className="h-3.5 w-3.5 text-blue-600" />
-                        </div>
-                        <span className="text-xs font-bold text-stone-700 truncate">Documento {idx + 1}.pdf</span>
-                      </div>
-                      <a 
-                        href={url} 
-                        download={`documento-${idx + 1}.pdf`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1.5 bg-white border border-stone-200 px-2.5 py-1.5 rounded-lg text-[10px] font-black text-stone-600 hover:bg-stone-50 active:scale-95 transition-all"
-                      >
-                        <Download className="h-3 w-3" />
-                        BAIXAR
-                      </a>
-                    </div>
-                  ))}
+                  <div className="grid grid-cols-2 gap-3">
+                    {allPdfs.map((url, idx) => {
+                      // Tentar extrair o nome do arquivo da URL do Supabase
+                      const fileName = url.split('/').pop()?.split('?')[0] || `documento-${idx + 1}.pdf`;
+                      const decodedName = decodeURIComponent(fileName).split('-').slice(1).join('-') || fileName;
+
+                      return (
+                        <a 
+                          key={idx}
+                          href={url} 
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group flex flex-col gap-2 p-2 bg-stone-50 border border-stone-200 rounded-2xl hover:border-amber-300 hover:bg-amber-50/50 transition-all active:scale-95"
+                        >
+                          {/* "Thumbnail" do Documento */}
+                          <div className="relative aspect-[3/4] w-full bg-white border border-stone-100 rounded-xl shadow-sm flex flex-col items-center justify-center group-hover:shadow-md transition-all overflow-hidden">
+                            <FileText className="h-10 w-10 text-stone-200 group-hover:text-amber-200 transition-colors" />
+                            <div className="absolute top-2 right-2 bg-amber-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-sm">
+                              PDF
+                            </div>
+                            <div className="absolute inset-x-0 bottom-0 h-1 bg-stone-100 group-hover:bg-amber-100 transition-colors" />
+                          </div>
+                          
+                          <div className="px-1 flex flex-col gap-0.5">
+                            <span className="text-[10px] font-bold text-stone-700 truncate w-full" title={decodedName}>
+                              {decodedName}
+                            </span>
+                            <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 uppercase">
+                              <Download className="h-2.5 w-2.5" />
+                              Baixar
+                            </div>
+                          </div>
+                        </a>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 

@@ -157,6 +157,37 @@ function ImagePreview({ src, isNew = false, onRemove }: ImagePreviewProps) {
   )
 }
 
+interface PDFPreviewProps {
+  label: string
+  onRemove: () => void
+}
+
+function PDFPreview({ label, onRemove }: PDFPreviewProps) {
+  // Tentar extrair o nome real do arquivo (se for URL do Supabase)
+  const fileName = label.split('/').pop()?.split('?')[0] || label;
+  const decodedName = decodeURIComponent(fileName).split('-').slice(1).join('-') || fileName;
+
+  return (
+    <div className="group relative flex flex-col items-center gap-1.5 p-2 bg-white border border-stone-200 rounded-xl shadow-sm hover:border-amber-300 transition-all w-20">
+      <div className="relative aspect-[3/4] h-16 bg-stone-50 border border-stone-100 rounded-lg flex flex-col items-center justify-center overflow-hidden">
+        <FileText className="h-7 w-7 text-stone-200 group-hover:text-amber-200 transition-colors" />
+        <div className="absolute top-1 right-1 bg-amber-600 text-white text-[7px] font-black px-1 py-0.5 rounded shadow-sm">PDF</div>
+      </div>
+      <span className="text-[9px] font-bold text-stone-600 truncate w-full text-center" title={decodedName}>
+        {decodedName}
+      </span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white shadow-sm transition-opacity"
+        aria-label="Remover PDF"
+      >
+        <X className="h-2.5 w-2.5" />
+      </button>
+    </div>
+  )
+}
+
 // ─── Hook: useAudioRecorder ───────────────────────────────────────────────────
 
 function useAudioRecorder(onRecordingComplete: (file: File) => void) {
@@ -541,24 +572,23 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
               <Loader2 className="ml-2 h-3 w-3 animate-spin inline text-stone-400" />
             )}
           </Label>
-          <div className="space-y-1.5">
+          <div className="flex flex-wrap gap-2">
             {pdfUrls.map((url, i) => (
-              <AttachmentItem
+              <PDFPreview
                 key={`pdf-${i}`}
-                label={url.split('/').pop()?.split('?')[0] || `Doc ${i + 1}`}
-                icon={<FileText className="h-3.5 w-3.5 flex-shrink-0 text-stone-400" />}
+                label={url}
                 onRemove={() => setPdfUrls((p) => p.filter((_, idx) => idx !== i))}
               />
             ))}
             {canAddPdfs && (
               <FilePickerButton
-                accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf"
                 onChange={addPdfs}
-                className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-stone-400 bg-white transition-all hover:bg-stone-50 active:bg-stone-100"
+                className="flex h-[100px] w-20 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-stone-400 bg-white transition-all hover:bg-stone-50 active:bg-stone-100"
               >
-                <FileText className="h-3.5 w-3.5 text-stone-500" />
-                <span className="text-[10px] font-bold uppercase text-stone-500">
-                  Anexar PDF
+                <FileText className="h-5 w-5 text-stone-500" />
+                <span className="text-[8px] font-bold uppercase text-stone-400 text-center px-1">
+                  Adicionar PDF
                 </span>
               </FilePickerButton>
             )}
