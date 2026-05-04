@@ -422,7 +422,8 @@ export default function Home() {
                             })
                             toast.success("Aviso publicado com sucesso!")
                           }
-                          loadAnnouncements(user?.id)
+                          // Aguarda o recarregamento dos dados antes de fechar o formulário
+                          await loadAnnouncements(user?.id, true)
                           setIsFormOpen(false)
                           setAnnouncementToEdit(null)
                         } catch (error) {
