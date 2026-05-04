@@ -101,16 +101,17 @@ export default function Home() {
   const [isAcceptingSwap, setIsAcceptingSwap] = useState(false)
   const [isUnavailableDrawerOpen, setIsUnavailableDrawerOpen] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
-  const [refreshSignal, setRefreshSignal] = useState(0)
 
-  const triggerRefresh = useCallback(() => {
-    // Pequeno delay (100ms) para o microtask queue limpar após o await
-    setTimeout(() => {
-      setRefreshSignal(prev => prev + 1)
-      // Força uma nova referência de data para disparar o useEffect
-      setCurrentDate(prev => new Date(prev.getTime()))
-    }, 100)
-  }, [])
+  const triggerRefresh = useCallback(async () => {
+    if (user?.id && isMember) {
+      await Promise.all([
+        loadAnnouncements(user.id, true),
+        loadSchedule(currentDate, profile?.role === "admin", true),
+        loadUpcomingSchedule(user.id, member?.id),
+        loadSwaps()
+      ])
+    }
+  }, [user?.id, isMember, currentDate, profile?.role, member?.id, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps])
 
   // Pull to Refresh
   const handleRefreshAll = useCallback(async () => {
@@ -209,13 +210,13 @@ export default function Home() {
 
   useEffect(() => {
     if (user?.id && isMember) {
-      loadAnnouncements(user?.id, refreshSignal > 0)
-      loadSchedule(currentDate, profile?.role === "admin", refreshSignal > 0)
+      loadAnnouncements(user?.id)
+      loadSchedule(currentDate, profile?.role === "admin")
       loadUpcomingSchedule(user.id, member?.id)
       loadSwaps()
       loadBirthdays()
     }
-  }, [user?.id, member?.id, isMember, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate, profile?.role, refreshSignal])
+  }, [user?.id, member?.id, isMember, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate, profile?.role])
 
   // Recarregar dados ao focar na janela (volta ao PWA ou aba)
   useEffect(() => {
