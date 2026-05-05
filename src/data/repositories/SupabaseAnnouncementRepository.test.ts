@@ -22,22 +22,13 @@ describe("SupabaseAnnouncementRepository", () => {
   })
 
   it("should create an announcement with PDFs", async () => {
-    const mockFile = new File(["pdf content"], "test.pdf", { type: "application/pdf" })
     const data = {
       title: "Teste",
       content: "Conteúdo",
       type: "Aviso" as const,
       expiresAt: new Date(),
-      pdfFiles: [mockFile]
+      pdfUrls: ["http://test.pdf"]
     }
-
-    const mockUpload = jest.fn().mockResolvedValue({ error: null })
-    const mockGetPublicUrl = jest.fn().mockReturnValue({ data: { publicUrl: 'http://test.pdf' } })
-    
-    ;(supabase.storage.from as jest.Mock).mockReturnValue({
-      upload: mockUpload,
-      getPublicUrl: mockGetPublicUrl
-    })
 
     ;(supabase.from as jest.Mock).mockReturnValue({
       insert: jest.fn().mockResolvedValue({ error: null })
@@ -48,8 +39,6 @@ describe("SupabaseAnnouncementRepository", () => {
 
     await repository.create(data)
 
-    expect(supabase.storage.from).toHaveBeenCalledWith('announcement_media')
-    expect(mockUpload).toHaveBeenCalled()
     expect(supabase.from).toHaveBeenCalledWith('announcements')
   })
 

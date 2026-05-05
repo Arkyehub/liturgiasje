@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { ScheduleForm } from "./ScheduleForm"
-import { makeCheckMassExists, makeCreateMassWithSlots, makeGetMembersUsage, makeListOccupiedDatesForMonth } from "@/main/factories/usecases/schedule"
+import { makeCheckMassExists, makeCreateMassWithSlots, makeGetMembersUsage, makeListOccupiedDatesForMonth, makeListSchedulesForMonth } from "@/main/factories/usecases/schedule"
 import { makeListMembers } from "@/main/factories/usecases/members"
 import { makeListUnavailableByDate } from "@/main/factories/usecases/user"
 import { toast } from "sonner"
@@ -12,7 +12,8 @@ jest.mock("@/main/factories/usecases/schedule", () => ({
   makeUpdateMass: jest.fn(),
   makeDeleteMass: jest.fn(),
   makeGetMembersUsage: jest.fn(),
-  makeListOccupiedDatesForMonth: jest.fn()
+  makeListOccupiedDatesForMonth: jest.fn(),
+  makeListSchedulesForMonth: jest.fn()
 }))
 
 jest.mock("@/main/factories/usecases/members", () => ({
@@ -62,13 +63,14 @@ describe("ScheduleForm Validation", () => {
     ;(makeListUnavailableByDate as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([]) })
     ;(makeCheckMassExists as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([]) })
     ;(makeListOccupiedDatesForMonth as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([]) })
+    ;(makeListSchedulesForMonth as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([]) })
   })
 
   it("should prevent saving if two sessions have the same time in the same form", async () => {
     render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
 
-    // Definir uma data
-    const dayBtn = screen.getByText("30", { selector: "button" })
+    // Definir data
+    const dayBtn = screen.getByText("30")
     fireEvent.click(dayBtn)
 
     // O formulário cria a primeira sessão automaticamente ao setar a data
@@ -99,7 +101,7 @@ describe("ScheduleForm Validation", () => {
     render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
 
     // Definir data
-    const dayBtn = screen.getByText("30", { selector: "button" })
+    const dayBtn = screen.getByText("30")
     fireEvent.click(dayBtn)
 
     // Aguardar o carregamento assíncrono (useEffect disparado pela data)
