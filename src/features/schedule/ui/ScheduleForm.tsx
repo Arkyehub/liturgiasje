@@ -30,11 +30,12 @@ import {
   makeDeleteMass, 
   makeUpdateMass, 
   makeCreateMassWithSlots,
-  makeListOccupiedDatesForMonth
+  makeListOccupiedDatesForMonth,
+  makeListSchedulesForMonth
 } from "@/main/factories/usecases/schedule"
 import { makeListUnavailableByDate } from "@/main/factories/usecases/user"
 import { Member } from "@/domain/models/Member"
-import { Plus, Search, Trash2, Type, CheckCircle2, User, AlertCircle } from "lucide-react"
+import { Plus, Search, Trash2, Type, CheckCircle2, User, AlertCircle, Eye } from "lucide-react"
 import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { toast } from "sonner"
@@ -77,6 +78,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
   const [hasExistingScale, setHasExistingScale] = useState(false)
   const [existingMassesFromDb, setExistingMassesFromDb] = useState<any[]>([])
   const [occupiedDates, setOccupiedDates] = useState<string[]>([])
+  const [allMonthMasses, setAllMonthMasses] = useState<any[]>([])
 
   const createEmptySession = (): Session => ({
     tempId: Math.random().toString(36).substring(2, 9),
@@ -85,9 +87,20 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
     slots: []
   })
 
+  const loadAllMonthMasses = async (mRef: string) => {
+    try {
+      const d = new Date(`${mRef}-01T00:00:00`)
+      const masses = await makeListSchedulesForMonth().execute(d, true)
+      setAllMonthMasses(masses)
+    } catch (error) {
+      console.error("Erro ao carregar missas do mês para tooltip:", error)
+    }
+  }
+
   useEffect(() => {
     loadMembers()
     loadUsage(activeMonthRef)
+    loadAllMonthMasses(activeMonthRef)
     // Carrega os dias já com escala cadastrada para o mês atual
     makeListOccupiedDatesForMonth().execute(format(currentMonth, "yyyy-MM"))
       .then(setOccupiedDates)
@@ -103,6 +116,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
         if (newMonthRef !== activeMonthRef) {
           setActiveMonthRef(newMonthRef)
           loadUsage(newMonthRef)
+          loadAllMonthMasses(newMonthRef)
         }
       } catch (e) {
         console.error("Erro ao processar data para contadores:", e)
@@ -180,6 +194,43 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
     } catch (error) {
       console.error("Erro ao carregar uso de membros:", error)
     }
+  }
+
+  const getMemberSchedules = (memberId: string) => {
+    const schedules: { date: string; time: string; role: string }[] = []
+
+    allMonthMasses.forEach(mass => {
+      mass.slots?.forEach((s: any) => {
+        if (s.memberId === memberId) {
+          schedules.push({
+            date: mass.date,
+            time: mass.time.substring(0, 5),
+            role: s.role?.match(/[CLP]/)?.[0] || 'L'
+          })
+        }
+      })
+    })
+
+    sessions.forEach(sess => {
+      sess.slots.forEach(s => {
+        if (s.memberId === memberId && sess.time && date) {
+          schedules.push({
+            date: date,
+            time: sess.time,
+            role: s.roleType
+          })
+        }
+      })
+    })
+
+    const unique = schedules.filter((v, i, a) => 
+      a.findIndex(t => (t.date === v.date && t.time === v.time && t.role === v.role)) === i
+    )
+
+    return unique.sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date)
+      return a.time.localeCompare(b.time)
+    })
   }
 
   const updateRoleLabels = (currentSlots: Slot[]) => {
@@ -379,10 +430,25 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
               const year = currentMonth.getFullYear()
               const month = currentMonth.getMonth()
               const daysInMonth = new Date(year, month + 1, 0).getDate()
+              const firstDayOfWeek = new Date(year, month, 1).getDay() // 0 = Domingo
               const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+              const weekDays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
 
               return (
                 <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
+                  {/* Cabeçalho dos dias da semana */}
+                  {weekDays.map((day, i) => (
+                    <div key={`header-${i}`} className="text-center text-[10px] font-bold text-stone-400 mb-1">
+                      {day}
+                    </div>
+                  ))}
+                  
+                  {/* Espaços em branco antes do primeiro dia */}
+                  {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+                    <div key={`empty-${i}`} className="h-9 w-full" />
+                  ))}
+
+                  {/* Dias do mês */}
                   {days.map(day => {
                     const dayStr = String(day).padStart(2, '0')
                     const monthStr = String(month + 1).padStart(2, '0')
@@ -399,7 +465,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
                           if (sessions.length === 0) setSessions([createEmptySession()])
                         }}
                         className={cn(
-                          "h-9 w-full rounded-xl text-[12px] font-bold transition-all active:scale-95 border",
+                          "h-9 w-full rounded-xl text-[12px] font-bold transition-all active:scale-95 border flex flex-col items-center justify-center",
                           isSelected
                             ? "bg-stone-800 text-white border-stone-800 shadow-md"
                             : isOccupied
@@ -408,9 +474,9 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
                         )}
                         title={isOccupied ? "Já há escala neste dia" : undefined}
                       >
-                        {day}
+                        <span>{day}</span>
                         {isOccupied && (
-                          <span className="block text-[7px] font-black leading-none -mt-0.5 text-amber-500">●</span>
+                          <span className="text-[6px] font-black leading-none text-amber-500 mt-0.5">●</span>
                         )}
                       </button>
                     )
@@ -544,13 +610,21 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
                                       return sortedMembers.map((member) => {
                                         const isUnavailable = member.claimedBy ? unavailableUserIds.includes(member.claimedBy) : false
                                         const isPreference = checkPreference(member, sess.time, date)
+                                        const isAlreadyScheduled = sessions.some(s => 
+                                          s.slots.some(sl => sl.memberId === member.id && sl.id !== slot.id)
+                                        )
                                         
                                         return (
                                           <CommandItem
                                             key={member.id}
                                             value={member.fullName}
                                             onSelect={() => {
-                                              if (isUnavailable) {
+                                              if (isAlreadyScheduled) {
+                                                toast.warning(`${member.fullName} já está escalado(a) neste dia!`, {
+                                                  duration: 5000,
+                                                  icon: <AlertCircle className="h-4 w-4 text-amber-600" />
+                                                })
+                                              } else if (isUnavailable) {
                                                 toast.warning(`${member.fullName} informou que não poderá participar nesta data.`, {
                                                   duration: 5000,
                                                   icon: <AlertCircle className="h-4 w-4 text-amber-600" />
@@ -564,11 +638,13 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
                                             <span className={cn(
                                               "font-medium transition-colors",
                                               isUnavailable && "text-red-500 font-bold",
-                                              isPreference && !isUnavailable && "text-green-600 font-bold"
+                                              isAlreadyScheduled && !isUnavailable && "text-amber-600 font-bold",
+                                              isPreference && !isUnavailable && !isAlreadyScheduled && "text-green-600 font-bold"
                                             )}>
                                               {member.fullName}
                                               {isUnavailable && " (Indisponível)"}
-                                              {isPreference && !isUnavailable && " (Preferência)"}
+                                              {isAlreadyScheduled && !isUnavailable && " (Já escalado)"}
+                                              {isPreference && !isUnavailable && !isAlreadyScheduled && " (Preferência)"}
                                             </span>
                                             <div className="flex items-center gap-2">
                                               {usageCounts[member.id] > 0 && (
@@ -588,14 +664,60 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
                           </Popover>
                         </div>
 
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-stone-600 hover:text-red-500 rounded-lg"
-                          onClick={() => removeSlot(sess.tempId, slot.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          {(() => {
+                            if (!slot.memberId) return null
+                            const schedules = getMemberSchedules(slot.memberId)
+                            if (schedules.length === 0) return null
+
+                            return (
+                              <Popover>
+                                <PopoverTrigger render={
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded-lg shrink-0"
+                                    title="Ver escalas do mês"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                } />
+                                <PopoverContent side="top" align="start" className="w-auto p-2 rounded-xl border border-stone-200 shadow-xl bg-white z-50">
+                                  <p className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-2 px-1">
+                                    Escalas neste mês
+                                  </p>
+                                  <div className="space-y-1">
+                                    {schedules.map((sch, i) => {
+                                      const isCurrentDay = sch.date === date;
+                                      return (
+                                        <div 
+                                          key={i} 
+                                          className={cn(
+                                            "text-xs font-medium px-2 py-1.5 rounded-md border whitespace-nowrap",
+                                            isCurrentDay 
+                                              ? "bg-amber-100 text-amber-800 border-amber-200" 
+                                              : "text-stone-700 bg-stone-50 border-stone-100"
+                                          )}
+                                        >
+                                          {format(new Date(sch.date + 'T00:00:00'), 'dd/MM')} - {sch.time} ({sch.role})
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            )
+                          })()}
+
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-stone-600 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                            onClick={() => removeSlot(sess.tempId, slot.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
