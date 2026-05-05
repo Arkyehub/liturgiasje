@@ -281,10 +281,10 @@ export default function Home() {
           if (el) {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' })
             // Efeito visual de destaque
-            el.classList.add('ring-4', 'ring-emerald-500', 'ring-offset-2', 'transition-all', 'duration-500')
+            el.classList.add('ring-4', 'ring-lime-400', 'bg-lime-300', 'ring-offset-4', 'transition-all', 'duration-500')
             setTimeout(() => {
-              el.classList.remove('ring-4', 'ring-emerald-500', 'ring-offset-2')
-            }, 4000)
+              el.classList.remove('ring-4', 'ring-lime-400', 'bg-lime-300', 'ring-offset-4')
+            }, 5000)
           }
         }, 800)
         return () => clearTimeout(timer)
