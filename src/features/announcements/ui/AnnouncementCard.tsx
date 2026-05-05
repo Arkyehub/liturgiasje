@@ -10,7 +10,7 @@ import { Card } from "@/shared/ui/card"
 import { Dialog, DialogContent, DialogTrigger } from "@/shared/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover"
 import { Calendar } from "@/shared/ui/calendar"
-import { CheckCircle2, Megaphone, Music, Maximize2, Calendar as CalendarIcon, Clock, Eye, Pencil, Trash2, User as UserIcon, RefreshCw, ChevronLeft, ChevronRight, Play, Pause, FastForward, FileText, Download } from "lucide-react"
+import { CheckCircle2, Megaphone, Music, Maximize2, Calendar as CalendarIcon, Clock, Eye, Pencil, Trash2, User as UserIcon, RefreshCw, ChevronLeft, ChevronRight, Play, Pause, FastForward, FileText, Download, Share2 } from "lucide-react"
 import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/shared/lib/utils"
@@ -160,6 +160,15 @@ export function AnnouncementCard({
 }: AnnouncementProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [activeImageIndex, setActiveImageIndex] = useState<number | null>(null)
+  
+  const handleShare = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const shareText = `*${title}*\n\n${content}\n\nVeja mais sobre:\n${window.location.origin}/#ann-${id}`
+    const encodedText = encodeURIComponent(shareText)
+    const whatsappUrl = `https://wa.me/?text=${encodedText}`
+    window.open(whatsappUrl, '_blank')
+  }
+
 
   const allImages = imageUrls.filter(Boolean) as string[]
   const allAudios = audioUrls.filter(Boolean) as string[]
@@ -169,7 +178,7 @@ export function AnnouncementCard({
   const shouldShowGlow = isLoggedIn && !isRead;
 
   return (
-    <Card className={`overflow-hidden p-0 gap-0 transition-all duration-500 ${shouldShowGlow
+    <Card id={`ann-${id}`} className={`overflow-hidden p-0 gap-0 transition-all duration-500 ${shouldShowGlow
         ? `${isExpanded ? "border-red-200 bg-white shadow-sm" : "border-red-400 bg-white shadow-md animate-alert-glow ring-2 ring-red-100 ring-offset-1"}`
         : isRead ? "border-green-500 bg-white shadow-sm hover:bg-white/90" : "border-stone-200 bg-white shadow-sm"
       }`}>
@@ -220,6 +229,15 @@ export function AnnouncementCard({
               </div>
             </PopoverContent>
           </Popover>
+
+          <button 
+            onClick={handleShare}
+            className="p-1 text-emerald-600 hover:text-emerald-700 bg-white/80 rounded-full border border-emerald-200 transition-colors ml-1.5 mr-auto flex items-center justify-center"
+            title="Compartilhar no WhatsApp"
+          >
+            <Share2 className="h-3 w-3" />
+          </button>
+
 
           {/* Direita: Ações */}
           <div className="flex items-center gap-2">

@@ -7,7 +7,7 @@ import { ScheduleCard } from "@/features/schedule/ui/ScheduleCard"
 import { MyScheduleWidget } from "@/features/schedule/ui/MyScheduleWidget"
 import { BirthdayCard } from "@/shared/ui/BirthdayCard"
 import { Button } from "@/shared/ui/button"
-import { ChevronLeft, ChevronRight, Loader2, Plus, RefreshCw, Plane, CheckCircle, FileText } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, Plus, RefreshCw, Plane, CheckCircle, FileText, Share2 } from "lucide-react"
 import { addMonths, format, subMonths, isToday, parseISO, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import Link from "next/link"
@@ -206,6 +206,92 @@ export default function Home() {
       }
     }
   }, [currentDate])
+  
+  const handleShareSchedule = useCallback(() => {
+    if (schedule.length === 0) {
+      toast.error("Não há escala para compartilhar neste mês.")
+      return
+    }
+
+    // Agrupar e ordenar como na renderização
+    const grouped = schedule.reduce((acc: any, item: any) => {
+      const dateKey = item.date;
+      if (!acc[dateKey]) {
+        acc[dateKey] = {
+          date: dateKey,
+          items: []
+        }
+      }
+      acc[dateKey].items.push(item)
+      return acc
+    }, {})
+
+    const sortedDays = Object.values(grouped).sort((a: any, b: any) => {
+      const dateA = new Date(a.date + 'T00:00:00');
+      const dateB = new Date(b.date + 'T00:00:00');
+      return (isValid(dateA) ? dateA.getTime() : 0) - (isValid(dateB) ? dateB.getTime() : 0);
+    })
+
+    const roleWeights: Record<string, number> = {
+      'C': 1,
+      '1L': 2,
+      'L': 2,
+      '2L': 3,
+      'P': 4
+    }
+
+    let shareText = `*Escala de Leitores - ${format(currentDate, "MMMM/yyyy", { locale: ptBR })}*\n\n`
+
+    sortedDays.forEach((day: any) => {
+      const dateStr = isValid(new Date(day.date + 'T00:00:00'))
+        ? format(new Date(day.date + 'T00:00:00'), "EEEE - dd/MM", { locale: ptBR })
+        : "Data Inválida"
+      
+      shareText += `*${dateStr}*\n`
+
+      day.items.forEach((mass: any) => {
+        shareText += `${mass.time.substring(0, 5)} - ${mass.specialDescription || "Missa"}\n`
+        
+        const sortedSlots = [...mass.slots].sort((a: any, b: any) => 
+          (roleWeights[a.role] || 99) - (roleWeights[b.role] || 99)
+        )
+
+        sortedSlots.forEach((slot: any) => {
+          shareText += `${slot.role} - ${slot.readerName || "---"}\n`
+        })
+        shareText += `\n`
+      })
+    })
+
+    const encodedText = encodeURIComponent(shareText)
+    const whatsappUrl = `https://wa.me/?text=${encodedText}`
+    
+    window.open(whatsappUrl, '_blank')
+  }, [schedule, currentDate])
+
+  // Lógica de Scroll para Recado via Hash (#ann-ID)
+  useEffect(() => {
+    if (isHydrated && !isLoadingAnnouncements) {
+      const hash = window.location.hash
+      if (hash && hash.startsWith('#ann-')) {
+        const id = hash.replace('#ann-', '')
+        // Pequeno delay para garantir que a lista de recados foi renderizada
+        const timer = setTimeout(() => {
+          const el = document.getElementById(`ann-${id}`)
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            // Efeito visual de destaque
+            el.classList.add('ring-4', 'ring-emerald-500', 'ring-offset-2', 'transition-all', 'duration-500')
+            setTimeout(() => {
+              el.classList.remove('ring-4', 'ring-emerald-500', 'ring-offset-2')
+            }, 4000)
+          }
+        }, 800)
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [isHydrated, isLoadingAnnouncements])
+
 
   useEffect(() => {
     if (user?.id && isMember) {
@@ -560,9 +646,24 @@ export default function Home() {
           {/* Sessão Interativa: Seletor de Mês */}
           <section className="flex flex-col items-center gap-4 py-2">
             <div className="flex items-center justify-center w-full relative h-8">
+              {profile?.role === "admin" && (
+                <div className="absolute left-0">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-9 w-9 rounded-full bg-white text-emerald-600 border-2 border-emerald-600 shadow-sm hover:bg-emerald-50 transition-all active:scale-95"
+                    onClick={handleShareSchedule}
+                    title="Compartilhar no WhatsApp"
+                  >
+                    <Share2 className="h-5 w-5" strokeWidth={2.5} />
+                  </Button>
+                </div>
+              )}
+
               <h2 className="text-xl font-black tracking-tight text-stone-800">
                 Escala de Leitores
               </h2>
+
               {user && (
                 <div className="absolute right-0">
                   <Button 
