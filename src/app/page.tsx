@@ -269,18 +269,33 @@ export default function Home() {
     window.open(whatsappUrl, '_blank')
   }, [schedule, currentDate])
 
-  // Lógica de Scroll para Recado via Hash (#ann-ID)
+  const handleShareSwap = useCallback((swap: any) => {
+    const massDate = new Date(swap.mass.date + 'T00:00:00');
+    const dia = format(massDate, "dd/MM (EEEE)", { locale: ptBR });
+    const horario = swap.mass.time.substring(0, 5);
+    const papel = swap.role;
+    const shareLink = `${window.location.origin}/#slot-${swap.id}`;
+    
+    const text = `Infelizmente não vou poder ler ${dia} às ${horario} - ${papel}. Alguém poderia trocar comigo?\n\nVeja no aplicativo: ${shareLink}`;
+    
+    const encodedText = encodeURIComponent(text);
+    const whatsappUrl = `https://wa.me/?text=${encodedText}`;
+    
+    window.open(whatsappUrl, '_blank');
+  }, [])
+
+  // Lógica de Scroll para Recado via Hash (#ann-ID) ou Slot (#slot-ID)
   useEffect(() => {
-    if (isHydrated && !isLoadingAnnouncements) {
+    if (isHydrated && !isLoadingAnnouncements && !isLoadingSchedule) {
       const hash = window.location.hash
-      if (hash && hash.startsWith('#ann-')) {
+      if (!hash) return
+
+      if (hash.startsWith('#ann-')) {
         const id = hash.replace('#ann-', '')
-        // Pequeno delay para garantir que a lista de recados foi renderizada
         const timer = setTimeout(() => {
           const el = document.getElementById(`ann-${id}`)
           if (el) {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            // Efeito visual de destaque
             el.classList.add('ring-4', 'ring-lime-400', 'bg-lime-300', 'ring-offset-4', 'transition-all', 'duration-500')
             setTimeout(() => {
               el.classList.remove('ring-4', 'ring-lime-400', 'bg-lime-300', 'ring-offset-4')
@@ -289,8 +304,23 @@ export default function Home() {
         }, 800)
         return () => clearTimeout(timer)
       }
+
+      if (hash.startsWith('#slot-')) {
+        const id = hash.replace('#slot-', '')
+        const timer = setTimeout(() => {
+          const el = document.getElementById(`slot-${id}`)
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            el.classList.add('ring-4', 'ring-amber-500', 'ring-offset-2', 'transition-all', 'duration-500')
+            setTimeout(() => {
+              el.classList.remove('ring-4', 'ring-amber-500', 'ring-offset-2')
+            }, 3000)
+          }
+        }, 1000)
+        return () => clearTimeout(timer)
+      }
     }
-  }, [isHydrated, isLoadingAnnouncements])
+  }, [isHydrated, isLoadingAnnouncements, isLoadingSchedule])
 
 
   useEffect(() => {
@@ -384,7 +414,7 @@ export default function Home() {
                   const requesterAvatar = swap.reader?.avatarUrl;
 
                   return (
-                    <button
+                    <div
                       key={swap.id}
                       onClick={() => {
                         const mDate = new Date(swap.mass.date + 'T00:00:00');
@@ -412,7 +442,15 @@ export default function Home() {
                           setTimeout(() => el?.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2'), 2000);
                         }
                       }}
-                      className="flex-none w-[220px] bg-white border border-amber-100 rounded-2xl p-3 shadow-sm hover:shadow-md transition-all active:scale-95 snap-start text-left"
+                      className="flex-none w-[220px] bg-white border border-amber-100 rounded-2xl p-3 shadow-sm hover:shadow-md transition-all active:scale-95 snap-start text-left cursor-pointer"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          (e.currentTarget as HTMLElement).click();
+                        }
+                      }}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2 min-w-0">
@@ -423,17 +461,31 @@ export default function Home() {
                             {requesterName}
                           </span>
                         </div>
-                        <UserAvatar 
-                          name={requesterName}
-                          src={requesterAvatar}
-                          isClaimed={swap.isClaimed}
-                          className="h-6 w-6 shrink-0"
-                        />
+                        {swap.readerId === user?.id ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 transition-all border border-emerald-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleShareSwap(swap);
+                            }}
+                          >
+                            <Share2 className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : (
+                          <UserAvatar 
+                            name={requesterName}
+                            src={requesterAvatar}
+                            isClaimed={swap.isClaimed}
+                            className="h-6 w-6 shrink-0"
+                          />
+                        )}
                       </div>
                       <p className="text-[11px] font-bold text-stone-800 leading-snug">
                         Solicitação para {isValid(massDate) ? format(massDate, "dd/MM (EEEE)", { locale: ptBR }) : "--/--"} às {swap.mass?.time?.substring(0, 5) || '--:--'} - {roleName}
                       </p>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
