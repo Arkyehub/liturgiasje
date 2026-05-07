@@ -198,8 +198,8 @@ export function AnnouncementCard({
                 RASCUNHO
               </Badge>
             ) : (
-              <Badge variant="outline" className="text-[9px] font-black bg-green-50 text-green-600 border-green-200 py-0 px-1.5 h-5 flex items-center justify-center">
-                <div className="h-2 w-2 bg-green-500 rounded-full" />
+              <Badge variant="outline" className="text-[9px] font-black bg-green-50 text-green-600 border-green-200 py-0 px-2 h-5">
+                PUBLICADO
               </Badge>
             )}
             <Switch 
