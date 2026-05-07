@@ -11,6 +11,7 @@ interface AnnouncementStore {
   imageUrls: string[]
   audioUrls: string[]
   pdfUrls: string[]
+  isPublished: boolean
   setIsFormOpen: (open: boolean) => void
   setEditingId: (id: string | null) => void
   setTitle: (title: string) => void
@@ -20,6 +21,7 @@ interface AnnouncementStore {
   setImageUrls: (urls: string[] | ((prev: string[]) => string[])) => void
   setAudioUrls: (urls: string[] | ((prev: string[]) => string[])) => void
   setPdfUrls: (urls: string[] | ((prev: string[]) => string[])) => void
+  setIsPublished: (isPublished: boolean) => void
   clearDraft: () => void
 }
 
@@ -35,6 +37,7 @@ export const useAnnouncementStore = create<AnnouncementStore>()(
       imageUrls: [],
       audioUrls: [],
       pdfUrls: [],
+      isPublished: true,
       setIsFormOpen: (isFormOpen) => set({ isFormOpen }),
       setEditingId: (editingId) => set({ editingId }),
       setTitle: (title) => set({ title }),
@@ -50,6 +53,7 @@ export const useAnnouncementStore = create<AnnouncementStore>()(
       setPdfUrls: (urls) => set((state) => ({ 
         pdfUrls: typeof urls === 'function' ? urls(state.pdfUrls) : urls 
       })),
+      setIsPublished: (isPublished) => set({ isPublished }),
       clearDraft: () => set({ 
         isFormOpen: false,
         editingId: null, 
@@ -59,7 +63,8 @@ export const useAnnouncementStore = create<AnnouncementStore>()(
         expirationDate: null,
         imageUrls: [],
         audioUrls: [],
-        pdfUrls: []
+        pdfUrls: [],
+        isPublished: true
       }),
     }),
     {

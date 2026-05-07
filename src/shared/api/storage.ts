@@ -35,6 +35,17 @@ export const storageService = {
   },
 
   /**
+   * Extrai o path de uma URL pública do Supabase Storage.
+   */
+  extractPathFromUrl(url: string, bucketName: string = 'announcement_media'): string | null {
+    if (!url) return null
+    const searchStr = `/storage/v1/object/public/${bucketName}/`
+    const index = url.indexOf(searchStr)
+    if (index === -1) return null
+    return url.substring(index + searchStr.length).split('?')[0]
+  },
+
+  /**
    * Remove arquivos do storage.
    */
   async removeFiles(paths: string[], bucket: string = 'announcement_media'): Promise<void> {

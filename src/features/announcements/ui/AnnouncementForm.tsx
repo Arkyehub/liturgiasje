@@ -29,6 +29,7 @@ interface InitialData {
   imageUrls?: string[]
   audioUrls?: string[]
   pdfUrls?: string[]
+  isPublished?: boolean
 }
 
 interface SavePayload {
@@ -39,6 +40,7 @@ interface SavePayload {
   imageUrls?: string[]
   audioUrls?: string[]
   pdfUrls?: string[]
+  isPublished?: boolean
 }
 
 interface AnnouncementFormProps {
@@ -140,19 +142,53 @@ interface ImagePreviewProps {
 
 function ImagePreview({ src, isNew = false, onRemove }: ImagePreviewProps) {
   return (
-    <div className={cn(
-      "relative h-16 w-16 overflow-hidden rounded-md border",
-      isNew ? "border-green-200" : "border-stone-200"
-    )}>
-      <img src={src} alt="Anexo" className="h-full w-full object-cover" />
+    <div className="relative h-16 w-16">
+      <div className={cn(
+        "h-full w-full overflow-hidden rounded-md border",
+        isNew ? "border-green-200" : "border-stone-200"
+      )}>
+        <img src={src} alt="Anexo" className="h-full w-full object-cover" />
+      </div>
       <button
         type="button"
         onClick={onRemove}
-        className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white shadow-sm"
+        className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white shadow-md transition-all hover:bg-red-600 hover:scale-110 active:scale-95 z-10"
         aria-label="Remover imagem"
       >
-        <X className="h-2.5 w-2.5" />
+        <X className="h-3 w-3" />
       </button>
+    </div>
+  )
+}
+
+interface AudioPreviewProps {
+  url: string
+  onRemove: () => void
+}
+
+function AudioPreview({ url, onRemove }: AudioPreviewProps) {
+  const fileName = url.split('/').pop()?.split('?')[0] || 'Áudio'
+  const decodedName = decodeURIComponent(fileName).split('-').slice(1).join('-') || fileName
+
+  return (
+    <div className="flex flex-col gap-1.5 rounded-md border border-stone-200 bg-stone-50 p-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 overflow-hidden">
+          <Music className="h-3.5 w-3.5 flex-shrink-0 text-stone-400" />
+          <span className="truncate text-[10px] font-medium text-stone-600" title={decodedName}>
+            {decodedName}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="flex-shrink-0 text-stone-400 transition-colors hover:text-red-500"
+          aria-label="Remover áudio"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      </div>
+      <audio controls src={url} className="mt-1 h-8 w-full" preload="metadata" />
     </div>
   )
 }
@@ -179,10 +215,10 @@ function PDFPreview({ label, onRemove }: PDFPreviewProps) {
       <button
         type="button"
         onClick={onRemove}
-        className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white shadow-sm transition-opacity"
+        className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white shadow-md transition-all hover:bg-red-600 hover:scale-110 active:scale-95 z-10"
         aria-label="Remover PDF"
       >
-        <X className="h-2.5 w-2.5" />
+        <X className="h-3 w-3" />
       </button>
     </div>
   )
@@ -269,6 +305,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
     imageUrls, setImageUrls,
     audioUrls, setAudioUrls,
     pdfUrls, setPdfUrls,
+    isPublished, setIsPublished,
     clearDraft
   } = useAnnouncementStore()
 
@@ -297,6 +334,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         setImageUrls(initialData.imageUrls ?? [])
         setAudioUrls(initialData.audioUrls ?? [])
         setPdfUrls(initialData.pdfUrls ?? [])
+        setIsPublished(initialData.isPublished ?? true)
       }
     } else if (editingId !== null) {
       // Se não há initialData mas o store tem um ID, estamos vindo de uma edição para um novo
@@ -394,15 +432,63 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
     }
   }, [pdfUrls.length, setPdfUrls])
 
+  // ── Handlers de remoção de arquivos e Cancelamento ─────────
+
+  const isUrlInDb = (url: string) => {
+    if (!initialData) return false
+    const allInitialUrls = [
+      ...(initialData.imageUrls || []),
+      ...(initialData.audioUrls || []),
+      ...(initialData.pdfUrls || [])
+    ]
+    return allInitialUrls.includes(url)
+  }
+
+  const handleRemoveUrl = async (url: string, type: 'image' | 'audio' | 'pdf') => {
+    // 1. Remove do estado local da UI
+    if (type === 'image') setImageUrls((p) => p.filter((u) => u !== url))
+    if (type === 'audio') setAudioUrls((p) => p.filter((u) => u !== url))
+    if (type === 'pdf') setPdfUrls((p) => p.filter((u) => u !== url))
+
+    // 2. Se a URL não existe no banco (é um arquivo novo do rascunho), apaga fisicamente
+    if (!isUrlInDb(url)) {
+      const path = storageService.extractPathFromUrl(url.split('?')[0])
+      if (path) {
+        await storageService.removeFiles([path]).catch(console.error)
+      }
+    }
+  }
+
+  const handleCancel = () => {
+    // Remove todos os arquivos subidos que ainda não estão no banco
+    const allCurrentUrls = [...imageUrls, ...audioUrls, ...pdfUrls]
+    const urlsToDelete = allCurrentUrls.filter((url) => !isUrlInDb(url))
+    
+    if (urlsToDelete.length > 0) {
+      const paths = urlsToDelete
+        .map((u) => storageService.extractPathFromUrl(u.split('?')[0]))
+        .filter(Boolean) as string[]
+      
+      if (paths.length > 0) {
+        storageService.removeFiles(paths).catch(console.error)
+      }
+    }
+
+    clearDraft()
+    onClose()
+  }
+
   // ── Submit ──────────────────────────────────────────────────────────────────
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, isPublishedOverride?: boolean) => {
     e.preventDefault()
     if (!title.trim() || !content.trim()) return
     if (Object.values(uploadingStatus).some(Boolean)) {
       toast.error("Aguarde o upload dos arquivos terminar")
       return
     }
+
+    const publishedStatus = isPublishedOverride !== undefined ? isPublishedOverride : isPublished
 
     setIsSubmitting(true)
     try {
@@ -411,6 +497,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         title: title.trim(),
         content: content.trim(),
         expiresAt: hasExpiration ? (expirationDateValue ?? null) : null,
+        isPublished: publishedStatus,
         imageUrls: imageUrls,
         audioUrls: audioUrls,
         pdfUrls: pdfUrls,
@@ -482,7 +569,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
             <ImagePreview
               key={`img-${i}`}
               src={url}
-              onRemove={() => setImageUrls((p) => p.filter((_, idx) => idx !== i))}
+              onRemove={() => handleRemoveUrl(url, 'image')}
             />
           ))}
           {canAddImages && (
@@ -515,11 +602,10 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
           </Label>
           <div className="space-y-1.5">
             {audioUrls.map((url, i) => (
-              <AttachmentItem
+              <AudioPreview
                 key={`audio-${i}`}
-                label={url.split('/').pop()?.split('?')[0] || `Áudio ${i + 1}`}
-                icon={<Music className="h-3.5 w-3.5 flex-shrink-0 text-stone-400" />}
-                onRemove={() => setAudioUrls((p) => p.filter((_, idx) => idx !== i))}
+                url={url}
+                onRemove={() => handleRemoveUrl(url, 'audio')}
               />
             ))}
             {canAddAudios && (
@@ -577,7 +663,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
               <PDFPreview
                 key={`pdf-${i}`}
                 label={url}
-                onRemove={() => setPdfUrls((p) => p.filter((_, idx) => idx !== i))}
+                onRemove={() => handleRemoveUrl(url, 'pdf')}
               />
             ))}
             {canAddPdfs && (
@@ -643,24 +729,37 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
       </div>
 
       {/* Ações */}
-      <div className="flex gap-3 pt-2">
+      <div className="flex flex-col gap-3 pt-2">
+        <div className="flex gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleCancel}
+            disabled={isSubmitting}
+            className="flex-1 text-stone-500 hover:bg-stone-100"
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={(e) => handleSubmit(e, false)}
+            disabled={isSubmitting}
+            className="flex-1 border-stone-300 text-stone-700 hover:bg-stone-50 font-bold"
+          >
+            Salvar Rascunho
+          </Button>
+        </div>
+        
         <Button
           type="button"
-          variant="ghost"
-          onClick={() => { clearDraft(); onClose() }}
+          onClick={(e) => handleSubmit(e, true)}
           disabled={isSubmitting}
-          className="flex-1 text-stone-500 hover:bg-stone-100"
-        >
-          Cancelar
-        </Button>
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-          className="flex-1 bg-stone-800 hover:bg-stone-900 text-white"
+          className="w-full bg-stone-800 hover:bg-stone-900 text-white h-12 text-base font-bold shadow-md active:scale-[0.98] transition-all"
         >
           {isSubmitting
             ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando...</>
-            : initialData ? "Salvar Alterações" : "Publicar Aviso"
+            : initialData ? "Salvar e Publicar" : "Publicar Aviso"
           }
         </Button>
       </div>

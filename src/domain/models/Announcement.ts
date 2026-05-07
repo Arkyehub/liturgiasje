@@ -13,6 +13,7 @@ export interface Announcement {
   createdBy: string
   authorName?: string
   isRead: boolean
+  isPublished: boolean
   viewers: AnnouncementViewer[]
 }
 
@@ -28,6 +29,7 @@ export interface CreateAnnouncementData {
   content: string
   type: AnnouncementType
   expiresAt: Date | null
+  isPublished?: boolean
   imageFiles?: File[] | null
   imageUrls?: string[]
   audioFiles?: File[] | null
@@ -40,6 +42,7 @@ export interface UpdateAnnouncementData {
   title?: string
   content?: string
   expiresAt?: string | Date | null
+  isPublished?: boolean
   imageFiles?: File[] | null
   imageUrls?: string[]
   audioFiles?: File[] | null

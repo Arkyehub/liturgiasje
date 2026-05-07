@@ -25,6 +25,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       createdBy: ann.created_by,
       authorName: ann.author?.full_name,
       isRead: ann.created_by === userId || ann.views?.some((v: any) => v.user_id === userId) || false,
+      isPublished: ann.is_published ?? true,
       viewers: ann.views?.map((v: any) => ({
         name: v.user?.full_name || 'Usuário',
         at: v.viewed_at,
@@ -38,7 +39,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error("Usuário não autenticado")
 
-    const { title, content, type, expiresAt, imageUrls = [], audioUrls = [], pdfUrls = [] } = data
+    const { title, content, type, expiresAt, isPublished = true, imageUrls = [], audioUrls = [], pdfUrls = [] } = data
 
     const { error } = await supabase.from('announcements').insert({
       title,
@@ -50,6 +51,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       audio_urls: audioUrls,
       pdf_urls: pdfUrls,
       expires_at: expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt,
+      is_published: isPublished,
       created_by: user.id
     })
 
@@ -80,9 +82,22 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
 
     if (error) throw error
     
+    // Buscar o role do usuário atual para filtrar rascunhos
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: userData } = user ? await supabase.from('users').select('role').eq('id', user.id).single() : { data: null }
+    const isAdmin = userData?.role === 'admin'
+
     const now = new Date()
     return (announcements || [])
-      .filter(ann => !ann.expires_at || new Date(ann.expires_at) > now)
+      .filter(ann => {
+        const isExpired = ann.expires_at && new Date(ann.expires_at) < now
+        if (isExpired) return false
+        
+        // Se não for admin, não vê rascunhos
+        if (!isAdmin && ann.is_published === false) return false
+        
+        return true
+      })
       .map(ann => this.mapToDomain(ann, userId))
   }
 
@@ -129,7 +144,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
   }
 
   async update(id: string, data: any): Promise<void> {
-    const { imageFiles, audioFiles, pdfFiles, imageUrls, audioUrls, pdfUrls, expiresAt, ...rest } = data
+    const { imageFiles, audioFiles, pdfFiles, imageUrls, audioUrls, pdfUrls, expiresAt, isPublished, ...rest } = data
     
     // Preparar dados finais
     const finalData: any = { 
@@ -138,6 +153,10 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       audio_urls: audioUrls,
       pdf_urls: pdfUrls,
       expires_at: expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt
+    }
+
+    if (isPublished !== undefined) {
+      finalData.is_published = isPublished
     }
 
     if (finalData.image_urls) {

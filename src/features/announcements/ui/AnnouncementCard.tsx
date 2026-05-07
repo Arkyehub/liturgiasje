@@ -10,7 +10,9 @@ import { Card } from "@/shared/ui/card"
 import { Dialog, DialogContent, DialogTrigger } from "@/shared/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover"
 import { Calendar } from "@/shared/ui/calendar"
-import { CheckCircle2, Megaphone, Music, Maximize2, Calendar as CalendarIcon, Clock, Eye, Pencil, Trash2, User as UserIcon, RefreshCw, ChevronLeft, ChevronRight, Play, Pause, FastForward, FileText, Download, Share2 } from "lucide-react"
+import { CheckCircle2, Megaphone, Music, Maximize2, Calendar as CalendarIcon, Clock, Eye, Pencil, Trash2, User as UserIcon, RefreshCw, ChevronLeft, ChevronRight, Play, Pause, FastForward, FileText, Download, Share2, AlertCircle } from "lucide-react"
+import { Switch } from "@/shared/ui/switch"
+import { Badge } from "@/shared/ui/badge"
 import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/shared/lib/utils"
@@ -131,6 +133,7 @@ interface AnnouncementProps {
   onDelete?: (id: string) => void
   onEdit?: (ann: any) => void
   onAcceptSwap?: (slotId: string, announcementId: string) => void
+  isPublished?: boolean
   currentUserId?: string
 }
 
@@ -156,6 +159,7 @@ export function AnnouncementCard({
   onDelete,
   onEdit,
   onAcceptSwap,
+  isPublished = true,
   currentUserId,
 }: AnnouncementProps) {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -178,72 +182,91 @@ export function AnnouncementCard({
   const shouldShowGlow = isLoggedIn && !isRead;
 
   return (
-    <Card id={`ann-${id}`} className={`overflow-hidden p-0 gap-0 transition-all duration-500 ${shouldShowGlow
-        ? `${isExpanded ? "border-red-200 bg-white shadow-sm" : "border-red-400 bg-white shadow-md animate-alert-glow ring-2 ring-red-100 ring-offset-1"}`
-        : isRead ? "border-green-500 bg-white shadow-sm hover:bg-white/90" : "border-stone-200 bg-white shadow-sm"
+    <Card id={`ann-${id}`} className={`overflow-hidden p-0 gap-0 transition-all duration-500 ${!isPublished && isAdmin
+        ? "border-2 border-orange-500 ring-2 ring-orange-100 bg-white"
+        : shouldShowGlow
+          ? `${isExpanded ? "border-red-200 bg-white shadow-sm" : "border-red-400 bg-white shadow-md animate-alert-glow ring-2 ring-red-100 ring-offset-1"}`
+          : isRead ? "border-green-500 bg-white shadow-sm hover:bg-white/90" : "border-stone-200 bg-white shadow-sm"
       }`}>
       {/* Barra de Ações Administrativas (Admin Only) */}
       {isAdmin && (
-        <div className="flex items-center justify-between border-b border-stone-100 bg-stone-50/50 px-3 py-0.5">
-          {/* Esquerda: Visualizações */}
-          <Popover>
-            <PopoverTrigger render={
-              <button className="flex items-center gap-1.5 text-[10px] font-bold text-amber-600 hover:text-amber-700 bg-white/80 px-2 py-0.5 rounded-full border border-amber-200 transition-colors">
-                <Eye className="h-3 w-3" />
-                {viewers.length} {viewers.length === 1 ? 'visto' : 'vistos'}
-              </button>
-            } />
-            <PopoverContent className="w-80 p-0" align="start">
-              <div className="flex flex-col">
-                <div className="border-b border-stone-100 bg-stone-50/50 px-3 py-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
-                    Visualizado por
-                  </span>
-                </div>
-                <div className="max-h-[250px] overflow-auto p-1.5">
-                  {viewers.length === 0 ? (
-                    <p className="px-3 py-4 text-center text-[10px] text-stone-400">Ninguém visualizou ainda</p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-1">
-                      {viewers.map((viewer, idx) => (
-                        <div key={idx} className="flex items-center gap-2.5 px-2 py-2 hover:bg-stone-50 rounded-md border border-transparent hover:border-stone-100 transition-all">
-                          <UserAvatar 
-                            name={viewer.name}
-                            src={viewer.avatarUrl}
-                            isClaimed={viewer.isClaimed}
-                            className="h-7 w-7 shrink-0 transition-transform group-hover:scale-105"
-                          />
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-[11px] font-black text-stone-800 truncate leading-tight" title={viewer.name}>
-                              {viewer.name}
-                            </span>
-                            <span className="text-[10px] font-bold text-stone-400 leading-tight">
-                              {isValid(new Date(viewer.at)) ? format(new Date(viewer.at), "dd/MM HH:mm", { locale: ptBR }) : "--/-- --:--"}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          <button 
-            onClick={handleShare}
-            className="p-1 text-emerald-600 hover:text-emerald-700 bg-white/80 rounded-full border border-emerald-200 transition-colors ml-1.5 mr-auto flex items-center justify-center"
-            title="Compartilhar no WhatsApp"
-          >
-            <Share2 className="h-3 w-3" />
-          </button>
-
-
-          {/* Direita: Ações */}
+        <div className="flex items-center justify-between border-b border-stone-100 bg-stone-50/50 px-3 py-1">
+          {/* Esquerda: Status do Rascunho */}
           <div className="flex items-center gap-2">
+            {!isPublished ? (
+              <Badge variant="outline" className="text-[9px] font-black bg-orange-50 text-orange-600 border-orange-200 py-0 px-2 h-5">
+                RASCUNHO
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[9px] font-black bg-green-50 text-green-600 border-green-200 py-0 px-1.5 h-5 flex items-center justify-center">
+                <div className="h-2 w-2 bg-green-500 rounded-full" />
+              </Badge>
+            )}
+            <Switch 
+              checked={isPublished} 
+              onCheckedChange={(val) => onUpdate?.(id, { isPublished: val })}
+              className="scale-75"
+            />
+          </div>
+
+          {/* Direita: Ações Agrupadas */}
+          <div className="flex items-center gap-1.5">
+            {/* Visualizações */}
+            <Popover>
+              <PopoverTrigger render={
+                <button className="flex items-center gap-1 text-[10px] font-bold text-amber-600 hover:text-amber-700 bg-white/80 px-1.5 py-0.5 rounded-full border border-amber-200 transition-colors">
+                  <Eye className="h-3 w-3" />
+                  {viewers.length}
+                </button>
+              } />
+              <PopoverContent className="w-80 p-0" align="end">
+                <div className="flex flex-col">
+                  <div className="border-b border-stone-100 bg-stone-50/50 px-3 py-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                      Visualizado por ({viewers.length})
+                    </span>
+                  </div>
+                  <div className="max-h-[250px] overflow-auto p-1.5">
+                    {viewers.length === 0 ? (
+                      <p className="px-3 py-4 text-center text-[10px] text-stone-400">Ninguém visualizou ainda</p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-1">
+                        {viewers.map((viewer, idx) => (
+                          <div key={idx} className="flex items-center gap-2.5 px-2 py-2 hover:bg-stone-50 rounded-md border border-transparent hover:border-stone-100 transition-all">
+                            <UserAvatar 
+                              name={viewer.name}
+                              src={viewer.avatarUrl}
+                              isClaimed={viewer.isClaimed}
+                              className="h-7 w-7 shrink-0 transition-transform group-hover:scale-105"
+                            />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[11px] font-black text-stone-800 truncate leading-tight" title={viewer.name}>
+                                {viewer.name}
+                              </span>
+                              <span className="text-[10px] font-bold text-stone-400 leading-tight">
+                                {isValid(new Date(viewer.at)) ? format(new Date(viewer.at), "dd/MM HH:mm", { locale: ptBR }) : "--/-- --:--"}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <button 
+              onClick={handleShare}
+              className="p-1 text-emerald-600 hover:text-emerald-700 bg-white/80 rounded-full border border-emerald-200 transition-colors flex items-center justify-center"
+              title="Compartilhar no WhatsApp"
+            >
+              <Share2 className="h-3 w-3" />
+            </button>
+
             <button
-              onClick={() => onEdit?.({ id, title, content, expiresAt, imageUrls, audioUrls, pdfUrls })}
-              className="p-1.5 hover:bg-amber-100 rounded-lg text-stone-500 hover:text-stone-800 transition-colors"
+              onClick={() => onEdit?.({ id, title, content, expiresAt, imageUrls, audioUrls, pdfUrls, isPublished })}
+              className="p-1 hover:bg-amber-100 rounded-lg text-stone-500 hover:text-stone-800 transition-colors"
               title="Editar"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -252,9 +275,9 @@ export function AnnouncementCard({
             {/* Expiração */}
             <Popover>
               <PopoverTrigger render={
-                <button className="flex items-center gap-1.5 text-[10px] font-bold text-stone-600 hover:text-stone-900 bg-white px-2 py-0.5 rounded-lg border border-stone-200 transition-colors">
+                <button className="flex items-center gap-1 text-[10px] font-bold text-stone-600 hover:text-stone-900 bg-white px-1.5 py-0.5 rounded-lg border border-stone-200 transition-colors">
                   <Clock className="h-3 w-3 text-red-500" />
-                  {expiresAt && isValid(new Date(expiresAt)) ? `até ${format(new Date(expiresAt), "dd/MM/yyyy", { locale: ptBR })}` : "Sem expiração"}
+                  {expiresAt && isValid(new Date(expiresAt)) ? format(new Date(expiresAt), "dd/MM", { locale: ptBR }) : "--/--"}
                 </button>
               } />
               <PopoverContent className="w-auto p-0" align="end">
@@ -270,7 +293,7 @@ export function AnnouncementCard({
 
             <button
               onClick={() => onDelete?.(id)}
-              className="p-1.5 hover:bg-red-50 rounded-lg text-stone-400 hover:text-red-600 transition-colors"
+              className="p-1 hover:bg-red-50 rounded-lg text-stone-400 hover:text-red-600 transition-colors"
               title="Excluir"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -398,7 +421,7 @@ export function AnnouncementCard({
               {allPdfs.length > 0 && (
                 <div className="flex flex-col gap-2 pt-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 px-1">Documentos Anexados</span>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-wrap gap-2 pt-1">
                     {allPdfs.map((url, idx) => {
                       // Tentar extrair o nome do arquivo da URL do Supabase
                       const fileName = url.split('/').pop()?.split('?')[0] || `documento-${idx + 1}.pdf`;
@@ -410,26 +433,28 @@ export function AnnouncementCard({
                           href={url} 
                           target="_blank"
                           rel="noreferrer"
-                          className="group flex flex-col gap-2 p-2 bg-stone-50 border border-stone-200 rounded-2xl hover:border-amber-300 hover:bg-amber-50/50 transition-all active:scale-95"
+                          className="group flex flex-col items-center gap-1.5 w-20 active:scale-95 transition-all"
+                          title={decodedName}
                         >
-                          {/* "Thumbnail" do Documento */}
-                          <div className="relative aspect-[3/4] w-full bg-white border border-stone-100 rounded-xl shadow-sm flex flex-col items-center justify-center group-hover:shadow-md transition-all overflow-hidden">
-                            <FileText className="h-10 w-10 text-stone-200 group-hover:text-amber-200 transition-colors" />
-                            <div className="absolute top-2 right-2 bg-amber-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-sm">
+                          {/* Card Quadrado */}
+                          <div className="relative w-20 h-20 flex items-center justify-center bg-stone-50 border border-stone-200 rounded-xl group-hover:border-red-300 group-hover:bg-red-50/30 transition-all shadow-sm overflow-hidden">
+                            <FileText className="h-9 w-9 text-stone-200 group-hover:text-red-200 transition-colors" />
+                            
+                            {/* Tag PDF Valorizada */}
+                            <div className="absolute top-1.5 right-1.5 bg-red-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow-md border border-red-500 animate-in fade-in zoom-in duration-300">
                               PDF
                             </div>
-                            <div className="absolute inset-x-0 bottom-0 h-1 bg-stone-100 group-hover:bg-amber-100 transition-colors" />
-                          </div>
-                          
-                          <div className="px-1 flex flex-col gap-0.5">
-                            <span className="text-[10px] font-bold text-stone-700 truncate w-full" title={decodedName}>
-                              {decodedName}
-                            </span>
-                            <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 uppercase">
-                              <Download className="h-2.5 w-2.5" />
-                              Baixar
+
+                            {/* Ícone de Download Sutil no Hover */}
+                            <div className="absolute bottom-1.5 right-1.5 p-1 bg-white/90 rounded-full opacity-0 group-hover:opacity-100 transition-opacity border border-red-100 shadow-sm">
+                              <Download className="h-3 w-3 text-red-600" />
                             </div>
                           </div>
+
+                          {/* Nome Externo */}
+                          <span className="text-[10px] font-bold text-stone-600 truncate w-full text-center px-0.5 group-hover:text-red-700 transition-colors">
+                            {decodedName}
+                          </span>
                         </a>
                       );
                     })}
