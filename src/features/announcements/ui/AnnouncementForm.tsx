@@ -194,28 +194,29 @@ function AudioPreview({ url, onRemove }: AudioPreviewProps) {
 }
 
 interface PDFPreviewProps {
-  label: string
+  url: string
   onRemove: () => void
 }
 
-function PDFPreview({ label, onRemove }: PDFPreviewProps) {
-  // Tentar extrair o nome real do arquivo (se for URL do Supabase)
-  const fileName = label.split('/').pop()?.split('?')[0] || label;
-  const decodedName = decodeURIComponent(fileName).split('-').slice(1).join('-') || fileName;
+function PDFPreview({ url, onRemove }: PDFPreviewProps) {
+  const fileName = url.split('/').pop()?.split('?')[0] || 'Documento'
+  const decodedName = decodeURIComponent(fileName).split('-').slice(1).join('-') || fileName
 
   return (
-    <div className="group relative flex flex-col items-center gap-1.5 p-2 bg-white border border-stone-200 rounded-xl shadow-sm hover:border-amber-300 transition-all w-20">
-      <div className="relative aspect-[3/4] h-16 bg-stone-50 border border-stone-100 rounded-lg flex flex-col items-center justify-center overflow-hidden">
-        <FileText className="h-7 w-7 text-stone-200 group-hover:text-amber-200 transition-colors" />
-        <div className="absolute top-1 right-1 bg-amber-600 text-white text-[7px] font-black px-1 py-0.5 rounded shadow-sm">PDF</div>
+    <div className="relative h-20 w-20">
+      <div className="h-full w-full overflow-hidden rounded-xl border border-stone-200 bg-stone-50 flex flex-col items-center justify-center p-1">
+        <FileText className="h-8 w-8 text-stone-300" />
+        <div className="absolute top-1.5 right-1.5 bg-red-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded shadow-sm">
+          PDF
+        </div>
+        <span className="mt-1 w-full truncate text-center text-[8px] font-bold text-stone-500 px-1 leading-tight">
+          {decodedName}
+        </span>
       </div>
-      <span className="text-[9px] font-bold text-stone-600 truncate w-full text-center" title={decodedName}>
-        {decodedName}
-      </span>
       <button
         type="button"
         onClick={onRemove}
-        className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white shadow-md transition-all hover:bg-red-600 hover:scale-110 active:scale-95 z-10"
+        className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white shadow-md transition-all hover:bg-red-600 hover:scale-110 active:scale-95 z-10 border-2 border-white"
         aria-label="Remover PDF"
       >
         <X className="h-3 w-3" />
@@ -572,6 +573,11 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
               onRemove={() => handleRemoveUrl(url, 'image')}
             />
           ))}
+          {uploadingStatus.images && (
+            <div className="flex h-16 w-16 animate-pulse items-center justify-center rounded-md border border-stone-200 bg-stone-100">
+              <Loader2 className="h-4 w-4 animate-spin text-stone-300" />
+            </div>
+          )}
           {canAddImages && (
             <FilePickerButton
               accept="image/*"
@@ -608,6 +614,12 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
                 onRemove={() => handleRemoveUrl(url, 'audio')}
               />
             ))}
+            {uploadingStatus.audios && (
+              <div className="flex h-10 w-full animate-pulse items-center justify-center rounded-md border border-stone-200 bg-stone-50">
+                <Loader2 className="h-4 w-4 animate-spin text-stone-300 mr-2" />
+                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Enviando áudio...</span>
+              </div>
+            )}
             {canAddAudios && (
               <div className="flex h-10 gap-1.5">
                 <button
@@ -662,19 +674,24 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
             {pdfUrls.map((url, i) => (
               <PDFPreview
                 key={`pdf-${i}`}
-                label={url}
+                url={url}
                 onRemove={() => handleRemoveUrl(url, 'pdf')}
               />
             ))}
+            {uploadingStatus.pdfs && (
+              <div className="flex h-20 w-20 animate-pulse items-center justify-center rounded-xl border border-stone-200 bg-stone-50">
+                <Loader2 className="h-4 w-4 animate-spin text-stone-300" />
+              </div>
+            )}
             {canAddPdfs && (
               <FilePickerButton
                 accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf"
                 onChange={addPdfs}
-                className="flex h-[100px] w-20 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-stone-400 bg-white transition-all hover:bg-stone-50 active:bg-stone-100"
+                className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-stone-400 bg-white transition-all hover:bg-stone-50 active:bg-stone-100"
               >
                 <FileText className="h-5 w-5 text-stone-500" />
                 <span className="text-[8px] font-bold uppercase text-stone-400 text-center px-1">
-                  Adicionar PDF
+                  Add
                 </span>
               </FilePickerButton>
             )}
