@@ -56,11 +56,14 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
     })
 
     if (error) throw error
-
-    fetch('/api/push/send', {
+    
+    // Disparar push notification
+    const isSwap = type === 'Troca';
+    
+    await fetch('/api/push/send', {
       method: 'POST',
       body: JSON.stringify({
-        title: 'Novo Recado',
+        title: isSwap ? 'Solicitação de Troca' : 'Novo Recado',
         body: title,
         url: '/'
       }),

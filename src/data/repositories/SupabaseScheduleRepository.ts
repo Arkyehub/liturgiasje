@@ -96,7 +96,9 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
   async requestSwap(slotId: string): Promise<void> {
     const { error } = await supabase.from('schedule_slots').update({ is_swap_requested: true }).eq('id', slotId)
     if (error) throw error
-    fetch('/api/push/send', {
+    
+    // Disparar notificação para todos
+    await fetch('/api/push/send', {
       method: 'POST',
       body: JSON.stringify({ title: 'Solicitação de Troca', body: 'Alguém solicitou uma troca de escala. Confira no mural!', url: '/' }),
       headers: { 'Content-Type': 'application/json' }
@@ -220,8 +222,44 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
   }
 
   async acceptSwap(slotId: string, newReaderId: string, newMemberId?: string): Promise<void> {
-    const { error } = await supabase.from('schedule_slots').update({ reader_id: newReaderId, member_id: newMemberId || undefined, is_swap_requested: false, is_confirmed: true }).eq('id', slotId)
+    // 1. Buscar o dono atual da troca para notificar
+    const { data: slot } = await supabase
+      .from('schedule_slots')
+      .select('reader_id, role')
+      .eq('id', slotId)
+      .single()
+
+    const oldReaderId = slot?.reader_id
+    const role = slot?.role
+
+    // 2. Atualizar o slot
+    const { error } = await supabase
+      .from('schedule_slots')
+      .update({ 
+        reader_id: newReaderId, 
+        member_id: newMemberId || undefined, 
+        is_swap_requested: false, 
+        is_confirmed: true 
+      })
+      .eq('id', slotId)
+    
     if (error) throw error
+
+    // 3. Notificar o dono original da troca
+    if (oldReaderId && oldReaderId !== newReaderId) {
+      const { data: accepter } = await supabase.from('users').select('full_name').eq('id', newReaderId).single()
+      
+      await fetch('/api/push/send', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          title: 'Troca Confirmada! ✅', 
+          body: `${accepter?.full_name || 'Alguém'} aceitou sua troca de ${role}.`, 
+          url: '/',
+          targetUserIds: [oldReaderId]
+        }),
+        headers: { 'Content-Type': 'application/json' }
+      }).catch(err => console.error('Erro ao notificar aceite de troca:', err))
+    }
   }
 
   async checkMassExists(date: string): Promise<Mass[]> {

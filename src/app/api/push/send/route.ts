@@ -25,10 +25,12 @@ export async function POST(request: Request) {
       .single();
 
     const isAdmin = senderProfile?.role === 'admin';
-    const isSwapNotification = title === 'Solicitação de Troca';
+    const isSwapNotification = 
+      title.toLowerCase().includes('troca') || 
+      body?.toLowerCase().includes('troca');
 
     if (!isAdmin && !isSwapNotification) {
-      console.warn('Unauthorized push attempt by:', sender.id);
+      console.warn('Unauthorized push attempt by:', sender.id, { title, body });
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
