@@ -141,18 +141,49 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
     if (publishError) throw publishError
     if (masses && masses.length > 0) {
       const massIds = masses.map(m => m.id)
-      const { data: slots } = await supabase.from('schedule_slots').select('member_id').in('mass_id', massIds).not('member_id', 'is', null)
+      
+      // 1. Buscar todos os slots para identificar quem notificar
+      const { data: slots } = await supabase
+        .from('schedule_slots')
+        .select('member_id, reader_id')
+        .in('mass_id', massIds)
+
       if (slots && slots.length > 0) {
-        const memberIds = [...new Set(slots.map(s => s.member_id))]
-        const { data: membersList } = await supabase.from('members').select('claimed_by').in('id', memberIds)
-        const targetUserIds = [...new Set((membersList || []).map(m => m.claimed_by).filter(id => !!id))]
+        const readerIdsSet = new Set<string>()
+        const memberIds = new Set<string>()
+
+        slots.forEach(s => {
+          if (s.reader_id) readerIdsSet.add(s.reader_id)
+          if (s.member_id) memberIds.add(s.member_id)
+        })
+
+        // 2. Buscar usuários que reivindicaram os membros
+        if (memberIds.size > 0) {
+          const { data: membersList } = await supabase
+            .from('members')
+            .select('claimed_by')
+            .in('id', Array.from(memberIds))
+          
+          membersList?.forEach(m => {
+            if (m.claimed_by) readerIdsSet.add(m.claimed_by)
+          })
+        }
+
+        const targetUserIds = Array.from(readerIdsSet)
+
         if (targetUserIds.length > 0) {
           const monthName = format(parseISO(masses[0].date), 'MMMM', { locale: ptBR })
-          fetch('/api/push/send', {
+          
+          await fetch('/api/push/send', {
             method: 'POST',
-            body: JSON.stringify({ title: 'Você foi escalado! 📅', body: `Confira seus horários de leitura na nova escala de ${monthName}.`, url: '/', targetUserIds }),
+            body: JSON.stringify({ 
+              title: 'Você foi escalado! 📅', 
+              body: `Confira seus horários de leitura na nova escala de ${monthName}.`, 
+              url: '/', 
+              targetUserIds 
+            }),
             headers: { 'Content-Type': 'application/json' }
-          }).catch(err => console.error(err))
+          }).catch(err => console.error('Erro ao notificar escala:', err))
         }
       }
     }
