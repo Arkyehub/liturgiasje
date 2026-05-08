@@ -34,8 +34,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
-    // Buscar subscrições
-    let query = supabase.from('push_subscriptions').select('subscription, user_id');
+    // Buscar subscrições (sempre excluindo o próprio remetente)
+    let query = supabase.from('push_subscriptions')
+      .select('subscription, user_id')
+      .neq('user_id', sender.id);
     
     if (targetUserIds && targetUserIds.length > 0) {
       query = query.in('user_id', targetUserIds);
