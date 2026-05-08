@@ -170,6 +170,7 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
         }
 
         const targetUserIds = Array.from(readerIdsSet)
+        console.log('[REPO] IDs coletados para notificação de escala:', targetUserIds);
 
         if (targetUserIds.length > 0) {
           const monthName = format(parseISO(masses[0].date), 'MMMM', { locale: ptBR })

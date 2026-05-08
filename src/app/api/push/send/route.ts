@@ -40,10 +40,14 @@ export async function POST(request: Request) {
       .neq('user_id', sender.id);
     
     if (targetUserIds && targetUserIds.length > 0) {
+      console.log('[PUSH] Filtrando por usuários:', targetUserIds);
       query = query.in('user_id', targetUserIds);
+    } else {
+      console.log('[PUSH] Envio global solicitado');
     }
 
     const { data: subs, error: subsError } = await query;
+    console.log(`[PUSH] Subscrições encontradas para envio: ${subs?.length || 0}`);
 
     if (subsError) {
       return NextResponse.json({ error: subsError.message }, { status: 500 });
