@@ -461,7 +461,7 @@ export default function Home() {
                             {requesterName}
                           </span>
                         </div>
-                        {swap.readerId === user?.id ? (
+                        {(swap.readerId === user?.id || (member?.id && swap.memberId === member.id)) ? (
                           <Button
                             variant="ghost"
                             size="icon"
