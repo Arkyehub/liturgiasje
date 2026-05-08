@@ -39,7 +39,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error("Usuário não autenticado")
 
-    const { title, content, type, expiresAt, isPublished = true, imageUrls = [], audioUrls = [], pdfUrls = [] } = data
+    const { title, content, type = 'Aviso', expiresAt, isPublished = true, imageUrls = [], audioUrls = [], pdfUrls = [] } = data
 
     const { error } = await supabase.from('announcements').insert({
       title,
@@ -57,18 +57,21 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
 
     if (error) throw error
     
-    // Disparar push notification
-    const isSwap = type === 'Troca';
-    
-    await fetch('/api/push/send', {
-      method: 'POST',
-      body: JSON.stringify({
-        title: isSwap ? 'Solicitação de Troca' : 'Novo Recado',
-        body: title,
-        url: '/'
-      }),
-      headers: { 'Content-Type': 'application/json' }
-    }).catch(err => console.error('Erro ao disparar push:', err))
+    // Disparar push notification apenas se estiver publicado
+    if (isPublished) {
+      const isSwap = type === 'Troca';
+      console.log('[REPO] Disparando push para novo recado publicado:', title);
+      
+      await fetch('/api/push/send', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: isSwap ? 'Solicitação de Troca' : 'Novo Recado',
+          body: title,
+          url: '/'
+        }),
+        headers: { 'Content-Type': 'application/json' }
+      }).catch(err => console.error('Erro ao disparar push:', err))
+    }
   }
 
   async list(userId?: string): Promise<Announcement[]> {
@@ -169,7 +172,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       finalData.audio_url = finalData.audio_urls[0] || ""
     }
 
-    const { data: oldAnn } = await supabase.from('announcements').select('image_urls, audio_urls, pdf_urls').eq('id', id).single()
+    const { data: oldAnn } = await supabase.from('announcements').select('image_urls, audio_urls, pdf_urls, is_published, type, title').eq('id', id).single()
     if (oldAnn) {
       const removedFiles: string[] = []
       if (oldAnn.image_urls && Array.isArray(oldAnn.image_urls)) {
@@ -206,5 +209,26 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
 
     const { error } = await supabase.from('announcements').update(finalData).eq('id', id)
     if (error) throw error
+
+    // Se o recado acabou de ser publicado (era rascunho e agora é isPublished: true), dispara push
+    const wasPublished = oldAnn?.is_published
+    const isNowPublished = finalData.is_published
+
+    if (!wasPublished && isNowPublished) {
+      const isSwap = (rest.type || oldAnn?.type) === 'Troca'
+      const title = rest.title || oldAnn?.title || 'Novo Recado'
+      
+      console.log('[REPO] Disparando push para recado que acaba de ser publicado:', title);
+      
+      await fetch('/api/push/send', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: isSwap ? 'Solicitação de Troca' : 'Novo Recado',
+          body: title,
+          url: '/'
+        }),
+        headers: { 'Content-Type': 'application/json' }
+      }).catch(err => console.error('Erro ao disparar push no update:', err))
+    }
   }
 }

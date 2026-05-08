@@ -15,7 +15,7 @@ import { Switch } from "@/shared/ui/switch"
 import { Badge } from "@/shared/ui/badge"
 import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { cn } from "@/shared/lib/utils"
+import { cn, getFileType, getFileViewerUrl } from "@/shared/lib/utils"
 import { UserAvatar } from "@/shared/ui/UserAvatar"
 
 interface AudioPlayerProps {
@@ -423,36 +423,59 @@ export function AnnouncementCard({
                   <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 px-1">Documentos Anexados</span>
                   <div className="flex flex-wrap gap-2 pt-1">
                     {allPdfs.map((url, idx) => {
+                      const fileType = getFileType(url);
+                      const isPdf = fileType === 'pdf';
+                      const viewerUrl = getFileViewerUrl(url);
+                      
                       // Tentar extrair o nome do arquivo da URL do Supabase
-                      const fileName = url.split('/').pop()?.split('?')[0] || `documento-${idx + 1}.pdf`;
+                      const fileName = url.split('/').pop()?.split('?')[0] || `documento-${idx + 1}.${fileType}`;
                       const decodedName = decodeURIComponent(fileName).split('-').slice(1).join('-') || fileName;
+
+                      // Cores dinâmicas para a tag baseadas no tipo
+                      const tagColors: Record<string, string> = {
+                        pdf: "bg-red-600 border-red-500",
+                        ppt: "bg-orange-600 border-orange-500",
+                        pptx: "bg-orange-600 border-orange-500",
+                        doc: "bg-blue-600 border-blue-500",
+                        docx: "bg-blue-600 border-blue-500",
+                        xls: "bg-green-600 border-green-500",
+                        xlsx: "bg-green-600 border-green-500"
+                      };
+                      
+                      const tagColorClass = tagColors[fileType] || "bg-stone-600 border-stone-500";
 
                       return (
                         <a 
                           key={idx}
-                          href={url} 
+                          href={viewerUrl} 
                           target="_blank"
                           rel="noreferrer"
                           className="group flex flex-col items-center gap-1.5 w-20 active:scale-95 transition-all"
                           title={decodedName}
                         >
                           {/* Card Quadrado */}
-                          <div className="relative w-20 h-20 flex items-center justify-center bg-stone-50 border border-stone-200 rounded-xl group-hover:border-red-300 group-hover:bg-red-50/30 transition-all shadow-sm overflow-hidden">
-                            <FileText className="h-9 w-9 text-stone-200 group-hover:text-red-200 transition-colors" />
+                          <div className="relative w-20 h-20 flex items-center justify-center bg-stone-50 border border-stone-200 rounded-xl group-hover:border-stone-300 group-hover:bg-stone-50/50 transition-all shadow-sm overflow-hidden">
+                            <FileText className={cn(
+                              "h-9 w-9 transition-colors",
+                              isPdf ? "text-stone-200 group-hover:text-red-200" : "text-stone-200 group-hover:text-blue-200"
+                            )} />
                             
-                            {/* Tag PDF Valorizada */}
-                            <div className="absolute top-1.5 right-1.5 bg-red-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow-md border border-red-500 animate-in fade-in zoom-in duration-300">
-                              PDF
+                            {/* Tag Dinâmica - Alinhada à Esquerda conforme solicitado */}
+                            <div className={cn(
+                              "absolute top-1.5 left-1.5 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow-md border animate-in fade-in zoom-in duration-300",
+                              tagColorClass
+                            )}>
+                              {fileType.toUpperCase()}
                             </div>
 
                             {/* Ícone de Download Sutil no Hover */}
-                            <div className="absolute bottom-1.5 right-1.5 p-1 bg-white/90 rounded-full opacity-0 group-hover:opacity-100 transition-opacity border border-red-100 shadow-sm">
-                              <Download className="h-3 w-3 text-red-600" />
+                            <div className="absolute bottom-1.5 right-1.5 p-1 bg-white/90 rounded-full opacity-0 group-hover:opacity-100 transition-opacity border border-stone-100 shadow-sm">
+                              <Download className="h-3 w-3 text-stone-600" />
                             </div>
                           </div>
 
                           {/* Nome Externo */}
-                          <span className="text-[10px] font-bold text-stone-600 truncate w-full text-center px-0.5 group-hover:text-red-700 transition-colors">
+                          <span className="text-[10px] font-bold text-stone-600 truncate w-full text-center px-0.5 group-hover:text-stone-900 transition-colors">
                             {decodedName}
                           </span>
                         </a>

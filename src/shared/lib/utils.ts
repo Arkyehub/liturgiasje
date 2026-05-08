@@ -12,3 +12,16 @@ export function maskPhone(value: string) {
   value = value.replace(/(\d)(\d{4})$/, "$1-$2")
   return value.substring(0, 15)
 }
+
+export function getFileType(url: string) {
+  if (!url) return 'file'
+  const extension = url.split('.').pop()?.split('?')[0]?.toLowerCase() || 'file'
+  return extension
+}
+
+export function getFileViewerUrl(url: string) {
+  const type = getFileType(url)
+  if (type === 'pdf') return url
+  // Para arquivos do Office, o Google Docs Viewer é uma excelente solução "premium"
+  return `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`
+}

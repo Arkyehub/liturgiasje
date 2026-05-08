@@ -14,10 +14,11 @@ import {
   CalendarIcon, Loader2, Image as ImageIcon,
   Music, X, Mic, Square, FileText
 } from "lucide-react"
-import { cn } from "@/shared/lib/utils"
+import { cn, getFileType } from "@/shared/lib/utils"
 import { toast } from "sonner"
 import { useAnnouncementStore } from "../store/useAnnouncementStore"
 import { storageService } from "@/shared/api/storage"
+import { AnnouncementType } from "@/domain/models/Announcement"
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ interface SavePayload {
   id?: string
   title: string
   content: string
+  type?: AnnouncementType
   expiresAt: Date | null
   imageUrls?: string[]
   audioUrls?: string[]
@@ -199,15 +201,33 @@ interface PDFPreviewProps {
 }
 
 function PDFPreview({ url, onRemove }: PDFPreviewProps) {
+  const fileType = getFileType(url)
   const fileName = url.split('/').pop()?.split('?')[0] || 'Documento'
   const decodedName = decodeURIComponent(fileName).split('-').slice(1).join('-') || fileName
+
+  // Cores dinâmicas para a tag baseadas no tipo
+  const tagColors: Record<string, string> = {
+    pdf: "bg-red-600",
+    ppt: "bg-orange-600",
+    pptx: "bg-orange-600",
+    doc: "bg-blue-600",
+    docx: "bg-blue-600",
+    xls: "bg-green-600",
+    xlsx: "bg-green-600"
+  };
+  
+  const tagColorClass = tagColors[fileType] || "bg-stone-600";
 
   return (
     <div className="relative h-20 w-20">
       <div className="h-full w-full overflow-hidden rounded-xl border border-stone-200 bg-stone-50 flex flex-col items-center justify-center p-1">
         <FileText className="h-8 w-8 text-stone-300" />
-        <div className="absolute top-1.5 right-1.5 bg-red-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded shadow-sm">
-          PDF
+        {/* Tag Dinâmica - Alinhada à Esquerda conforme solicitado */}
+        <div className={cn(
+          "absolute top-1.5 left-1.5 text-white text-[7px] font-black px-1.5 py-0.5 rounded shadow-sm",
+          tagColorClass
+        )}>
+          {fileType.toUpperCase()}
         </div>
         <span className="mt-1 w-full truncate text-center text-[8px] font-bold text-stone-500 px-1 leading-tight">
           {decodedName}
@@ -217,7 +237,7 @@ function PDFPreview({ url, onRemove }: PDFPreviewProps) {
         type="button"
         onClick={onRemove}
         className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white shadow-md transition-all hover:bg-red-600 hover:scale-110 active:scale-95 z-10 border-2 border-white"
-        aria-label="Remover PDF"
+        aria-label={`Remover ${fileType.toUpperCase()}`}
       >
         <X className="h-3 w-3" />
       </button>
@@ -499,6 +519,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         content: content.trim(),
         expiresAt: hasExpiration ? (expirationDateValue ?? null) : null,
         isPublished: publishedStatus,
+        type: 'Aviso',
         imageUrls: imageUrls,
         audioUrls: audioUrls,
         pdfUrls: pdfUrls,
