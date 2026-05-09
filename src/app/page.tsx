@@ -522,17 +522,17 @@ export default function Home() {
                     {...ann} 
                     createdAt={ann.createdAt}
                     authorId={ann.createdBy}
-                    currentUserId={user?.id}
+                    currentUserId={profile?.id}
                     isAdmin={profile?.role === "admin"}
                     isLoggedIn={!!user}
                     onRead={async (id) => {
-                      if (!user) {
+                      if (!profile) {
                         toast.error("Faça login para marcar como lido.")
                         return
                       }
                       try {
-                        await markAsRead(id, user.id)
-                        await loadAnnouncements(user.id, true)
+                        await markAsRead(id, profile.id)
+                        await loadAnnouncements(profile.id, true)
                       } catch (error) {
                         console.error(error)
                       }
@@ -541,7 +541,7 @@ export default function Home() {
                       try {
                         await updateAnnouncement(id, data)
                         toast.success("Aviso atualizado!")
-                        await loadAnnouncements(user?.id, true)
+                        if (profile) await loadAnnouncements(profile.id, true)
                       } catch (error) {
                         toast.error("Erro ao atualizar aviso.")
                       }
