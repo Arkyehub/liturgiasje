@@ -34,9 +34,9 @@ export function useSchedule() {
     }
   }, [])
 
-  const loadUpcomingSchedule = useCallback(async (userId: string, memberId?: string) => {
+  const loadUpcomingSchedule = useCallback(async (profileId: string) => {
     try {
-      const data = await makeListUpcomingSchedulesForUser().execute(userId, memberId)
+      const data = await makeListUpcomingSchedulesForUser().execute(profileId)
       setUpcomingSchedule(data)
     } catch (error) {
       console.error("Erro ao carregar próximas leituras:", error)
@@ -55,15 +55,15 @@ export function useSchedule() {
     }
   }, [])
 
-  const confirmSlot = async (slotId: string, userId: string) => {
-    // Atualização otimista da UI para dar feedback instantâneo ao usuário
+  const confirmSlot = async (slotId: string, profileId: string) => {
+    // Atualização otimista
     setSchedule(prev => prev.map(mass => ({
       ...mass,
-      slots: mass.slots.map(s => s.id === slotId ? { ...s, isConfirmed: true, readerId: userId } : s)
+      slots: mass.slots.map(s => s.id === slotId ? { ...s, isConfirmed: true, profileId } : s)
     })))
     
     try {
-      await makeConfirmScheduleSlot().execute(slotId, userId)
+      await makeConfirmScheduleSlot().execute(slotId, profileId)
     } catch (error) {
       console.error("Erro ao confirmar slot:", error)
       throw error
@@ -100,15 +100,15 @@ export function useSchedule() {
     }
   }
 
-  const acceptSwap = async (slotId: string, userId: string, memberId?: string) => {
+  const acceptSwap = async (slotId: string, profileId: string) => {
     // Atualização otimista
     setSchedule(prev => prev.map(mass => ({
       ...mass,
-      slots: mass.slots.map(s => s.id === slotId ? { ...s, isSwapRequested: false, isConfirmed: true, readerId: userId, memberId: memberId || s.memberId } : s)
+      slots: mass.slots.map(s => s.id === slotId ? { ...s, isSwapRequested: false, isConfirmed: true, profileId } : s)
     })))
     
     try {
-      await makeAcceptScheduleSwap().execute(slotId, userId, memberId)
+      await makeAcceptScheduleSwap().execute(slotId, profileId)
     } catch (error) {
       console.error("Erro ao assumir troca:", error)
       throw error

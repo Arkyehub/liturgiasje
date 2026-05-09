@@ -1,7 +1,8 @@
-export interface UserProfile {
+export interface Profile {
   id: string
-  email: string
+  authUserId?: string | null // Link to auth.users.id
   fullName: string
+  email?: string | null
   avatarUrl?: string | null
   role: 'admin' | 'reader'
   whatsapp?: string
@@ -10,7 +11,8 @@ export interface UserProfile {
     day_preferences?: Record<string, string[]>
   }
   claimedAt?: string
-  isSelfRegistered?: boolean
+  createdAt: string
+  updatedAt: string
 }
 
 export interface BirthdayInfo {
@@ -18,5 +20,7 @@ export interface BirthdayInfo {
   fullName: string
   avatarUrl?: string | null
   birthDate: string
-  isClaimed?: boolean
+  isActive?: boolean // true se authUserId estiver preenchido
 }
+
+export type CreateProfileData = Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>

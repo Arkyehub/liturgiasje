@@ -4,13 +4,12 @@ import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/shared/hooks/useAuth"
 import { 
-  makeListMembers, 
-  makeDeleteMember, 
-  makeCreateMember, 
-  makeUpdateMember 
-} from "@/main/factories/usecases/members"
-import { makeUpdateUserRole } from "@/main/factories/usecases/user"
-import { Member } from "@/domain/models/Member"
+  makeListProfiles, 
+  makeDeleteProfile, 
+  makeCreateProfile, 
+  makeUpdateProfile 
+} from "@/main/factories/usecases/profiles"
+import { Profile } from "@/domain/models/Profile"
 import { Badge } from "@/shared/ui/badge"
 import {
   Drawer,
@@ -37,15 +36,15 @@ import { toast } from "sonner"
 export default function AdminMembersPage() {
   const { user, profile, loading } = useAuth()
   const router = useRouter()
-  const [members, setMembers] = useState<Member[]>([])
+  const [profiles, setProfiles] = useState<Profile[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
-  const [editingMember, setEditingMember] = useState<Member | null>(null)
+  const [editingProfile, setEditingProfile] = useState<Profile | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
-  const [roleChangeMember, setRoleChangeMember] = useState<Member | null>(null)
+  const [roleChangeProfile, setRoleChangeProfile] = useState<Profile | null>(null)
   const [isRoleDrawerOpen, setIsRoleDrawerOpen] = useState(false)
   const [isSubmittingRole, setIsSubmittingRole] = useState(false)
-  const [memberToDelete, setMemberToDelete] = useState<Member | null>(null)
+  const [profileToDelete, setProfileToDelete] = useState<Profile | null>(null)
   const [isDeleteDrawerOpen, setIsDeleteDrawerOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -55,54 +54,50 @@ export default function AdminMembersPage() {
       if (!user || profile?.role !== 'admin') {
         router.push("/")
       } else {
-        loadMembers()
+        loadProfiles()
       }
     }
   }, [user, profile, loading])
 
-  const loadMembers = async () => {
+  const loadProfiles = async () => {
     try {
       setIsLoading(true)
-      const data = await makeListMembers().execute()
-      setMembers(data)
+      const data = await makeListProfiles().execute()
+      setProfiles(data)
     } catch (error) {
-      toast.error("Erro ao carregar membros.")
+      toast.error("Erro ao carregar perfis.")
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!memberToDelete) return
+    if (!profileToDelete) return
     
-    // 1. Atualização Otimista: Removemos o membro do estado local antes da chamada ao servidor
-    const previousMembers = [...members]
-    setMembers(current => current.filter(m => m.id !== id))
+    // Atualização Otimista
+    const previousProfiles = [...profiles]
+    setProfiles(current => current.filter(p => p.id !== id))
     setIsDeleteDrawerOpen(false)
     
     try {
       setIsDeleting(true)
-      await makeDeleteMember().execute(id)
-      toast.success("Membro excluído.")
-      // Não precisamos recarregar tudo de novo se a UI otimista funcionou,
-      // mas podemos um loadMembers secundário se quisermos garantir sincronia total.
-      // loadMembers()
+      await makeDeleteProfile().execute(id)
+      toast.success("Perfil excluído.")
     } catch (error) {
-      // 2. Reversão em caso de erro
-      setMembers(previousMembers)
-      toast.error("Erro ao excluir membro.")
+      setProfiles(previousProfiles)
+      toast.error("Erro ao excluir perfil.")
     } finally {
       setIsDeleting(false)
-      setMemberToDelete(null)
+      setProfileToDelete(null)
     }
   }
 
-  const filteredMembers = useMemo(() => {
-    return members.filter(m => 
-      m.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.whatsapp?.includes(searchTerm)
+  const filteredProfiles = useMemo(() => {
+    return profiles.filter(p => 
+      p.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.whatsapp?.includes(searchTerm)
     )
-  }, [members, searchTerm])
+  }, [profiles, searchTerm])
 
 
   if (loading || (user && !profile)) {
@@ -133,7 +128,7 @@ export default function AdminMembersPage() {
                 />
               </div>
               <Button onClick={() => {
-                setEditingMember(null)
+                setEditingProfile(null)
                 setIsSheetOpen(true)
               }} className="rounded-xl bg-stone-800 hover:bg-black">
                 <Plus className="h-4 w-4" />
@@ -145,75 +140,80 @@ export default function AdminMembersPage() {
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-stone-300" />
                 </div>
-              ) : filteredMembers.length === 0 ? (
-                <p className="text-center text-xs text-stone-400 py-10">Nenhum membro encontrado.</p>
+              ) : filteredProfiles.length === 0 ? (
+                <p className="text-center text-xs text-stone-400 py-10">Nenhum perfil encontrado.</p>
               ) : (
-                filteredMembers.map((member) => (
-                  <div key={member.id} className="bg-white p-4 rounded-3xl border border-stone-100 shadow-sm flex items-center justify-between gap-4">
+                filteredProfiles.map((p) => (
+                  <div key={p.id} className="bg-white p-4 rounded-3xl border border-stone-100 shadow-sm flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 overflow-hidden">
                       <UserAvatar 
-                        name={member.fullName}
-                        src={member.claimedUser?.avatarUrl}
-                        isClaimed={member.isClaimed}
-                        className="h-10 w-10 shrink-0"
-                      />
-
-                      <div className="space-y-0.5 truncate">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-bold text-stone-800 truncate">{member.fullName}</p>
-                          {member.claimedUser?.role === 'admin' && (
-                            <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 font-bold text-[8px] tracking-wider px-1.5 py-0 rounded shrink-0 uppercase">
-                              Admin
+                         name={p.fullName}
+                         src={p.avatarUrl}
+                         isClaimed={!!p.authUserId}
+                         className="h-10 w-10 shrink-0"
+                       />
+ 
+                       <div className="space-y-0.5 truncate">
+                         <div className="flex items-center gap-2">
+                           <p className="text-sm font-bold text-stone-800 truncate">{p.fullName}</p>
+                           {p.role === 'admin' && (
+                             <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 font-bold text-[8px] tracking-wider px-1.5 py-0 rounded shrink-0 uppercase">
+                               Admin
+                             </Badge>
+                           )}
+                           {p.authUserId && p.role !== 'admin' && (
+                             <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 font-bold text-[8px] tracking-wider px-1.5 py-0 rounded shrink-0 uppercase">
+                               Leitor
+                             </Badge>
+                           )}
+                           {!p.authUserId && (
+                            <Badge className="bg-stone-100 text-stone-500 border-stone-200 hover:bg-stone-100 font-bold text-[8px] tracking-wider px-1.5 py-0 rounded shrink-0 uppercase">
+                              Pendente
                             </Badge>
-                          )}
-                          {member.isClaimed && member.claimedUser?.role !== 'admin' && (
-                            <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 font-bold text-[8px] tracking-wider px-1.5 py-0 rounded shrink-0 uppercase">
-                              Leitor
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-stone-500 truncate">{member.whatsapp || "Sem WhatsApp"}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-1 shrink-0">
-                      {member.isClaimed && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => {
-                            setRoleChangeMember(member)
-                            setIsRoleDrawerOpen(true)
-                          }} 
-                          className={`h-8 w-8 ${member.claimedUser?.role === 'admin' ? 'text-amber-600 hover:text-amber-700' : 'text-stone-400 hover:text-stone-800'}`}
-                          title={member.claimedUser?.role === 'admin' ? "Remover Administrador" : "Tornar Administrador"}
-                        >
-                          <UserKey className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {!member.isClaimed && (
-                        <Button variant="ghost" size="icon" onClick={() => {
-                          setEditingMember(member)
-                          setIsSheetOpen(true)
-                        }} className="h-8 w-8 text-stone-400 hover:text-stone-800">
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        onClick={() => {
-                          setMemberToDelete(member)
-                          setIsDeleteDrawerOpen(true)
-                        }} 
-                        className="h-8 w-8 text-stone-400 hover:text-red-600"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              )}
+                           )}
+                         </div>
+                         <p className="text-xs text-stone-500 truncate">{p.whatsapp || "Sem WhatsApp"}</p>
+                       </div>
+                     </div>
+                     
+                     <div className="flex items-center gap-1 shrink-0">
+                       {p.authUserId && (
+                         <Button 
+                           variant="ghost" 
+                           size="icon" 
+                           onClick={() => {
+                             setRoleChangeProfile(p)
+                             setIsRoleDrawerOpen(true)
+                           }} 
+                           className={`h-8 w-8 ${p.role === 'admin' ? 'text-amber-600 hover:text-amber-700' : 'text-stone-400 hover:text-stone-800'}`}
+                           title={p.role === 'admin' ? "Remover Administrador" : "Tornar Administrador"}
+                         >
+                           <UserKey className="h-4 w-4" />
+                         </Button>
+                       )}
+                       {!p.authUserId && (
+                         <Button variant="ghost" size="icon" onClick={() => {
+                           setEditingProfile(p)
+                           setIsSheetOpen(true)
+                         }} className="h-8 w-8 text-stone-400 hover:text-stone-800">
+                           <Edit2 className="h-4 w-4" />
+                         </Button>
+                       )}
+                       <Button 
+                         variant="ghost" 
+                         size="icon" 
+                         onClick={() => {
+                           setProfileToDelete(p)
+                           setIsDeleteDrawerOpen(true)
+                         }} 
+                         className="h-8 w-8 text-stone-400 hover:text-red-600"
+                       >
+                         <Trash2 className="h-4 w-4" />
+                       </Button>
+                     </div>
+                   </div>
+                 ))
+               )}
             </div>
           </div>
         </div>
@@ -223,34 +223,34 @@ export default function AdminMembersPage() {
         <SheetContent side="right" className="w-[90%] sm:max-w-xl p-6">
           <SheetHeader>
             <SheetTitle className="text-stone-800">
-              {editingMember ? "Editar Membro" : "Novo Membro"}
+              {editingProfile ? "Editar Perfil" : "Novo Perfil"}
             </SheetTitle>
           </SheetHeader>
           <MemberForm 
-            initialData={editingMember ? { full_name: editingMember.fullName, whatsapp: editingMember.whatsapp } : undefined}
+            initialData={editingProfile ? { full_name: editingProfile.fullName, whatsapp: editingProfile.whatsapp } : undefined}
             onSave={async (data) => {
               try {
-                if (editingMember) {
-                  await makeUpdateMember().execute(editingMember.id, {
+                if (editingProfile) {
+                  await makeUpdateProfile().execute(editingProfile.id, {
                     fullName: data.full_name,
                     whatsapp: data.whatsapp
                   })
-                  toast.success("Membro atualizado!")
+                  toast.success("Perfil atualizado!")
                 } else {
-                  await makeCreateMember().execute({
+                  await makeCreateProfile().execute({
                     fullName: data.full_name,
                     whatsapp: data.whatsapp,
-                    isClaimed: false
+                    role: 'reader'
                   })
-                  toast.success("Membro cadastrado!")
+                  toast.success("Perfil cadastrado!")
                 }
-                loadMembers()
+                loadProfiles()
                 setIsSheetOpen(false)
               } catch (error: any) {
                 if (error.message === "NAME_ALREADY_IN_USE") {
-                  toast.error("Este nome já está em uso por outro membro.")
+                  toast.error("Este nome já está em uso por outro perfil.")
                 } else {
-                  toast.error("Erro ao salvar membro.")
+                  toast.error("Erro ao salvar perfil.")
                 }
               }
             }}
@@ -265,26 +265,27 @@ export default function AdminMembersPage() {
           <div className="mx-auto w-full max-w-sm">
             <DrawerHeader className="text-center">
               <DrawerTitle className="text-stone-800">
-                {roleChangeMember?.claimedUser?.role === 'admin' ? "Remover Administrador?" : "Tornar Administrador?"}
+                {roleChangeProfile?.role === 'admin' ? "Remover Administrador?" : "Tornar Administrador?"}
               </DrawerTitle>
               <DrawerDescription>
-                {roleChangeMember?.claimedUser?.role === 'admin' 
-                  ? `O membro ${roleChangeMember?.fullName} deixará de ter permissões de administrador no sistema.`
-                  : `O membro ${roleChangeMember?.fullName} terá permissão total para gerenciar escalas e outros membros.`}
+                {roleChangeProfile?.role === 'admin' 
+                  ? `O membro ${roleChangeProfile?.fullName} deixará de ter permissões de administrador no sistema.`
+                  : `O membro ${roleChangeProfile?.fullName} terá permissão total para gerenciar escalas e outros membros.`}
               </DrawerDescription>
             </DrawerHeader>
             <DrawerFooter className="flex flex-col gap-2 pb-8">
               <Button 
-                variant={roleChangeMember?.claimedUser?.role === 'admin' ? "destructive" : "default"}
-                className={`w-full font-bold h-12 rounded-xl ${roleChangeMember?.claimedUser?.role !== 'admin' ? 'bg-stone-800 hover:bg-black text-white' : ''}`}
+                variant={roleChangeProfile?.role === 'admin' ? "destructive" : "default"}
+                className={`w-full font-bold h-12 rounded-xl ${roleChangeProfile?.role !== 'admin' ? 'bg-stone-800 hover:bg-black text-white' : ''}`}
                 disabled={isSubmittingRole}
                 onClick={async () => {
-                  if (!roleChangeMember) return
+                  if (!roleChangeProfile) return
                   try {
-                    const newRole = roleChangeMember.claimedUser?.role === 'admin' ? 'reader' : 'admin'
-                    await makeUpdateUserRole().execute(roleChangeMember.claimedBy!, newRole)
+                    setIsSubmittingRole(true)
+                    const newRole = roleChangeProfile.role === 'admin' ? 'reader' : 'admin'
+                    await makeUpdateProfile().execute(roleChangeProfile.id, { role: newRole })
                     toast.success(newRole === 'admin' ? "Novo administrador definido!" : "Permissões de administrador removidas.")
-                    loadMembers()
+                    loadProfiles()
                     setIsRoleDrawerOpen(false)
                   } catch (error) {
                     toast.error("Erro ao atualizar permissões.")
@@ -310,9 +311,9 @@ export default function AdminMembersPage() {
         <DrawerContent>
           <div className="mx-auto w-full max-w-sm">
             <DrawerHeader className="text-center">
-              <DrawerTitle className="text-stone-800">Excluir Membro?</DrawerTitle>
+              <DrawerTitle className="text-stone-800">Excluir Perfil?</DrawerTitle>
               <DrawerDescription>
-                Esta ação removerá o membro <strong>{memberToDelete?.fullName}</strong>, sua conta de login e todos os registros relacionados (escalas, trocas e indisponibilidades) permanentemente.
+                Esta ação removerá o perfil <strong>{profileToDelete?.fullName}</strong> e todos os registros relacionados (escalas, trocas e indisponibilidades) permanentemente. Se o perfil estiver vinculado a uma conta de login, o acesso será mantido mas sem os dados de leitor.
               </DrawerDescription>
             </DrawerHeader>
             <DrawerFooter className="flex flex-col gap-2 pb-8">
@@ -320,7 +321,7 @@ export default function AdminMembersPage() {
                 variant="destructive"
                 className="w-full font-bold h-12 rounded-xl"
                 disabled={isDeleting}
-                onClick={() => memberToDelete && handleDelete(memberToDelete.id)}
+                onClick={() => profileToDelete && handleDelete(profileToDelete.id)}
               >
                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sim, Excluir"}
               </Button>

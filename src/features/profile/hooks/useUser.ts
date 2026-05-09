@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react"
-import { BirthdayInfo } from "@/domain/models/UserProfile"
-import { makeListBirthdays } from "@/main/factories/usecases/user"
+import { BirthdayInfo } from "@/domain/models/Profile"
+import { makeListBirthdays } from "@/main/factories/usecases/profiles"
 
 export function useUser() {
   const [birthdays, setBirthdays] = useState<BirthdayInfo[]>([])

@@ -1,5 +1,5 @@
 export interface UnavailableRepository {
-  listByUser(userId: string): Promise<string[]>
+  listByProfile(profileId: string): Promise<string[]>
   listManyByDate(date: string): Promise<string[]>
-  toggleDate(userId: string, date: string): Promise<{ action: 'added' | 'removed' }>
+  toggleDate(profileId: string, date: string): Promise<{ action: 'added' | 'removed' }>
 }

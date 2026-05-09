@@ -13,10 +13,10 @@ export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(false)
 
-  const loadAnnouncements = useCallback(async (userId?: string, silent = false) => {
+  const loadAnnouncements = useCallback(async (profileId?: string, silent = false) => {
     try {
       if (!silent) setLoading(true)
-      const data = await makeListAnnouncements().execute(userId)
+      const data = await makeListAnnouncements().execute(profileId)
       setAnnouncements(data)
     } catch (error) {
       console.error(error)
@@ -38,8 +38,8 @@ export function useAnnouncements() {
     await makeDeleteAnnouncement().execute(id)
   }
 
-  const markAsRead = async (id: string, userId: string) => {
-    await makeMarkAnnouncementAsRead().execute(id, userId)
+  const markAsRead = async (id: string, profileId: string) => {
+    await makeMarkAnnouncementAsRead().execute(id, profileId)
   }
 
   return {

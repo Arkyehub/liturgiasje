@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Card } from "@/shared/ui/card"
 import { UserAvatar } from "@/shared/ui/UserAvatar"
 import { cn } from "@/shared/lib/utils"
@@ -23,6 +23,23 @@ interface BirthdayCardProps {
 
 export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (cardRef.current && !cardRef.current.contains(event.target as Node)) {
+        setIsExpanded(false)
+      }
+    }
+
+    if (isExpanded) {
+      document.addEventListener("mousedown", handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [isExpanded])
 
   // Filtrar aniversariantes DO DIA (com base no horário local do browser)
   const todayBirthdays = members.filter(m => {
@@ -42,7 +59,7 @@ export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
   if (members.length === 0) return null
 
   return (
-    <Card className="overflow-hidden border-stone-200 bg-white shadow-sm transition-all">
+    <Card ref={cardRef} className="overflow-hidden border-stone-200 bg-white shadow-sm transition-all">
       {/* CAPA DO CARD */}
       <div 
         onClick={() => setIsExpanded(!isExpanded)}

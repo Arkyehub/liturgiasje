@@ -280,7 +280,7 @@ export function AnnouncementCard({
                   {expiresAt && isValid(new Date(expiresAt)) ? format(new Date(expiresAt), "dd/MM", { locale: ptBR }) : "--/--"}
                 </button>
               } />
-              <PopoverContent className="w-auto p-0" align="end">
+              <PopoverContent className="w-auto p-0 flex flex-col" align="end">
                 <Calendar
                   mode="single"
                   selected={expiresAt ? new Date(expiresAt) : undefined}
@@ -288,6 +288,19 @@ export function AnnouncementCard({
                   initialFocus
                   locale={ptBR}
                 />
+                {expiresAt && (
+                  <div className="p-1 border-t border-stone-100">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onUpdate?.(id, { expiresAt: null })}
+                      className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 font-bold text-[10px] h-8"
+                    >
+                      <Trash2 className="h-3 w-3 mr-2" />
+                      REMOVER DATA
+                    </Button>
+                  </div>
+                )}
               </PopoverContent>
             </Popover>
 

@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react"
 import { useAuth } from "@/shared/hooks/useAuth"
-import { makeUploadUserAvatar, makeUpdateUserProfile } from "@/main/factories/usecases/user"
+import { makeUploadAvatar, makeUpdateProfile } from "@/main/factories/usecases/profiles"
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar"
 import { Button } from "@/shared/ui/button"
 import { ImageCropperModal } from "./ImageCropperModal"
@@ -29,10 +29,10 @@ export function ProfileImageEditor() {
   }
 
   const handleSaveCroppedImage = async (blob: Blob) => {
-    if (!user) return
+    if (!profile) return
     setIsUpdating(true)
     try {
-      await makeUploadUserAvatar().execute(user.id, blob)
+      await makeUploadAvatar().execute(profile.id, blob)
       toast.success("Foto de perfil atualizada!")
       await refreshProfile()
     } catch (error) {
@@ -46,14 +46,14 @@ export function ProfileImageEditor() {
 
   const handlePullFromGoogle = async () => {
     const googleAvatarUrl = user?.user_metadata?.avatar_url
-    if (!googleAvatarUrl || !user) {
+    if (!googleAvatarUrl || !profile) {
       toast.error("Foto do Google não encontrada.")
       return
     }
 
     setIsUpdating(true)
     try {
-      await makeUpdateUserProfile().execute(user.id, { avatarUrl: googleAvatarUrl })
+      await makeUpdateProfile().execute(profile.id, { avatarUrl: googleAvatarUrl })
       toast.success("Foto importada do Google!")
       await refreshProfile()
     } catch (error) {

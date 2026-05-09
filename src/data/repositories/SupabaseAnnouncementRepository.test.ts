@@ -30,8 +30,17 @@ describe("SupabaseAnnouncementRepository", () => {
       pdfUrls: ["http://test.pdf"]
     }
 
-    ;(supabase.from as jest.Mock).mockReturnValue({
-      insert: jest.fn().mockResolvedValue({ error: null })
+    ;(supabase.from as jest.Mock).mockImplementation((table) => {
+      if (table === 'profiles') {
+        return {
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+          single: jest.fn().mockResolvedValue({ data: { id: 'profile-1' }, error: null })
+        }
+      }
+      return {
+        insert: jest.fn().mockResolvedValue({ error: null })
+      }
     })
 
     // Mock global fetch for push notification
@@ -39,6 +48,7 @@ describe("SupabaseAnnouncementRepository", () => {
 
     await repository.create(data)
 
+    expect(supabase.from).toHaveBeenCalledWith('profiles')
     expect(supabase.from).toHaveBeenCalledWith('announcements')
   })
 

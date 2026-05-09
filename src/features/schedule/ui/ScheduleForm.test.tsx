@@ -1,8 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { ScheduleForm } from "./ScheduleForm"
-import { makeCheckMassExists, makeCreateMassWithSlots, makeGetMembersUsage, makeListOccupiedDatesForMonth, makeListSchedulesForMonth } from "@/main/factories/usecases/schedule"
-import { makeListMembers } from "@/main/factories/usecases/members"
-import { makeListUnavailableByDate } from "@/main/factories/usecases/user"
+import { makeCheckMassExists, makeCreateMassWithSlots, makeGetProfilesUsage, makeListOccupiedDatesForMonth, makeListSchedulesForMonth } from "@/main/factories/usecases/schedule"
+import { makeListProfiles, makeListUnavailableByDate } from "@/main/factories/usecases/profiles"
 import { toast } from "sonner"
 
 // Mocks
@@ -11,16 +10,13 @@ jest.mock("@/main/factories/usecases/schedule", () => ({
   makeCreateMassWithSlots: jest.fn(),
   makeUpdateMass: jest.fn(),
   makeDeleteMass: jest.fn(),
-  makeGetMembersUsage: jest.fn(),
+  makeGetProfilesUsage: jest.fn(),
   makeListOccupiedDatesForMonth: jest.fn(),
   makeListSchedulesForMonth: jest.fn()
 }))
 
-jest.mock("@/main/factories/usecases/members", () => ({
-  makeListMembers: jest.fn()
-}))
-
-jest.mock("@/main/factories/usecases/user", () => ({
+jest.mock("@/main/factories/usecases/profiles", () => ({
+  makeListProfiles: jest.fn(),
   makeListUnavailableByDate: jest.fn()
 }))
 
@@ -58,8 +54,8 @@ describe("ScheduleForm Validation", () => {
     jest.clearAllMocks()
     
     // Mocks padrão para carregamento inicial
-    ;(makeListMembers as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([]) })
-    ;(makeGetMembersUsage as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue({}) })
+    ;(makeListProfiles as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([]) })
+    ;(makeGetProfilesUsage as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue({}) })
     ;(makeListUnavailableByDate as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([]) })
     ;(makeCheckMassExists as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([]) })
     ;(makeListOccupiedDatesForMonth as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([]) })
@@ -84,7 +80,7 @@ describe("ScheduleForm Validation", () => {
     fireEvent.change(timeInputs[1], { target: { value: "07:00" } })
 
     // Tentar salvar
-    const saveBtn = screen.getByText(/Salvar Escala do Dia/i)
+    const saveBtn = screen.getByText(/Salvar Rascunho/i)
     fireEvent.click(saveBtn)
 
     await waitFor(() => {
@@ -112,7 +108,7 @@ describe("ScheduleForm Validation", () => {
     fireEvent.change(timeInput, { target: { value: "19:00" } })
 
     // Tentar salvar
-    const saveBtn = screen.getByText(/Salvar Escala do Dia/i)
+    const saveBtn = screen.getByText(/Salvar Rascunho/i)
     fireEvent.click(saveBtn)
 
     await waitFor(() => {
@@ -121,8 +117,8 @@ describe("ScheduleForm Validation", () => {
   })
 
   it("should fetch usage counts for the initial month", async () => {
-    const mockGetUsage = jest.fn().mockResolvedValue({ 'member-1': 2 })
-    ;(makeGetMembersUsage as jest.Mock).mockReturnValue({ execute: mockGetUsage })
+    const mockGetUsage = jest.fn().mockResolvedValue({ 'profile-1': 2 })
+    ;(makeGetProfilesUsage as jest.Mock).mockReturnValue({ execute: mockGetUsage })
 
     render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
 

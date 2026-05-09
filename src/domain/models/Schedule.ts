@@ -12,24 +12,21 @@ export interface ScheduleSlot {
   id: string
   massId: string
   role: string
-  readerId?: string
-  memberId?: string
-  originalReaderId?: string
+  profileId: string
+  originalProfileId?: string
   isConfirmed: boolean
   isSwapRequested: boolean
   createdAt: string
-  // Virtual fields populated by repository
-  reader?: {
+  // Campos virtuais populados pelo repositório
+  profile?: {
     fullName: string
     avatarUrl: string | null
-  } | null
-  member?: {
-    fullName: string
+    authUserId?: string | null
   } | null
   readerName?: string
   avatarUrl?: string | null
-  isClaimed?: boolean
-  originalReader?: {
+  isActive?: boolean // se tem conta vinculada
+  originalProfile?: {
     fullName: string
     avatarUrl: string | null
   } | null
@@ -51,5 +48,5 @@ export interface CreateMassData {
 
 export interface CreateSlotData {
   role: string
-  memberId: string
+  profileId: string
 }

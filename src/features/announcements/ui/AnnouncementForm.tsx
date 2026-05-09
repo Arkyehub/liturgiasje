@@ -12,7 +12,7 @@ import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import {
   CalendarIcon, Loader2, Image as ImageIcon,
-  Music, X, Mic, Square, FileText
+  Music, X, Mic, Square, FileText, Trash2
 } from "lucide-react"
 import { cn, getFileType } from "@/shared/lib/utils"
 import { toast } from "sonner"
@@ -503,7 +503,18 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
 
   const handleSubmit = async (e: React.FormEvent, isPublishedOverride?: boolean) => {
     e.preventDefault()
-    if (!title.trim() || !content.trim()) return
+    
+    if (!title.trim()) {
+      toast.error("Por favor, preencha o título do aviso")
+      return
+    }
+
+    const hasAdditionalContent = content.trim().length > 0 || imageUrls.length > 0 || audioUrls.length > 0 || pdfUrls.length > 0
+    if (!hasAdditionalContent) {
+      toast.error("O aviso precisa ter uma mensagem ou pelo menos um anexo (imagem, áudio ou documento)")
+      return
+    }
+
     if (Object.values(uploadingStatus).some(Boolean)) {
       toast.error("Aguarde o upload dos arquivos terminar")
       return
@@ -538,6 +549,13 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
   const canAddAudios = audioUrls.length < MAX_ATTACHMENTS
   const canAddPdfs = pdfUrls.length < MAX_ATTACHMENTS
 
+  const isFormValid = title.trim().length > 0 && (
+    content.trim().length > 0 || 
+    imageUrls.length > 0 || 
+    audioUrls.length > 0 || 
+    pdfUrls.length > 0
+  )
+
   // ── Render ──────────────────────────────────────────────────────────────────
   if (!isHydrated) return null
 
@@ -554,8 +572,6 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
             id="ann-title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ex: Comunicado Geral"
-            required
             className="border-stone-300 focus-visible:ring-stone-400 font-medium"
           />
         </div>
@@ -568,8 +584,6 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
             id="ann-content"
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="Escreva os detalhes aqui..."
-            required
             className="min-h-[120px] border-stone-300 focus-visible:ring-stone-400 font-medium"
           />
         </div>
@@ -751,7 +765,7 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
                   </Button>
                 }
               />
-              <PopoverContent className="w-auto p-0" align="start">
+              <PopoverContent className="w-auto p-0 flex flex-col" align="start">
                   <Calendar
                     mode="single"
                     selected={expirationDateValue}
@@ -760,6 +774,20 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
                     locale={ptBR}
                     disabled={(date) => date < new Date()}
                   />
+                  {expirationDateValue && (
+                    <div className="p-1 border-t border-stone-100">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setExpirationDate(null)}
+                        className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 font-bold text-[10px] h-8"
+                      >
+                        <Trash2 className="h-3 w-3 mr-2" />
+                        REMOVER DATA
+                      </Button>
+                    </div>
+                  )}
               </PopoverContent>
             </Popover>
           </div>
@@ -771,10 +799,10 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         <div className="flex gap-3">
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             onClick={handleCancel}
             disabled={isSubmitting}
-            className="flex-1 text-stone-500 hover:bg-stone-100"
+            className="flex-1 border-stone-300 text-stone-500 bg-white hover:bg-stone-50"
           >
             Cancelar
           </Button>
@@ -782,8 +810,8 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
             type="button"
             variant="outline"
             onClick={(e) => handleSubmit(e, false)}
-            disabled={isSubmitting}
-            className="flex-1 border-stone-300 text-stone-700 hover:bg-stone-50 font-bold"
+            disabled={isSubmitting || !isFormValid}
+            className="flex-1 bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100 font-bold disabled:opacity-50"
           >
             Salvar Rascunho
           </Button>
@@ -792,8 +820,8 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
         <Button
           type="button"
           onClick={(e) => handleSubmit(e, true)}
-          disabled={isSubmitting}
-          className="w-full bg-stone-800 hover:bg-stone-900 text-white h-12 text-base font-bold shadow-md active:scale-[0.98] transition-all"
+          disabled={isSubmitting || !isFormValid}
+          className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-base font-bold shadow-md active:scale-[0.98] transition-all disabled:opacity-50"
         >
           {isSubmitting
             ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando...</>

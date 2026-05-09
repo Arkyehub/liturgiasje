@@ -8,11 +8,11 @@ const supabase = createClient(
 );
 
 async function updateVersion() {
-  const newVersion = '1.27';
+  const newVersion = '1.28';
   const { data, error } = await supabase
     .from('app_settings')
-    .update({ min_version: newVersion })
-    .eq('id', 1); // Geralmente o id é 1 para settings globais
+    .update({ value: newVersion, updated_at: new Date().toISOString() })
+    .eq('key', 'min_version');
 
   if (error) {
     console.error('Erro ao atualizar versão:', error);

@@ -23,18 +23,18 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/shared/ui/popover"
-import { makeListMembers } from "@/main/factories/usecases/members"
+import { makeListProfiles } from "@/main/factories/usecases/profiles"
 import { 
   makeCheckMassExists, 
-  makeGetMembersUsage, 
+  makeGetProfilesUsage, 
   makeDeleteMass, 
   makeUpdateMass, 
   makeCreateMassWithSlots,
   makeListOccupiedDatesForMonth,
   makeListSchedulesForMonth
 } from "@/main/factories/usecases/schedule"
-import { makeListUnavailableByDate } from "@/main/factories/usecases/user"
-import { Member } from "@/domain/models/Member"
+import { makeListUnavailableByDate } from "@/main/factories/usecases/profiles"
+import { Profile } from "@/domain/models/Profile"
 import { Plus, Search, Trash2, Type, CheckCircle2, User, AlertCircle, Eye } from "lucide-react"
 import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -53,8 +53,8 @@ interface Slot {
   id: string
   roleType: "C" | "L" | "P"
   roleLabel: string
-  memberId: string
-  memberName: string
+  profileId: string
+  profileName: string
   isOpen: boolean
 }
 
@@ -69,7 +69,7 @@ interface Session {
 export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: ScheduleFormProps) {
   const [date, setDate] = useState("")
   const [sessions, setSessions] = useState<Session[]>([])
-  const [members, setMembers] = useState<Member[]>([])
+  const [profiles, setProfiles] = useState<Profile[]>([])
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({})
   const [activeMonthRef, setActiveMonthRef] = useState(format(currentMonth, "yyyy-MM"))
   const [isSaving, setIsSaving] = useState(false)
@@ -98,7 +98,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
   }
 
   useEffect(() => {
-    loadMembers()
+    loadProfiles()
     loadUsage(activeMonthRef)
     loadAllMonthMasses(activeMonthRef)
     // Carrega os dias já com escala cadastrada para o mês atual
@@ -158,8 +158,8 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
             id: s.id,
             roleType,
             roleLabel: s.role,
-            memberId: s.memberId,
-            memberName: s.readerName || s.memberName || s.reader?.fullName,
+            profileId: s.profileId,
+            profileName: s.readerName || s.profileName || s.reader?.fullName,
             isOpen: false
           }
         })
@@ -178,10 +178,10 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
     }
   }, [initialData])
 
-  const loadMembers = async () => {
+  const loadProfiles = async () => {
     try {
-      const membersList = await makeListMembers().execute()
-      setMembers(membersList)
+      const profilesList = await makeListProfiles().execute()
+      setProfiles(profilesList)
     } catch (error) {
       console.error("Erro ao carregar leitores:", error)
     }
@@ -189,19 +189,19 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
 
   const loadUsage = async (mRef: string) => {
     try {
-      const counts = await makeGetMembersUsage().execute(mRef)
+      const counts = await makeGetProfilesUsage().execute(mRef)
       setUsageCounts(counts)
     } catch (error) {
-      console.error("Erro ao carregar uso de membros:", error)
+      console.error("Erro ao carregar uso de perfis:", error)
     }
   }
 
-  const getMemberSchedules = (memberId: string) => {
+  const getProfileSchedules = (profileId: string) => {
     const schedules: { date: string; time: string; role: string }[] = []
 
     allMonthMasses.forEach(mass => {
       mass.slots?.forEach((s: any) => {
-        if (s.memberId === memberId) {
+        if (s.profileId === profileId) {
           schedules.push({
             date: mass.date,
             time: mass.time.substring(0, 5),
@@ -213,7 +213,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
 
     sessions.forEach(sess => {
       sess.slots.forEach(s => {
-        if (s.memberId === memberId && sess.time && date) {
+        if (s.profileId === profileId && sess.time && date) {
           schedules.push({
             date: date,
             time: sess.time,
@@ -247,8 +247,8 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
     })
   }
 
-  const checkPreference = (member: Member, massTime: string, massDate: string) => {
-    if (!member.claimedUser?.preferences?.day_preferences) return false
+  const checkPreference = (profile: Profile, massTime: string, massDate: string) => {
+    if (!profile.preferences?.day_preferences) return false
     
     // Obter dia da semana (0-6, 0 é domingo)
     try {
@@ -258,7 +258,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
       // O app usa "6" para Domingo nas preferências do perfil
       const dayKey = dayOfWeek === 0 ? "6" : dayOfWeek.toString()
       
-      const prefs = member.claimedUser.preferences.day_preferences[dayKey]
+      const prefs = profile.preferences.day_preferences[dayKey]
       return Array.isArray(prefs) && (prefs.includes(massTime) || prefs.includes(massTime.substring(0, 5)))
     } catch {
       return false
@@ -289,11 +289,11 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
 
   const addSlot = (sessionTempId: string, roleType: "C" | "L" | "P") => {
     const newSlot: Slot = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: Math.random().toString(36).substring(2, 9),
       roleType,
       roleLabel: "",
-      memberId: "",
-      memberName: "",
+      profileId: "",
+      profileName: "",
       isOpen: false
     }
     setSessions(sessions.map(sess => {
@@ -315,11 +315,11 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
     }))
   }
 
-  const updateSlotMember = (sessionTempId: string, slotId: string, member: Member) => {
+  const updateSlotProfile = (sessionTempId: string, slotId: string, profile: Profile) => {
     setSessions(sessions.map(sess => {
       if (sess.tempId === sessionTempId) {
         const updatedSlots = sess.slots.map(s => 
-          s.id === slotId ? { ...s, memberId: member.id, memberName: member.fullName, isOpen: false } : s
+          s.id === slotId ? { ...s, profileId: profile.id, profileName: profile.fullName, isOpen: false } : s
         )
         return { ...sess, slots: updatedSlots }
       }
@@ -353,7 +353,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
       }
       
       // Se houver slots adicionados, eles precisam ter um leitor selecionado
-      const unassigned = sess.slots.find(s => !s.memberId)
+      const unassigned = sess.slots.find(s => !s.profileId)
       if (unassigned) {
         toast.error(`Escolha um leitor para ${unassigned.roleLabel} na missa das ${sess.time}`)
         return
@@ -395,7 +395,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
         
         const slotsData = sess.slots.map(s => ({
           role: s.roleLabel,
-          memberId: s.memberId
+          profileId: s.profileId
         }))
 
         if (sess.dbId) {
@@ -571,13 +571,13 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
                                 variant="outline"
                                 className={cn(
                                   "w-full h-8 justify-between font-bold rounded-lg border-stone-600 bg-white px-2",
-                                  !slot.memberId && "text-stone-500 font-bold"
+                                  !slot.profileId && "text-stone-500 font-bold"
                                 )}
                               >
                                 <div className="flex items-center truncate">
                                   <User className="mr-2 h-3.5 w-3.5 text-stone-400 shrink-0" />
                                   <span className="truncate text-[13px]">
-                                    {slot.memberId ? slot.memberName : "Selecionar..."}
+                                    {slot.profileId ? slot.profileName : "Selecionar..."}
                                   </span>
                                 </div>
                                 <Search className="ml-2 h-3 w-3 opacity-50 shrink-0" />
@@ -595,42 +595,42 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
                                   <CommandEmpty>Nenhum leitor encontrado.</CommandEmpty>
                                   <CommandGroup>
                                     {(() => {
-                                      const sortedMembers = [...members].sort((a, b) => {
+                                      const sortedProfiles = [...profiles].sort((a, b) => {
                                         const prefA = checkPreference(a, sess.time, date) ? 1 : 0
                                         const prefB = checkPreference(b, sess.time, date) ? 1 : 0
                                         if (prefA !== prefB) return prefB - prefA
 
-                                        const unA = a.claimedBy && unavailableUserIds.includes(a.claimedBy) ? 1 : 0
-                                        const unB = b.claimedBy && unavailableUserIds.includes(b.claimedBy) ? 1 : 0
+                                        const unA = a.id && unavailableUserIds.includes(a.id) ? 1 : 0
+                                        const unB = b.id && unavailableUserIds.includes(b.id) ? 1 : 0
                                         if (unA !== unB) return unA - unB
 
                                         return a.fullName.localeCompare(b.fullName)
                                       })
 
-                                      return sortedMembers.map((member) => {
-                                        const isUnavailable = member.claimedBy ? unavailableUserIds.includes(member.claimedBy) : false
-                                        const isPreference = checkPreference(member, sess.time, date)
+                                      return sortedProfiles.map((p) => {
+                                        const isUnavailable = p.id ? unavailableUserIds.includes(p.id) : false
+                                        const isPreference = checkPreference(p, sess.time, date)
                                         const isAlreadyScheduled = sessions.some(s => 
-                                          s.slots.some(sl => sl.memberId === member.id && sl.id !== slot.id)
+                                          s.slots.some(sl => sl.profileId === p.id && sl.id !== slot.id)
                                         )
                                         
                                         return (
                                           <CommandItem
-                                            key={member.id}
-                                            value={member.fullName}
+                                            key={p.id}
+                                            value={p.fullName}
                                             onSelect={() => {
                                               if (isAlreadyScheduled) {
-                                                toast.warning(`${member.fullName} já está escalado(a) neste dia!`, {
+                                                toast.warning(`${p.fullName} já está escalado(a) neste dia!`, {
                                                   duration: 5000,
                                                   icon: <AlertCircle className="h-4 w-4 text-amber-600" />
                                                 })
                                               } else if (isUnavailable) {
-                                                toast.warning(`${member.fullName} informou que não poderá participar nesta data.`, {
+                                                toast.warning(`${p.fullName} informou que não poderá participar nesta data.`, {
                                                   duration: 5000,
                                                   icon: <AlertCircle className="h-4 w-4 text-amber-600" />
                                                 })
                                               }
-                                              updateSlotMember(sess.tempId, slot.id, member)
+                                              updateSlotProfile(sess.tempId, slot.id, p)
                                               setSearchTerm("")
                                             }}
                                             className="flex items-center justify-between"
@@ -641,15 +641,15 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
                                               isAlreadyScheduled && !isUnavailable && "text-amber-600 font-bold",
                                               isPreference && !isUnavailable && !isAlreadyScheduled && "text-green-600 font-bold"
                                             )}>
-                                              {member.fullName}
+                                              {p.fullName}
                                               {isUnavailable && " (Indisponível)"}
                                               {isAlreadyScheduled && !isUnavailable && " (Já escalado)"}
                                               {isPreference && !isUnavailable && !isAlreadyScheduled && " (Preferência)"}
                                             </span>
                                             <div className="flex items-center gap-2">
-                                              {usageCounts[member.id] > 0 && (
+                                              {usageCounts[p.id] > 0 && (
                                                 <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-black rounded-md">
-                                                  {usageCounts[member.id]}x
+                                                  {usageCounts[p.id]}x
                                                 </span>
                                               )}
                                             </div>
@@ -666,8 +666,8 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
 
                         <div className="flex items-center gap-0.5 shrink-0">
                           {(() => {
-                            if (!slot.memberId) return null
-                            const schedules = getMemberSchedules(slot.memberId)
+                            if (!slot.profileId) return null
+                            const schedules = getProfileSchedules(slot.profileId)
                             if (schedules.length === 0) return null
 
                             return (
@@ -759,20 +759,30 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
 
       {/* Rodapé Fixo (Sticky) */}
       <div className="shrink-0 bg-white border-t border-stone-200 p-4 pb-5 shadow-[0_-10px_40px_rgba(0,0,0,0.04)] z-50">
-        <Button 
-          disabled={isSaving || !date || sessions.some(s => !s.time || s.slots.some(slot => !slot.memberId))}
-          className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-black tracking-widest uppercase text-[10px] rounded-xl shadow-xl shadow-green-200/50 transition-all active:scale-95 disabled:opacity-50"
-          onClick={handleSaveMass}
-        >
-          {isSaving ? (
-            <div className="h-4 w-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
-          ) : (
-            <>
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              Salvar Escala do Dia
-            </>
-          )}
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isSaving}
+            className="flex-1 border-stone-300 text-stone-500 bg-white hover:bg-stone-50 h-11 rounded-xl font-bold"
+          >
+            Cancelar
+          </Button>
+          <Button 
+            type="button"
+            disabled={isSaving || !date || sessions.some(s => !s.time || s.slots.some(slot => !slot.profileId))}
+            variant="outline"
+            className="flex-1 bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100 h-11 rounded-xl font-bold disabled:opacity-50"
+            onClick={handleSaveMass}
+          >
+            {isSaving ? (
+              <div className="h-4 w-4 animate-spin border-2 border-orange-600 border-t-transparent rounded-full" />
+            ) : (
+              "Salvar Rascunho"
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   )

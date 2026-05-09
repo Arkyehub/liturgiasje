@@ -118,19 +118,19 @@ describe("SupabaseScheduleRepository", () => {
 
   it("should confirm a slot", async () => {
     const slotId = "slot-1"
-    const userId = "user-1"
+    const profileId = "profile-1"
     const mockFrom = supabase.from as jest.Mock
     mockFrom.mockImplementation(() => ({
       update: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
       single: jest.fn().mockResolvedValue({ 
-        data: { id: slotId, is_confirmed: true, reader_id: userId }, 
+        data: { id: slotId, is_confirmed: true, profile_id: profileId }, 
         error: null 
       })
     }))
 
-    const result = await repository.confirmSlot(slotId, userId)
+    const result = await repository.confirmSlot(slotId, profileId)
 
     expect(mockFrom).toHaveBeenCalledWith('schedule_slots')
     expect(result.isConfirmed).toBe(true)
@@ -154,14 +154,12 @@ describe("SupabaseScheduleRepository", () => {
   })
 
   it("should list upcoming schedules for a user globally", async () => {
-    const userId = "user-1"
-    const memberId = "member-1"
+    const profileId = "profile-1"
     const mockFrom = supabase.from as jest.Mock
     
     const mockChain = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
-      or: jest.fn().mockReturnThis(),
       gte: jest.fn().mockReturnThis(),
       order: jest.fn().mockReturnThis(),
       then: jest.fn((resolve) => resolve({ 
@@ -184,7 +182,7 @@ describe("SupabaseScheduleRepository", () => {
 
     mockFrom.mockReturnValue(mockChain)
 
-    const result = await repository.listUpcomingForUser(userId, memberId)
+    const result = await repository.listUpcomingForUser(profileId)
 
     expect(mockFrom).toHaveBeenCalledWith('schedule_slots')
     expect(result).toHaveLength(1)

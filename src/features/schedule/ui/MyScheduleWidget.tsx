@@ -12,14 +12,13 @@ import Image from "next/image"
 
 interface MyScheduleWidgetProps {
   schedule: Mass[]
-  userId?: string
-  memberId?: string
+  profileId?: string
   userName?: string
   userAvatar?: string | null
   onNavigateToSlot: (slotId: string, date: string) => void
 }
 
-export function MyScheduleWidget({ schedule, userId, memberId, userName, userAvatar, onNavigateToSlot }: MyScheduleWidgetProps) {
+export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, onNavigateToSlot }: MyScheduleWidgetProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   // 1. Filtrar todas as escalas do usuário no mês
@@ -28,7 +27,7 @@ export function MyScheduleWidget({ schedule, userId, memberId, userName, userAva
     
     schedule.forEach(mass => {
       mass.slots.forEach(slot => {
-        const isMine = slot.readerId ? slot.readerId === userId : (memberId && slot.memberId === memberId)
+        const isMine = slot.profileId === profileId
         if (isMine) {
           slots.push({
             ...slot,
@@ -46,7 +45,7 @@ export function MyScheduleWidget({ schedule, userId, memberId, userName, userAva
       const dateB = new Date(`${b.massDate}T${b.massTime}`)
       return dateA.getTime() - dateB.getTime()
     })
-  }, [schedule, userId, memberId])
+  }, [schedule, profileId])
 
   // 2. Encontrar a próxima leitura (primeira leitura futura ou hoje)
   const nextReading = useMemo(() => {

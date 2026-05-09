@@ -1,32 +1,33 @@
 import { supabase } from "@/shared/api/supabase"
-import { Mass, ScheduleSlot, SwapRequest } from "@/domain/models/Schedule"
+import { Mass, ScheduleSlot, SwapRequest, CreateMassData, CreateSlotData } from "@/domain/models/Schedule"
 import { ScheduleRepository } from "@/domain/repositories/ScheduleRepository"
 import { startOfMonth, endOfMonth, format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 export class SupabaseScheduleRepository implements ScheduleRepository {
-  private mapSlotToDomain(slot: any, userNames: any, memberNames: any): ScheduleSlot {
-    const user = slot.reader_id ? userNames[slot.reader_id] : null
-    const member = slot.member_id ? memberNames[slot.member_id] : null
+  private mapSlotToDomain(slot: any, profilesMap: Record<string, any>): ScheduleSlot {
+    const profile = profilesMap[slot.profile_id] || null
 
     return {
       id: slot.id,
       massId: slot.mass_id,
       role: slot.role,
-      readerId: slot.reader_id,
-      memberId: slot.member_id,
-      originalReaderId: slot.original_reader_id,
+      profileId: slot.profile_id,
+      originalProfileId: slot.original_profile_id,
       isConfirmed: slot.is_confirmed,
       isSwapRequested: slot.is_swap_requested,
       createdAt: slot.created_at,
-      reader: user ? { fullName: user.full_name, avatarUrl: user.avatar_url } : null,
-      member: member ? { fullName: member.full_name } : null,
-      readerName: user?.full_name || member?.full_name || "---",
-      avatarUrl: user?.avatar_url || (member as any)?.avatar_url || null,
-      isClaimed: !!user || !!member?.is_claimed,
-      originalReader: slot.original_reader_id ? { 
-        fullName: userNames[slot.original_reader_id]?.full_name, 
-        avatarUrl: userNames[slot.original_reader_id]?.avatar_url 
+      profile: profile ? { 
+        fullName: profile.full_name, 
+        avatarUrl: profile.avatar_url,
+        authUserId: profile.auth_user_id
+      } : null,
+      readerName: profile?.full_name || "---",
+      avatarUrl: profile?.avatar_url || null,
+      isActive: !!profile?.auth_user_id,
+      originalProfile: slot.original_profile_id ? { 
+        fullName: profilesMap[slot.original_profile_id]?.full_name, 
+        avatarUrl: profilesMap[slot.original_profile_id]?.avatar_url 
       } : null
     }
   }
@@ -47,33 +48,18 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
 
     if (error) throw error
 
-    const readerIds = new Set<string>()
-    const memberIds = new Set<string>()
+    const profileIds = new Set<string>()
     for (const mass of masses || []) {
       for (const slot of mass.slots) {
-        if (slot.reader_id) readerIds.add(slot.reader_id)
-        if (slot.member_id) memberIds.add(slot.member_id)
-        if (slot.original_reader_id) readerIds.add(slot.original_reader_id)
+        if (slot.profile_id) profileIds.add(slot.profile_id)
+        if (slot.original_profile_id) profileIds.add(slot.original_profile_id)
       }
     }
 
-    let userNames: Record<string, any> = {}
-    let memberNames: Record<string, any> = {}
-
-    if (readerIds.size > 0) {
-      const { data: users } = await supabase.from('users').select('id, full_name, avatar_url').in('id', Array.from(readerIds))
-      if (users) userNames = Object.fromEntries(users.map(u => [u.id, u]))
-    }
-
-    if (memberIds.size > 0) {
-      const { data: members } = await supabase.from('members').select('id, full_name, user:users!claimed_by(avatar_url)').in('id', Array.from(memberIds))
-      if (members) {
-        memberNames = Object.fromEntries(members.map(m => [m.id, { 
-          full_name: m.full_name, 
-          is_claimed: !!(m as any).user,
-          avatar_url: (m as any).user?.avatar_url
-        }]))
-      }
+    let profilesMap: Record<string, any> = {}
+    if (profileIds.size > 0) {
+      const { data: profiles } = await supabase.from('profiles').select('id, full_name, avatar_url, auth_user_id').in('id', Array.from(profileIds))
+      if (profiles) profilesMap = Object.fromEntries(profiles.map(p => [p.id, p]))
     }
 
     return (masses || []).map(mass => ({
@@ -83,21 +69,20 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
       specialDescription: mass.special_description,
       monthReference: mass.month_reference,
       isPublished: mass.is_published,
-      slots: mass.slots.map((s: any) => this.mapSlotToDomain(s, userNames, memberNames))
+      slots: mass.slots.map((s: any) => this.mapSlotToDomain(s, profilesMap))
     }))
   }
 
-  async confirmSlot(slotId: string, userId: string): Promise<ScheduleSlot> {
-    const { data, error } = await supabase.from('schedule_slots').update({ is_confirmed: true, reader_id: userId }).eq('id', slotId).select().single()
+  async confirmSlot(slotId: string, profileId: string): Promise<ScheduleSlot> {
+    const { data, error } = await supabase.from('schedule_slots').update({ is_confirmed: true, profile_id: profileId }).eq('id', slotId).select().single()
     if (error) throw error
-    return this.mapSlotToDomain(data, {}, {}) // Nomes serão recarregados na listagem
+    return this.mapSlotToDomain(data, {}) 
   }
 
   async requestSwap(slotId: string): Promise<void> {
     const { error } = await supabase.from('schedule_slots').update({ is_swap_requested: true }).eq('id', slotId)
     if (error) throw error
     
-    // Disparar notificação para todos
     await fetch('/api/push/send', {
       method: 'POST',
       body: JSON.stringify({ title: 'Solicitação de Troca', body: 'Alguém solicitou uma troca de escala. Confira no mural!', url: '/' }),
@@ -110,15 +95,15 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
     if (error) throw error
   }
 
-  async getMembersUsage(monthReference: string): Promise<Record<string, number>> {
-    const { data, error } = await supabase.from('schedule_slots').select(`member_id, mass:masses!inner(month_reference)`).eq('mass.month_reference', monthReference)
+  async getProfilesUsage(monthReference: string): Promise<Record<string, number>> {
+    const { data, error } = await supabase.from('schedule_slots').select(`profile_id, mass:masses!inner(month_reference)`).eq('mass.month_reference', monthReference)
     if (error) throw error
     const counts: Record<string, number> = {}
-    data?.forEach((slot: any) => { if (slot.member_id) counts[slot.member_id] = (counts[slot.member_id] || 0) + 1 })
+    data?.forEach((slot: any) => { if (slot.profile_id) counts[slot.profile_id] = (counts[slot.profile_id] || 0) + 1 })
     return counts
   }
 
-  async createMassWithSlots(massData: any, slots: any[]): Promise<Mass> {
+  async createMassWithSlots(massData: CreateMassData, slots: CreateSlotData[]): Promise<Mass> {
     const payload = {
       date: massData.date,
       time: massData.time,
@@ -129,7 +114,7 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
     const { data: mass, error: massError } = await supabase.from('masses').insert(payload).select().single()
     if (massError) throw massError
     if (slots.length > 0) {
-      const slotsToInsert = slots.map(slot => ({ mass_id: mass.id, role: slot.role, member_id: slot.memberId }))
+      const slotsToInsert = slots.map(slot => ({ mass_id: mass.id, role: slot.role, profile_id: slot.profileId }))
       const { error: slotsError } = await supabase.from('schedule_slots').insert(slotsToInsert)
       if (slotsError) throw slotsError
     }
@@ -142,55 +127,38 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
     if (masses && masses.length > 0) {
       const massIds = masses.map(m => m.id)
       
-      // 1. Buscar todos os slots para identificar quem notificar
       const { data: slots } = await supabase
         .from('schedule_slots')
-        .select('member_id, reader_id')
+        .select('profile_id')
         .in('mass_id', massIds)
 
       if (slots && slots.length > 0) {
-        const readerIdsSet = new Set<string>()
-        const memberIds = new Set<string>()
+        const profileIds = Array.from(new Set(slots.map(s => s.profile_id).filter(Boolean)))
 
-        slots.forEach(s => {
-          if (s.reader_id) readerIdsSet.add(s.reader_id)
-          if (s.member_id) memberIds.add(s.member_id)
-        })
+        if (profileIds.length > 0) {
+          const { data: profiles } = await supabase.from('profiles').select('auth_user_id').in('id', profileIds)
+          const targetUserIds = profiles?.map(p => p.auth_user_id).filter(Boolean) as string[]
 
-        // 2. Buscar usuários que reivindicaram os membros
-        if (memberIds.size > 0) {
-          const { data: membersList } = await supabase
-            .from('members')
-            .select('claimed_by')
-            .in('id', Array.from(memberIds))
-          
-          membersList?.forEach(m => {
-            if (m.claimed_by) readerIdsSet.add(m.claimed_by)
-          })
-        }
-
-        const targetUserIds = Array.from(readerIdsSet)
-        console.log('[REPO] IDs coletados para notificação de escala:', targetUserIds);
-
-        if (targetUserIds.length > 0) {
-          const monthName = format(parseISO(masses[0].date), 'MMMM', { locale: ptBR })
-          
-          await fetch('/api/push/send', {
-            method: 'POST',
-            body: JSON.stringify({ 
-              title: 'Você foi escalado! 📅', 
-              body: `Confira seus horários de leitura na nova escala de ${monthName}.`, 
-              url: '/', 
-              targetUserIds 
-            }),
-            headers: { 'Content-Type': 'application/json' }
-          }).catch(err => console.error('Erro ao notificar escala:', err))
+          if (targetUserIds && targetUserIds.length > 0) {
+            const monthName = format(parseISO(masses[0].date), 'MMMM', { locale: ptBR })
+            
+            await fetch('/api/push/send', {
+              method: 'POST',
+              body: JSON.stringify({ 
+                title: 'Você foi escalado! 📅', 
+                body: `Confira seus horários de leitura na nova escala de ${monthName}.`, 
+                url: '/', 
+                targetUserIds 
+              }),
+              headers: { 'Content-Type': 'application/json' }
+            }).catch(err => console.error('Erro ao notificar escala:', err))
+          }
         }
       }
     }
   }
 
-  async updateMass(massId: string, massData: any, slots: any[]): Promise<void> {
+  async updateMass(massId: string, massData: CreateMassData, slots: CreateSlotData[]): Promise<void> {
     const payload = {
       date: massData.date,
       time: massData.time,
@@ -203,7 +171,7 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
     const { error: deleteError } = await supabase.from('schedule_slots').delete().eq('mass_id', massId)
     if (deleteError) throw deleteError
     if (slots.length > 0) {
-      const slotsToInsert = slots.map(slot => ({ mass_id: massId, role: slot.role, member_id: slot.memberId }))
+      const slotsToInsert = slots.map(slot => ({ mass_id: massId, role: slot.role, profile_id: slot.profileId }))
       const { error: slotsError } = await supabase.from('schedule_slots').insert(slotsToInsert)
       if (slotsError) throw slotsError
     }
@@ -212,17 +180,14 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
   async listAllSwaps(): Promise<SwapRequest[]> {
     const { data, error } = await supabase
       .from('schedule_slots')
-      .select(`id, role, reader_id, member_id, is_swap_requested, reader:users!reader_id (full_name, avatar_url), member:members!member_id (full_name, user:users!claimed_by(avatar_url)), mass:masses (date, time, special_description)`)
+      .select(`id, role, profile_id, is_swap_requested, profile:profiles!profile_id (full_name, avatar_url, auth_user_id), mass:masses (date, time, special_description)`)
       .eq('is_swap_requested', true)
       .gte('mass.date', new Date().toISOString().split('T')[0])
       .order('mass(date)', { ascending: true })
 
     if (error) throw error
     return (data || []).map(s => ({
-      ...this.mapSlotToDomain(s, 
-        s.reader ? { [s.reader_id]: s.reader } : {}, 
-        s.member ? { [s.member_id]: { ...s.member, avatar_url: (s.member as any).user?.avatar_url } } : {}
-      ),
+      ...this.mapSlotToDomain(s, s.profile ? { [s.profile_id]: s.profile } : {}),
       mass: { 
         date: (s.mass as any)?.date, 
         time: (s.mass as any)?.time, 
@@ -232,44 +197,33 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
   }
 
   async deleteMass(massId: string): Promise<void> {
-    // 1. Buscar os IDs dos slots vinculados a esta missa
     const { data: slots, error: fetchSlotsError } = await supabase.from('schedule_slots').select('id').eq('mass_id', massId)
     if (fetchSlotsError) throw fetchSlotsError
 
     if (slots && slots.length > 0) {
       const slotIds = slots.map(s => s.id)
-      
-      // 2. Deletar anúncios/trocas vinculados a esses slots (ex: pedidos de troca)
-      const { error: announceError } = await supabase.from('announcements').delete().in('related_schedule_slot_id', slotIds)
-      if (announceError) throw announceError
-
-      // 3. Deletar os slots
-      const { error: slotsError } = await supabase.from('schedule_slots').delete().in('id', slotIds)
-      if (slotsError) throw slotsError
+      await supabase.from('announcements').delete().in('related_schedule_slot_id', slotIds)
+      await supabase.from('schedule_slots').delete().in('id', slotIds)
     }
 
-    // 4. Finalmente, deletar a missa
     const { error: massError } = await supabase.from('masses').delete().eq('id', massId)
     if (massError) throw massError
   }
 
-  async acceptSwap(slotId: string, newReaderId: string, newMemberId?: string): Promise<void> {
-    // 1. Buscar o dono atual da troca para notificar
+  async acceptSwap(slotId: string, newProfileId: string): Promise<void> {
     const { data: slot } = await supabase
       .from('schedule_slots')
-      .select('reader_id, role')
+      .select('profile_id, role')
       .eq('id', slotId)
       .single()
 
-    const oldReaderId = slot?.reader_id
+    const oldProfileId = slot?.profile_id
     const role = slot?.role
 
-    // 2. Atualizar o slot
     const { error } = await supabase
       .from('schedule_slots')
       .update({ 
-        reader_id: newReaderId, 
-        member_id: newMemberId || undefined, 
+        profile_id: newProfileId, 
         is_swap_requested: false, 
         is_confirmed: true 
       })
@@ -277,20 +231,22 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
     
     if (error) throw error
 
-    // 3. Notificar o dono original da troca
-    if (oldReaderId && oldReaderId !== newReaderId) {
-      const { data: accepter } = await supabase.from('users').select('full_name').eq('id', newReaderId).single()
+    if (oldProfileId && oldProfileId !== newProfileId) {
+      const { data: oldProfile } = await supabase.from('profiles').select('auth_user_id').eq('id', oldProfileId).single()
+      const { data: accepter } = await supabase.from('profiles').select('full_name').eq('id', newProfileId).single()
       
-      await fetch('/api/push/send', {
-        method: 'POST',
-        body: JSON.stringify({ 
-          title: 'Troca Confirmada! ✅', 
-          body: `${accepter?.full_name || 'Alguém'} aceitou sua troca de ${role}.`, 
-          url: '/',
-          targetUserIds: [oldReaderId]
-        }),
-        headers: { 'Content-Type': 'application/json' }
-      }).catch(err => console.error('Erro ao notificar aceite de troca:', err))
+      if (oldProfile?.auth_user_id) {
+        await fetch('/api/push/send', {
+          method: 'POST',
+          body: JSON.stringify({ 
+            title: 'Troca Confirmada! ✅', 
+            body: `${accepter?.full_name || 'Alguém'} aceitou sua troca de ${role}.`, 
+            url: '/',
+            targetUserIds: [oldProfile.auth_user_id]
+          }),
+          headers: { 'Content-Type': 'application/json' }
+        }).catch(err => console.error('Erro ao notificar aceite de troca:', err))
+      }
     }
   }
 
@@ -304,82 +260,47 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
       specialDescription: mass.special_description,
       monthReference: mass.month_reference,
       isPublished: mass.is_published,
-      slots: [] // Não precisamos dos slots para a checagem de existência
+      slots: []
     }))
   }
 
   async updateMassesStatus(massIds: string[], isPublished: boolean): Promise<void> {
-    const { error } = await supabase.from('masses').update({ is_published: isPublished }).in('id', massIds)
-    if (error) throw error
+    await supabase.from('masses').update({ is_published: isPublished }).in('id', massIds)
   }
 
   async listOccupiedDatesForMonth(monthReference: string): Promise<string[]> {
-    const { data, error } = await supabase
-      .from('masses')
-      .select('date')
-      .eq('month_reference', monthReference)
+    const { data, error } = await supabase.from('masses').select('date').eq('month_reference', monthReference)
     if (error) throw error
-    // Retorna datas únicas (pode haver várias missas no mesmo dia)
     return [...new Set((data || []).map(m => m.date))]
   }
 
-  async listUpcomingForUser(userId: string, memberId?: string): Promise<Mass[]> {
+  async listUpcomingForUser(profileId: string): Promise<Mass[]> {
     const today = new Date().toISOString().split('T')[0]
     
-    // 1. Buscar slots vinculados ao usuário ou membro
-    let query = supabase
+    const { data: slots, error } = await supabase
       .from('schedule_slots')
-      .select(`
-        *,
-        mass:masses!inner(*)
-      `)
+      .select(`*, mass:masses!inner(*)`)
       .eq('mass.is_published', true)
       .gte('mass.date', today)
-
-    if (memberId) {
-      query = query.or(`reader_id.eq."${userId}",member_id.eq."${memberId}"`)
-    } else {
-      query = query.eq('reader_id', userId)
-    }
-
-    const { data: slots, error } = await query
+      .eq('profile_id', profileId)
       .order('mass(date)', { ascending: true })
       .order('mass(time)', { ascending: true })
 
     if (error) throw error
     if (!slots || slots.length === 0) return []
 
-    // 2. Buscar nomes para os envolvidos
-    const readerIds = new Set<string>()
-    const memberIds = new Set<string>()
+    const profileIds = new Set<string>()
     slots.forEach(s => {
-      if (s.reader_id) readerIds.add(s.reader_id)
-      if (s.member_id) memberIds.add(s.member_id)
+      if (s.profile_id) profileIds.add(s.profile_id)
     })
 
-    let userNames: Record<string, any> = {}
-    let memberNames: Record<string, any> = {}
-
-    if (readerIds.size > 0) {
-      const { data: users } = await supabase.from('users').select('id, full_name, avatar_url').in('id', Array.from(readerIds))
-      if (users) userNames = Object.fromEntries(users.map(u => [u.id, u]))
+    let profilesMap: Record<string, any> = {}
+    if (profileIds.size > 0) {
+      const { data: profiles } = await supabase.from('profiles').select('id, full_name, avatar_url, auth_user_id').in('id', Array.from(profileIds))
+      if (profiles) profilesMap = Object.fromEntries(profiles.map(p => [p.id, p]))
     }
 
-    if (memberIds.size > 0) {
-      const { data: members } = await supabase.from('members').select('id, full_name, user:users!claimed_by(avatar_url)').in('id', Array.from(memberIds))
-      if (members) {
-        memberNames = Object.fromEntries(members.map(m => [m.id, { 
-          full_name: m.full_name, 
-          is_claimed: !!(m as any).user,
-          avatar_url: (m as any).user?.avatar_url
-        }]))
-      }
-    }
-
-    // 3. Agrupar em formato de Mass (como o widget espera)
-    // No widget, cada slot vira um item de lista, mas aqui agrupamos por missa se houver várias leituras na mesma missa
     const massMap = new Map<string, Mass>()
-
     slots.forEach(s => {
       const massData = s.mass as any
       if (!massMap.has(massData.id)) {
@@ -393,9 +314,8 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
           slots: []
         })
       }
-      
       const mass = massMap.get(massData.id)!
-      mass.slots.push(this.mapSlotToDomain(s, userNames, memberNames))
+      mass.slots.push(this.mapSlotToDomain(s, profilesMap))
     })
 
     return Array.from(massMap.values())

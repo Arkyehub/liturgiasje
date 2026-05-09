@@ -11,7 +11,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
     return url.substring(index + searchStr.length)
   }
 
-  private mapToDomain(ann: any, userId?: string): Announcement {
+  private mapToDomain(ann: any, profileId?: string): Announcement {
     return {
       id: ann.id,
       title: ann.title,
@@ -22,15 +22,15 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       pdfUrls: ann.pdf_urls || [],
       expiresAt: ann.expires_at,
       createdAt: ann.created_at,
-      createdBy: ann.created_by,
+      createdBy: ann.profile_id,
       authorName: ann.author?.full_name,
-      isRead: ann.created_by === userId || ann.views?.some((v: any) => v.user_id === userId) || false,
+      isRead: ann.profile_id === profileId || ann.views?.some((v: any) => v.profile_id === profileId) || false,
       isPublished: ann.is_published ?? true,
       viewers: ann.views?.map((v: any) => ({
-        name: v.user?.full_name || 'Usuário',
+        name: v.profile?.full_name || 'Usuário',
         at: v.viewed_at,
-        avatarUrl: v.user?.avatar_url,
-        isClaimed: true
+        avatarUrl: v.profile?.avatar_url,
+        isClaimed: !!v.profile?.auth_user_id
       })) || []
     }
   }
@@ -38,6 +38,9 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
   async create(data: CreateAnnouncementData): Promise<void> {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error("Usuário não autenticado")
+
+    const { data: profile } = await supabase.from('profiles').select('id').eq('auth_user_id', user.id).single()
+    if (!profile) throw new Error("Perfil não encontrado")
 
     const { title, content, type = 'Aviso', expiresAt, isPublished = true, imageUrls = [], audioUrls = [], pdfUrls = [] } = data
 
@@ -52,16 +55,13 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       pdf_urls: pdfUrls,
       expires_at: expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt,
       is_published: isPublished,
-      created_by: user.id
+      profile_id: profile.id
     })
 
     if (error) throw error
     
-    // Disparar push notification apenas se estiver publicado
     if (isPublished) {
       const isSwap = type === 'Troca';
-      console.log('[REPO] Disparando push para novo recado publicado:', title);
-      
       await fetch('/api/push/send', {
         method: 'POST',
         body: JSON.stringify({
@@ -74,13 +74,13 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
     }
   }
 
-  async list(userId?: string): Promise<Announcement[]> {
+  async list(profileId?: string): Promise<Announcement[]> {
     const { data: announcements, error } = await supabase
       .from('announcements')
       .select(`
         *,
-        author:users!announcements_created_by_fkey(full_name),
-        views:announcement_views(user_id, viewed_at, user:users(full_name))
+        author:profiles!announcements_profile_id_fkey(full_name),
+        views:announcement_views(profile_id, viewed_at, profile:profiles(full_name, avatar_url, auth_user_id))
       `)
       .order('created_at', { ascending: false })
       .limit(50)
@@ -90,21 +90,18 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
     
     // Buscar o role do usuário atual para filtrar rascunhos
     const { data: { user } } = await supabase.auth.getUser()
-    const { data: userData } = user ? await supabase.from('users').select('role').eq('id', user.id).single() : { data: null }
-    const isAdmin = userData?.role === 'admin'
+    const { data: profileData } = user ? await supabase.from('profiles').select('role').eq('auth_user_id', user.id).single() : { data: null }
+    const isAdmin = profileData?.role === 'admin'
 
     const now = new Date()
     return (announcements || [])
       .filter(ann => {
         const isExpired = ann.expires_at && new Date(ann.expires_at) < now
         if (isExpired) return false
-        
-        // Se não for admin, não vê rascunhos
         if (!isAdmin && ann.is_published === false) return false
-        
         return true
       })
-      .map(ann => this.mapToDomain(ann, userId))
+      .map(ann => this.mapToDomain(ann, profileId))
   }
 
   async delete(id: string): Promise<void> {
@@ -141,10 +138,10 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
     if (error) throw error
   }
 
-  async markAsRead(announcementId: string, userId: string): Promise<void> {
+  async markAsRead(announcementId: string, profileId: string): Promise<void> {
     const { error } = await supabase.from('announcement_views').insert({
       announcement_id: announcementId,
-      user_id: userId
+      profile_id: profileId
     })
     if (error) throw error
   }
@@ -152,7 +149,6 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
   async update(id: string, data: any): Promise<void> {
     const { imageFiles, audioFiles, pdfFiles, imageUrls, audioUrls, pdfUrls, expiresAt, isPublished, ...rest } = data
     
-    // Preparar dados finais
     const finalData: any = { 
       ...rest,
       image_urls: imageUrls,
@@ -175,33 +171,35 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
     const { data: oldAnn } = await supabase.from('announcements').select('image_urls, audio_urls, pdf_urls, is_published, type, title').eq('id', id).single()
     if (oldAnn) {
       const removedFiles: string[] = []
-      if (oldAnn.image_urls && Array.isArray(oldAnn.image_urls)) {
-        const newUrls = finalData.image_urls || []
-        oldAnn.image_urls.forEach((oldUrl: string) => {
-          if (!newUrls.includes(oldUrl)) {
-            const path = this.extractPathFromUrl(oldUrl)
-            if (path) removedFiles.push(path)
-          }
-        })
-      }
-      if (oldAnn.audio_urls && Array.isArray(oldAnn.audio_urls)) {
-        const newUrls = finalData.audio_urls || []
-        oldAnn.audio_urls.forEach((oldUrl: string) => {
-          if (!newUrls.includes(oldUrl)) {
-            const path = this.extractPathFromUrl(oldUrl)
-            if (path) removedFiles.push(path)
-          }
-        })
-      }
-      if (oldAnn.pdf_urls && Array.isArray(oldAnn.pdf_urls)) {
-        const newUrls = finalData.pdf_urls || []
-        oldAnn.pdf_urls.forEach((oldUrl: string) => {
-          if (!newUrls.includes(oldUrl)) {
-            const path = this.extractPathFromUrl(oldUrl)
-            if (path) removedFiles.push(path)
-          }
-        })
-      }
+      const cleanUrls = (urls: any) => Array.isArray(urls) ? urls : []
+      
+      const oldImages = cleanUrls(oldAnn.image_urls)
+      const newImages = cleanUrls(finalData.image_urls)
+      oldImages.forEach((oldUrl: string) => {
+        if (!newImages.includes(oldUrl)) {
+          const path = this.extractPathFromUrl(oldUrl)
+          if (path) removedFiles.push(path)
+        }
+      })
+
+      const oldAudios = cleanUrls(oldAnn.audio_urls)
+      const newAudios = cleanUrls(finalData.audio_urls)
+      oldAudios.forEach((oldUrl: string) => {
+        if (!newAudios.includes(oldUrl)) {
+          const path = this.extractPathFromUrl(oldUrl)
+          if (path) removedFiles.push(path)
+        }
+      })
+
+      const oldPdfs = cleanUrls(oldAnn.pdf_urls)
+      const newPdfs = cleanUrls(finalData.pdf_urls)
+      oldPdfs.forEach((oldUrl: string) => {
+        if (!newPdfs.includes(oldUrl)) {
+          const path = this.extractPathFromUrl(oldUrl)
+          if (path) removedFiles.push(path)
+        }
+      })
+
       if (removedFiles.length > 0) {
         await supabase.storage.from('announcement_media').remove(removedFiles).catch(err => console.error("Error cleaning files:", err))
       }
@@ -210,15 +208,12 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
     const { error } = await supabase.from('announcements').update(finalData).eq('id', id)
     if (error) throw error
 
-    // Se o recado acabou de ser publicado (era rascunho e agora é isPublished: true), dispara push
     const wasPublished = oldAnn?.is_published
     const isNowPublished = finalData.is_published
 
     if (!wasPublished && isNowPublished) {
       const isSwap = (rest.type || oldAnn?.type) === 'Troca'
       const title = rest.title || oldAnn?.title || 'Novo Recado'
-      
-      console.log('[REPO] Disparando push para recado que acaba de ser publicado:', title);
       
       await fetch('/api/push/send', {
         method: 'POST',

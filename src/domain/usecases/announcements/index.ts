@@ -17,15 +17,15 @@ export class DeleteAnnouncement {
 
 export class ListAnnouncements {
   constructor(private readonly announcementRepository: AnnouncementRepository) {}
-  async execute(userId?: string): Promise<Announcement[]> {
-    return this.announcementRepository.list(userId)
+  async execute(profileId?: string): Promise<Announcement[]> {
+    return this.announcementRepository.list(profileId)
   }
 }
 
 export class MarkAnnouncementAsRead {
   constructor(private readonly announcementRepository: AnnouncementRepository) {}
-  async execute(announcementId: string, userId: string): Promise<void> {
-    return this.announcementRepository.markAsRead(announcementId, userId)
+  async execute(announcementId: string, profileId: string): Promise<void> {
+    return this.announcementRepository.markAsRead(announcementId, profileId)
   }
 }
 

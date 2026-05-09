@@ -3,15 +3,13 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react"
 import { supabase } from "@/shared/api/supabase"
 import { User, AuthChangeEvent, Session } from "@supabase/supabase-js"
-import { makeGetUserProfile } from "@/main/factories/usecases/user"
-import { makeGetMemberByUserId } from "@/main/factories/usecases/members"
-import { UserProfile } from "@/domain/models/UserProfile"
+import { makeGetProfileByAuthId } from "@/main/factories/usecases/profiles"
+import { Profile } from "@/domain/models/Profile"
 
 interface AuthContextType {
   user: User | null
-  profile: UserProfile | null
-  member: any | null
-  isMember: boolean
+  profile: Profile | null
+  isActive: boolean // true se o usuário tem um perfil vinculado
   loading: boolean
   refreshProfile: () => Promise<void>
   signInWithGoogle: () => Promise<void>
@@ -22,23 +20,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [member, setMember] = useState<any | null>(null)
-  const [isMember, setIsMember] = useState(false)
+  const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (authUserId: string) => {
     setLoading(true)
     try {
-      const [profileData, memberData] = await Promise.all([
-        makeGetUserProfile().execute(userId),
-        makeGetMemberByUserId().execute(userId)
-      ])
+      const profileData = await makeGetProfileByAuthId().execute(authUserId)
       setProfile(profileData)
-      setMember(memberData)
-      setIsMember(!!memberData)
     } catch (error) {
-      console.error("Erro ao buscar perfil/membro:", error)
+      console.error("Erro ao buscar perfil:", error)
     } finally {
       setLoading(false)
     }
@@ -64,8 +55,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           fetchProfile(currentUser.id)
         } else {
           setProfile(null)
-          setMember(null)
-          setIsMember(false)
           setLoading(false)
         }
       }
@@ -86,16 +75,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut()
     setProfile(null)
-    setMember(null)
-    setIsMember(false)
     setUser(null)
   }
 
   const value = {
     user,
     profile,
-    member,
-    isMember,
+    isActive: !!profile,
     loading,
     refreshProfile: async () => {
       if (user) await fetchProfile(user.id)

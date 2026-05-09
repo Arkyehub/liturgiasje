@@ -3,9 +3,8 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/shared/hooks/useAuth"
-import { Member } from "@/domain/models/Member"
-import { makeSearchMembers, makeClaimMember, makeCreateMember } from "@/main/factories/usecases/members"
-import { makeUpdateUserProfile, makeCreateUserProfile } from "@/main/factories/usecases/user"
+import { Profile } from "@/domain/models/Profile"
+import { makeSearchProfiles, makeClaimProfile } from "@/main/factories/usecases/profiles"
 import { Button } from "@/shared/ui/button"
 import { Input } from "@/shared/ui/input"
 import { Loader2, Search, UserPlus, LogOut } from "lucide-react"
@@ -13,10 +12,10 @@ import { toast } from "sonner"
 import { supabase } from "@/shared/api/supabase"
 
 export default function OnboardingPage() {
-  const { user, profile, isMember, loading, refreshProfile, signOut } = useAuth()
+  const { user, profile, isActive, loading, refreshProfile, signOut } = useAuth()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
-  const [searchResults, setSearchResults] = useState<Member[]>([])
+  const [searchResults, setSearchResults] = useState<Profile[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -25,76 +24,36 @@ export default function OnboardingPage() {
     if (!loading) {
       if (!user) {
         router.push("/")
-      } else if (isMember) {
+      } else if (isActive) {
         router.push("/")
       }
     }
-  }, [user, isMember, loading, router])
+  }, [user, isActive, loading, router])
 
   const handleSearch = async () => {
     if (!searchTerm.trim()) return
     setIsSearching(true)
     try {
-      const results = await makeSearchMembers().execute(searchTerm)
+      const results = await makeSearchProfiles().execute(searchTerm, true)
       setSearchResults(results)
     } finally {
       setIsSearching(false)
     }
   }
 
-  const handleClaim = async (member: Member) => {
+  const handleClaim = async (p: Profile) => {
     if (!user) return
     setIsSubmitting(true)
     try {
-      // 1. Criar/Atualizar perfil em public.users
-      await makeCreateUserProfile().execute({
-        id: user.id,
-        email: user.email!,
-        fullName: member.fullName,
-        whatsapp: member.whatsapp,
-        role: profile?.role || 'reader',
-        claimedAt: new Date().toISOString()
-      })
-
-      // 2. Vincular na tabela members
-      await makeClaimMember().execute(member.id, user.id)
+      // Vincular o perfil existente ao usuário logado
+      await makeClaimProfile().execute(p.id, user.id)
       
       toast.success("Perfil vinculado com sucesso!")
       await refreshProfile()
       router.push("/perfil")
     } catch (error: any) {
       toast.error("Erro ao vincular perfil.")
-      console.error("Erro detalhado:", error.message || error.details || error)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  const handleCreateNew = async () => {
-    if (!user) return
-    setIsSubmitting(true)
-    try {
-      // 1. Criar/Atualizar perfil em public.users
-      await makeCreateUserProfile().execute({
-        id: user.id,
-        email: user.email!,
-        fullName: user.user_metadata.full_name || profile?.fullName || "",
-        role: profile?.role || 'reader',
-        isSelfRegistered: true
-      })
-      
-      // 2. Criar registro na tabela members já vinculado
-      await makeCreateMember().execute({
-        fullName: user.user_metadata.full_name || user.email?.split('@')[0] || "Novo Membro",
-        isClaimed: true,
-        claimedBy: user.id
-      })
-      
-      toast.success("Perfil criado e vinculado!")
-      await refreshProfile()
-      router.push("/perfil")
-    } catch (error) {
-      toast.error("Erro ao criar perfil.")
+      console.error("Erro detalhado:", error)
     } finally {
       setIsSubmitting(false)
     }

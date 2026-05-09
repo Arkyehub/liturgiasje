@@ -46,7 +46,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar"
 import { UserAvatar } from "@/shared/ui/UserAvatar"
 
 export default function Home() {
-  const { user, profile, member, isMember, loading, signInWithGoogle, signOut } = useAuth()
+  const { user, profile, isActive, loading, signInWithGoogle, signOut } = useAuth()
   const router = useRouter()
   const [currentDate, setCurrentDate] = useState(new Date())
   const pendingScrollSlotId = useRef<string | null>(null)
@@ -103,28 +103,28 @@ export default function Home() {
   const [isPublishing, setIsPublishing] = useState(false)
 
   const triggerRefresh = useCallback(async () => {
-    if (user?.id && isMember) {
+    if (user?.id && profile) {
       await Promise.all([
-        loadAnnouncements(user.id, true),
+        loadAnnouncements(profile.id, true),
         loadSchedule(currentDate, profile?.role === "admin", true),
-        loadUpcomingSchedule(user.id, member?.id),
+        loadUpcomingSchedule(profile.id),
         loadSwaps()
       ])
     }
-  }, [user?.id, isMember, currentDate, profile?.role, member?.id, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps])
+  }, [user?.id, profile, currentDate, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps])
 
   // Pull to Refresh
   const handleRefreshAll = useCallback(async () => {
-    if (user?.id && isMember) {
+    if (user?.id && profile) {
       await Promise.all([
-        loadAnnouncements(user.id, true),
+        loadAnnouncements(profile.id, true),
         loadSchedule(currentDate, profile?.role === "admin", true),
-        loadUpcomingSchedule(user.id, member?.id),
+        loadUpcomingSchedule(profile.id),
         loadSwaps(),
         loadBirthdays()
       ])
     }
-  }, [user?.id, isMember, currentDate, profile?.role, member?.id, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays])
+  }, [user?.id, profile, currentDate, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays])
 
   const { isRefreshing, pullDistance } = usePullToRefresh(handleRefreshAll)
   
@@ -133,11 +133,11 @@ export default function Home() {
     if (loading) return
 
     if (user) {
-      if (!isMember) {
-        // 1. Usuário logado mas não vinculado à lista de membros
+      if (!isActive) {
+        // 1. Usuário logado mas não vinculado a nenhum perfil
         router.push("/bemvindo")
       } else if (profile) {
-        // 2. É membro, mas verificar se o perfil está completo (Data Nasc + Missa Preferencial)
+        // 2. Tem perfil, mas verificar se está completo (Data Nasc + Missa Preferencial)
         const hasBirthDate = !!profile.birthDate
         const hasPreferences = (profile.preferences?.day_preferences?.[6]?.length || 0) > 0
         
@@ -146,7 +146,7 @@ export default function Home() {
         }
       }
     }
-  }, [user, isMember, profile, loading, router])
+  }, [user, isActive, profile, loading, router])
 
   const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1))
   const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1))
@@ -324,27 +324,27 @@ export default function Home() {
 
 
   useEffect(() => {
-    if (user?.id && isMember) {
-      loadAnnouncements(user?.id)
+    if (user?.id && isActive && profile) {
+      loadAnnouncements(profile.id)
       loadSchedule(currentDate, profile?.role === "admin")
-      loadUpcomingSchedule(user.id, member?.id)
+      loadUpcomingSchedule(profile.id)
       loadSwaps()
       loadBirthdays()
     }
-  }, [user?.id, member?.id, isMember, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate, profile?.role])
+  }, [user?.id, profile, isActive, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate])
 
   // Recarregar dados ao focar na janela (volta ao PWA ou aba)
   useEffect(() => {
     const handleFocus = () => {
-      if (user?.id && isMember) {
-        loadAnnouncements(user.id, true)
+      if (user?.id && isActive && profile) {
+        loadAnnouncements(profile.id, true)
         loadSchedule(currentDate, profile?.role === "admin", true)
         loadSwaps()
       }
     }
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
-  }, [user?.id, isMember, currentDate, profile?.role, loadAnnouncements, loadSchedule, loadSwaps])
+  }, [user?.id, isActive, profile, currentDate, loadAnnouncements, loadSchedule, loadSwaps])
 
 
   if (loading) {
@@ -375,12 +375,11 @@ export default function Home() {
 
       <main className="flex-1 overflow-hidden flex flex-col">
         {/* Tarja de Próxima Escala (Colada ao Header) */}
-        {user && (
+        {user && profile && (
           <div className="shrink-0 animate-in fade-in slide-in-from-top-4 duration-500 z-40">
             <MyScheduleWidget 
               schedule={upcomingSchedule} 
-              userId={user.id} 
-              memberId={member?.id}
+              profileId={profile.id}
               userName={profile?.fullName}
               userAvatar={profile?.avatarUrl}
               onNavigateToSlot={handleNavigateToSlot}
@@ -410,8 +409,8 @@ export default function Home() {
                     'L': 'Leitura Única'
                   } as Record<string, string>)[swap.role]) || swap.role;
 
-                  const requesterName = swap.reader?.fullName || swap.member?.fullName || "---";
-                  const requesterAvatar = swap.reader?.avatarUrl;
+                  const requesterName = swap.profile?.fullName || "---";
+                  const requesterAvatar = swap.profile?.avatarUrl;
 
                   return (
                     <div
@@ -461,7 +460,7 @@ export default function Home() {
                             {requesterName}
                           </span>
                         </div>
-                        {(swap.readerId === user?.id || (member?.id && swap.memberId === member.id)) ? (
+                        {(swap.profileId === profile?.id) ? (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -477,7 +476,7 @@ export default function Home() {
                           <UserAvatar 
                             name={requesterName}
                             src={requesterAvatar}
-                            isClaimed={swap.isClaimed}
+                            isClaimed={!!swap.profile?.authUserId}
                             className="h-6 w-6 shrink-0"
                           />
                         )}
@@ -690,7 +689,7 @@ export default function Home() {
                 fullName: m.fullName,
                 birthDate: m.birthDate,
                 avatarUrl: m.avatarUrl ?? undefined,
-                isClaimed: true
+                isClaimed: !!m.isActive
               }))}
             />
           </section>
@@ -862,7 +861,7 @@ export default function Home() {
                           isConfirmed: s.isConfirmed,
                           isSwapRequested: s.isSwapRequested,
                           isClaimed: s.isClaimed,
-                          isMine: s.readerId ? s.readerId === user?.id : (member?.id && (s.memberId === member.id))
+                          isMine: s.profileId === profile?.id
                         }))
                       }))}
                       isAdmin={profile?.role === "admin"}
@@ -898,7 +897,7 @@ export default function Home() {
                       onRequestSwap={(slotId) => {
                         // Encontrar detalhes da missa para o aviso
                         let targetMass: any = null;
-                        let targetDay: any = null;
+                        const targetDay: any = null;
                         
                         schedule.forEach(mass => {
                           if (mass.slots.some((s: any) => s.id === slotId)) {
@@ -1080,15 +1079,15 @@ export default function Home() {
                     variant="default"
                     className="w-full font-bold h-12 rounded-xl bg-green-700 hover:bg-green-800 text-white shadow-lg shadow-green-100"
                     disabled={isAcceptingSwap}
-                    onClick={async () => {
-                      if (!takeSwapTarget || !user) return
-                      setIsAcceptingSwap(true)
-                        try {
-                          await acceptSwap(takeSwapTarget.slotId, user.id, member?.id)
-                          toast.success("Você assumiu a escala! Presença confirmada.")
-                          triggerRefresh()
-                          setTakeSwapTarget(null)
-                        } catch (error) {
+                      onClick={async () => {
+                        if (!takeSwapTarget || !profile) return
+                        setIsAcceptingSwap(true)
+                          try {
+                            await acceptSwap(takeSwapTarget.slotId, profile.id)
+                            toast.success("Você assumiu a escala! Presença confirmada.")
+                            triggerRefresh()
+                            setTakeSwapTarget(null)
+                          } catch (error) {
                         toast.error("Erro ao assumir troca.")
                       } finally {
                         setIsAcceptingSwap(false)
@@ -1116,11 +1115,11 @@ export default function Home() {
                     Informe os dias que você <span className="text-red-600 underline decoration-red-200 underline-offset-4">não poderá</span> participar
                   </DrawerTitle>
                 </DrawerHeader>
-                {user && (
-                  <UnavailableForm 
-                    userId={user.id} 
-                    onClose={() => setIsUnavailableDrawerOpen(false)} 
-                  />
+                {profile && (
+                    <UnavailableForm 
+                      profileId={profile.id} 
+                      onClose={() => setIsUnavailableDrawerOpen(false)} 
+                    />
                 )}
                 <DrawerFooter className="px-0 pt-4">
                   <DrawerClose asChild>
@@ -1147,16 +1146,21 @@ export default function Home() {
       {profile?.role === "admin" && schedule.some(mass => !mass.isPublished) && (
         <div className="fixed bottom-6 left-6 z-50 w-[calc(100%-120px)] max-w-[280px]">
           <Button 
-            className="w-full h-14 bg-green-600 hover:bg-green-700 text-white font-black rounded-2xl shadow-xl border-t border-white/20 animate-in fade-in slide-in-from-bottom-8 duration-500"
+            className="w-full h-14 bg-green-600 hover:bg-green-700 text-white rounded-2xl shadow-xl border-t border-white/20 animate-in fade-in slide-in-from-bottom-8 duration-500 flex items-center justify-center gap-3"
             onClick={handlePublish}
             disabled={isPublishing}
           >
             {isPublishing ? (
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
-              <CheckCircle className="mr-2 h-5 w-5" />
+              <CheckCircle className="h-5 w-5" />
             )}
-            PUBLICAR ESCALA DE {format(currentDate, "MMMM", { locale: ptBR }).toUpperCase()}
+            <div className="flex flex-col items-start leading-none">
+              <span className="text-[9px] font-bold opacity-80 tracking-widest uppercase">Publicar Escala de</span>
+              <span className="text-base font-black uppercase">
+                {format(currentDate, "MMMM", { locale: ptBR })}
+              </span>
+            </div>
           </Button>
         </div>
       )}

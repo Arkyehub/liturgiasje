@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/shared/hooks/useAuth"
-import { makeUpdateUserProfile } from "@/main/factories/usecases/user"
+import { makeUpdateProfile } from "@/main/factories/usecases/profiles"
 import { Button } from "@/shared/ui/button"
 import { Input } from "@/shared/ui/input"
 import { Loader2, ArrowLeft, Save, User as UserIcon, Calendar, MessageSquare, Clock } from "lucide-react"
@@ -16,7 +16,7 @@ import { Badge } from "@/shared/ui/badge"
 const COMMON_TIMES = ["07:00", "09:00", "11:00", "19:00"]
 
 export default function ProfilePage() {
-  const { user, profile, isMember, loading, signInWithGoogle, signOut, refreshProfile } = useAuth()
+  const { user, profile, isActive, loading, signInWithGoogle, signOut, refreshProfile } = useAuth()
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedDay] = useState(6) // Fixo Domingo
@@ -74,7 +74,8 @@ export default function ProfilePage() {
     if (!user || !isFormValid) return
     setIsSubmitting(true)
     try {
-      await makeUpdateUserProfile().execute(user.id, formData)
+      if (!profile) return
+      await makeUpdateProfile().execute(profile.id, formData)
       toast.success("Perfil atualizado com sucesso!")
       await refreshProfile()
       router.push("/")
@@ -103,7 +104,7 @@ export default function ProfilePage() {
       
       <main className="flex-1 overflow-auto">
         <div className="container max-w-md mx-auto px-4 py-8 space-y-8 pb-20">
-          {isMember && (!profile?.birthDate || !((profile?.preferences?.day_preferences?.[6]?.length ?? 0) > 0)) && (
+          {isActive && (!profile?.birthDate || !((profile?.preferences?.day_preferences?.[6]?.length ?? 0) > 0)) && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 animate-in fade-in slide-in-from-top-2">
               <h3 className="text-amber-800 font-bold text-sm">Complete seu perfil</h3>
               <p className="text-amber-700 text-xs mt-1">
@@ -222,12 +223,12 @@ export default function ProfilePage() {
                 <div className="space-y-1">
                   <h3 className="text-sm font-bold text-stone-800">Status de Membro</h3>
                   <p className="text-[11px] text-stone-500">
-                    {isMember 
+                    {isActive 
                       ? "Você está vinculado à lista oficial de membros." 
                       : "Seu perfil ainda não está vinculado à lista de membros."}
                   </p>
                 </div>
-                {isMember ? (
+                {isActive ? (
                   <div className="flex items-center gap-1.5 bg-green-50 text-green-600 px-3 py-1.5 rounded-full border border-green-100 border-none!">
                     <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
                     <span className="text-[10px] font-bold uppercase tracking-wider">Ativo</span>
@@ -239,7 +240,7 @@ export default function ProfilePage() {
                 )}
               </div>
 
-              {!isMember && (
+              {!isActive && (
                 <Button 
                   type="button"
                   variant="outline"

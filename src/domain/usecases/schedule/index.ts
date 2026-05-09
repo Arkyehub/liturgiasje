@@ -10,8 +10,8 @@ export class ListSchedulesForMonth {
 
 export class ConfirmScheduleSlot {
   constructor(private readonly scheduleRepository: ScheduleRepository) {}
-  async execute(slotId: string, userId: string): Promise<ScheduleSlot> {
-    return this.scheduleRepository.confirmSlot(slotId, userId)
+  async execute(slotId: string, profileId: string): Promise<ScheduleSlot> {
+    return this.scheduleRepository.confirmSlot(slotId, profileId)
   }
 }
 
@@ -29,10 +29,10 @@ export class CancelScheduleSwap {
   }
 }
 
-export class GetMembersUsage {
+export class GetProfilesUsage {
   constructor(private readonly scheduleRepository: ScheduleRepository) {}
   async execute(monthReference: string): Promise<Record<string, number>> {
-    return this.scheduleRepository.getMembersUsage(monthReference)
+    return this.scheduleRepository.getProfilesUsage(monthReference)
   }
 }
 
@@ -73,8 +73,8 @@ export class DeleteMass {
 
 export class AcceptScheduleSwap {
   constructor(private readonly scheduleRepository: ScheduleRepository) {}
-  async execute(slotId: string, newReaderId: string, newMemberId?: string): Promise<void> {
-    return this.scheduleRepository.acceptSwap(slotId, newReaderId, newMemberId)
+  async execute(slotId: string, newProfileId: string): Promise<void> {
+    return this.scheduleRepository.acceptSwap(slotId, newProfileId)
   }
 }
 
@@ -98,9 +98,10 @@ export class ListOccupiedDatesForMonth {
     return this.scheduleRepository.listOccupiedDatesForMonth(monthReference)
   }
 }
+
 export class ListUpcomingSchedulesForUser {
   constructor(private readonly scheduleRepository: ScheduleRepository) {}
-  async execute(userId: string, memberId?: string): Promise<Mass[]> {
-    return this.scheduleRepository.listUpcomingForUser(userId, memberId)
+  async execute(profileId: string): Promise<Mass[]> {
+    return this.scheduleRepository.listUpcomingForUser(profileId)
   }
 }

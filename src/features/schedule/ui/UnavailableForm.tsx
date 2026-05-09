@@ -4,27 +4,27 @@ import { useState, useEffect } from "react"
 import { Calendar } from "@/shared/ui/calendar"
 import { ptBR } from "date-fns/locale"
 import { format } from "date-fns"
-import { makeListUnavailableByUser, makeToggleUnavailableDate } from "@/main/factories/usecases/user"
+import { makeListUnavailableByProfile, makeToggleUnavailableDate } from "@/main/factories/usecases/profiles"
 import { toast } from "sonner"
 import { Loader2, CalendarX, AlertCircle } from "lucide-react"
 
 interface UnavailableFormProps {
-  userId: string
+  profileId: string
   onClose: () => void
 }
 
-export function UnavailableForm({ userId, onClose }: UnavailableFormProps) {
+export function UnavailableForm({ profileId, onClose }: UnavailableFormProps) {
   const [unavailableDates, setUnavailableDates] = useState<Date[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     loadUnavailableDates()
-  }, [userId])
+  }, [profileId])
 
   const loadUnavailableDates = async () => {
     try {
       setIsLoading(true)
-      const datesStr = await makeListUnavailableByUser().execute(userId)
+      const datesStr = await makeListUnavailableByProfile().execute(profileId)
       // Ajuste de timezone: Adicionar T00:00:00 para evitar que vire o dia anterior
       const dates = datesStr.map(d => new Date(d + 'T00:00:00'))
       setUnavailableDates(dates)
@@ -40,7 +40,7 @@ export function UnavailableForm({ userId, onClose }: UnavailableFormProps) {
 
     const dateStr = format(date, "yyyy-MM-dd")
     try {
-      const result = await makeToggleUnavailableDate().execute(userId, dateStr)
+      const result = await makeToggleUnavailableDate().execute(profileId, dateStr)
       if (result.action === 'added') {
         setUnavailableDates(prev => [...prev, date])
       } else {
