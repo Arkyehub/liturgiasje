@@ -15,11 +15,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
     }
 
+    // Buscar o profile_id correspondente ao auth.uid()
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+
     // Upsert a subscrição para o usuário
     const { error } = await supabase
       .from('push_subscriptions')
       .upsert({
         user_id: user.id,
+        profile_id: profile?.id || null,
         subscription: subscription,
         updated_at: new Date().toISOString()
       }, {

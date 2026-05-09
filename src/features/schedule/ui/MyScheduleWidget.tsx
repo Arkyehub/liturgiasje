@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import { Mass } from "@/domain/models/Schedule"
 import { Card } from "@/shared/ui/card"
-import { AlertCircle, CalendarDays, CheckCircle, ChevronDown, ChevronUp, ExternalLink } from "lucide-react"
+import { AlertCircle, CalendarDays, CheckCircle, ChevronDown, ChevronRight, ChevronUp, ExternalLink } from "lucide-react"
 import { format, isAfter, startOfDay, parseISO, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/shared/lib/utils"
@@ -56,6 +56,14 @@ export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, on
     })
   }, [mySlots])
 
+  // 3. Encontrar a primeira leitura NÃO CONFIRMADA
+  const firstUnconfirmed = useMemo(() => {
+    return mySlots.find(slot => !slot.isConfirmed)
+  }, [mySlots])
+
+  const isAlertMode = !!firstUnconfirmed
+  const activeSlot = isAlertMode ? firstUnconfirmed : nextReading
+
   // 3. Função para scroll suave até o item
 
   const currentMonthName = useMemo(() => {
@@ -107,33 +115,60 @@ export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, on
 
   return (
     <div className="w-full">
-      {/* Barra Principal - Próxima Leitura */}
-      <div className="relative overflow-hidden bg-[#064e3b] text-white border-b border-emerald-900/50">
+      {/* Barra Principal - Próxima Leitura ou Alerta de Confirmação */}
+      <div className={cn(
+        "relative overflow-hidden text-white border-b transition-colors duration-500",
+        isAlertMode 
+          ? "bg-red-600 border-red-900/50" 
+          : "bg-[#064e3b] border-emerald-900/50"
+      )}>
         <div className="flex items-center">
           <button 
             onClick={() => {
-              if (otherReadings.length > 0) {
+              if (!isAlertMode && otherReadings.length > 0) {
                 setIsExpanded(!isExpanded);
               } else {
-                onNavigateToSlot(nextReading.id, nextReading.massDate);
+                onNavigateToSlot(activeSlot.id, activeSlot.massDate);
               }
             }}
-            className="flex-1 flex items-center justify-between p-3 active:bg-[#054031] transition-all min-w-0"
+            className={cn(
+              "flex-1 flex items-center justify-between p-3 transition-all min-w-0",
+              isAlertMode ? "active:bg-red-700" : "active:bg-[#054031]"
+            )}
           >
             <div className="flex items-center gap-2 min-w-0">
-              <CalendarDays className="h-4 w-4 text-emerald-400 shrink-0" />
+              {isAlertMode ? (
+                <AlertCircle className="h-4 w-4 text-white animate-pulse shrink-0" />
+              ) : (
+                <CalendarDays className="h-4 w-4 text-emerald-400 shrink-0" />
+              )}
               <p className="text-[12px] font-black tracking-tight truncate uppercase">
-                <span className="opacity-70 mr-1.5">Próxima Leitura:</span>
-                {isValid(parseISO(nextReading.massDate)) ? format(parseISO(nextReading.massDate), "dd/MM") : "--/--"} às {nextReading.massTime.substring(0, 5)} - {nextReading.role}
+                {isAlertMode ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="opacity-100">Confirmar Escala:</span>
+                    {isValid(parseISO(activeSlot.massDate)) ? format(parseISO(activeSlot.massDate), "dd/MM") : "--/--"} às {activeSlot.massTime.substring(0, 5)} - {activeSlot.role}
+                  </span>
+                ) : (
+                  <>
+                    <span className="opacity-70 mr-1.5">Próxima Leitura:</span>
+                    {isValid(parseISO(activeSlot.massDate)) ? format(parseISO(activeSlot.massDate), "dd/MM") : "--/--"} às {activeSlot.massTime.substring(0, 5)} - {activeSlot.role}
+                  </>
+                )}
               </p>
             </div>
             
-            {otherReadings.length > 0 && (
+            {!isAlertMode && otherReadings.length > 0 && (
               <div className={cn(
                 "p-1 transition-transform duration-300 ml-2",
                 isExpanded && "rotate-180"
               )}>
                 <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+              </div>
+            )}
+
+            {isAlertMode && (
+              <div className="ml-2">
+                <ChevronRight className="h-3.5 w-3.5 opacity-60" />
               </div>
             )}
           </button>
@@ -142,12 +177,17 @@ export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, on
           <button 
             onClick={(e) => {
               e.stopPropagation();
-              onNavigateToSlot(nextReading.id, nextReading.massDate);
+              onNavigateToSlot(activeSlot.id, activeSlot.massDate);
             }}
-            className="p-3 hover:bg-emerald-800 border-l border-emerald-800/50 transition-colors"
+            className={cn(
+              "p-3 transition-colors border-l",
+              isAlertMode 
+                ? "hover:bg-red-700 border-red-700/50" 
+                : "hover:bg-emerald-800 border-emerald-800/50"
+            )}
             title="Ver na escala"
           >
-            <ExternalLink className="h-4 w-4 text-emerald-400" />
+            <ExternalLink className={cn("h-4 w-4", isAlertMode ? "text-white" : "text-emerald-400")} />
           </button>
         </div>
       </div>

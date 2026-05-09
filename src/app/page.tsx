@@ -101,6 +101,7 @@ export default function Home() {
   const [isAcceptingSwap, setIsAcceptingSwap] = useState(false)
   const [isUnavailableDrawerOpen, setIsUnavailableDrawerOpen] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
+  const processedHashRef = useRef<string | null>(null)
 
   const triggerRefresh = useCallback(async () => {
     if (user?.id && profile) {
@@ -185,9 +186,9 @@ export default function Home() {
         const element = document.getElementById(`slot-${slotId}`)
         if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          element.classList.add('ring-4', 'ring-emerald-500', 'ring-offset-2', 'transition-all', 'duration-500')
+          element.classList.add('ring-4', 'ring-emerald-500', 'ring-offset-1', 'transition-all', 'duration-500')
           setTimeout(() => {
-            element.classList.remove('ring-4', 'ring-emerald-500', 'ring-offset-2')
+            element.classList.remove('ring-4', 'ring-emerald-500', 'ring-offset-1')
           }, 3000)
           pendingScrollSlotId.current = null
         }
@@ -208,9 +209,9 @@ export default function Home() {
       const element = document.getElementById(`slot-${slotId}`)
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        element.classList.add('ring-4', 'ring-emerald-500', 'ring-offset-2', 'transition-all', 'duration-500')
+        element.classList.add('ring-4', 'ring-emerald-500', 'ring-offset-1', 'transition-all', 'duration-500')
         setTimeout(() => {
-          element.classList.remove('ring-4', 'ring-emerald-500', 'ring-offset-2')
+          element.classList.remove('ring-4', 'ring-emerald-500', 'ring-offset-1')
         }, 3000)
       }
     }
@@ -297,7 +298,11 @@ export default function Home() {
   useEffect(() => {
     if (isHydrated && !isLoadingAnnouncements && !isLoadingSchedule) {
       const hash = window.location.hash
-      if (!hash) return
+      if (!hash || hash === processedHashRef.current) return
+
+      // Marcar como processado e limpar da URL
+      processedHashRef.current = hash
+      router.replace("/", { scroll: false })
 
       if (hash.startsWith('#ann-')) {
         const id = hash.replace('#ann-', '')
@@ -305,9 +310,9 @@ export default function Home() {
           const el = document.getElementById(`ann-${id}`)
           if (el) {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            el.classList.add('ring-4', 'ring-lime-400', 'bg-lime-300', 'ring-offset-4', 'transition-all', 'duration-500')
+            el.classList.add('ring-4', 'ring-lime-400', 'bg-lime-300', 'ring-offset-1', 'transition-all', 'duration-500')
             setTimeout(() => {
-              el.classList.remove('ring-4', 'ring-lime-400', 'bg-lime-300', 'ring-offset-4')
+              el.classList.remove('ring-4', 'ring-lime-400', 'bg-lime-300', 'ring-offset-1')
             }, 5000)
           }
         }, 800)
@@ -320,9 +325,9 @@ export default function Home() {
           const el = document.getElementById(`slot-${id}`)
           if (el) {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            el.classList.add('ring-4', 'ring-amber-500', 'ring-offset-2', 'transition-all', 'duration-500')
+            el.classList.add('ring-4', 'ring-amber-500', 'ring-offset-1', 'transition-all', 'duration-500')
             setTimeout(() => {
-              el.classList.remove('ring-4', 'ring-amber-500', 'ring-offset-2')
+              el.classList.remove('ring-4', 'ring-amber-500', 'ring-offset-1')
             }, 3000)
           }
         }, 1000)

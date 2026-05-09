@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef } from "react"
 import { Mass, SwapRequest } from "@/domain/models/Schedule"
 import { 
   makeListSchedulesForMonth,
@@ -20,12 +20,20 @@ export function useSchedule() {
   const [swaps, setSwaps] = useState<SwapRequest[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingSwaps, setLoadingSwaps] = useState(false)
+  const lastRequestedDateRef = useRef<string | null>(null)
 
   const loadSchedule = useCallback(async (date: Date, isAdmin?: boolean, silent = false) => {
+    const dateKey = date.toISOString().substring(0, 7) // "YYYY-MM"
+    lastRequestedDateRef.current = dateKey
+
     try {
       if (!silent) setLoading(true)
       const data = await makeListSchedulesForMonth().execute(date, isAdmin)
-      setSchedule(data)
+      
+      // Só atualiza se ainda for o mesmo mês solicitado por último
+      if (lastRequestedDateRef.current === dateKey) {
+        setSchedule(data)
+      }
     } catch (error) {
       console.error(error)
       toast.error("Erro ao carregar escala")

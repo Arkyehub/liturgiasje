@@ -106,7 +106,7 @@ export function ScheduleCard({
 
   return (
     <Card className={cn(
-      "overflow-hidden border-stone-200 bg-white shadow-sm p-0 gap-0 transition-all",
+      "!overflow-visible border-stone-200 bg-white shadow-sm p-0 gap-0 transition-all",
       !isPublished && isAdmin && "border-2 border-orange-500 ring-2 ring-orange-100",
       isDatePast && !isExpanded && "opacity-80"
     )}>
@@ -164,7 +164,7 @@ export function ScheduleCard({
                     key={slot.id}
                     id={`slot-${slot.id}`}
                     className={cn(
-                      "flex items-center justify-between py-1.5 px-3 rounded-xl border border-stone-100/10 transition-all",
+                      "mx-1 flex items-center justify-between py-1.5 px-3 rounded-xl border border-stone-100/10 transition-all",
                       slot.isSwapRequested ? "bg-red-50/70 border-l-4 border-l-red-200" :
                         slot.isConfirmed && slot.isMine ? "bg-green-50" : "bg-stone-50/40"
                     )}
