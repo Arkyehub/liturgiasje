@@ -74,9 +74,18 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
   }
 
   async confirmSlot(slotId: string, profileId: string): Promise<ScheduleSlot> {
-    const { data, error } = await supabase.from('schedule_slots').update({ is_confirmed: true, profile_id: profileId }).eq('id', slotId).select().single()
+    const { data, error } = await supabase
+      .from('schedule_slots')
+      .update({ is_confirmed: true, profile_id: profileId })
+      .eq('id', slotId)
+      .select(`*, profile:profiles(id, full_name, avatar_url, auth_user_id)`)
+      .single()
+    
     if (error) throw error
-    return this.mapSlotToDomain(data, {}) 
+    
+    const p = (data as any).profile
+    const profilesMap = p ? { [p.id]: p } : {}
+    return this.mapSlotToDomain(data, profilesMap)
   }
 
   async requestSwap(slotId: string): Promise<void> {
