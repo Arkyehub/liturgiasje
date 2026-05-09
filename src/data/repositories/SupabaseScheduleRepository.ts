@@ -78,7 +78,7 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
       .from('schedule_slots')
       .update({ is_confirmed: true, profile_id: profileId })
       .eq('id', slotId)
-      .select(`*, profile:profiles(id, full_name, avatar_url, auth_user_id)`)
+      .select(`*, profile:profiles!profile_id(id, full_name, avatar_url, auth_user_id)`)
       .single()
     
     if (error) throw error
