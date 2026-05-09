@@ -66,7 +66,15 @@ export async function POST(request: Request) {
     
     if (unavailError) console.error('Erro ao limpar indisponibilidades:', unavailError);
 
-    // 5. LIMPEZA DE AVISOS E INSCRIÇÕES PUSH
+    // 5. LIMPEZA DE AVISOS, VISUALIZAÇÕES E INSCRIÇÕES PUSH
+    // Remover visualizações de avisos feitas por este perfil
+    const { error: viewsError } = await adminSupabase
+      .from('announcement_views')
+      .delete()
+      .eq('profile_id', profileId);
+
+    if (viewsError) console.error('Erro ao limpar visualizações:', viewsError);
+
     // Remover avisos de troca vinculados ou criados pelo perfil
     const { error: announcementsError } = await adminSupabase
       .from('announcements')
