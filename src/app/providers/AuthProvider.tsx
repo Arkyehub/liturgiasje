@@ -25,11 +25,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchProfile = async (authUserId: string) => {
     setLoading(true)
+    console.log("[AuthProvider] Buscando perfil para authUserId:", authUserId)
     try {
       const profileData = await makeGetProfileByAuthId().execute(authUserId)
+      console.log("[AuthProvider] Perfil encontrado:", profileData)
       setProfile(profileData)
-    } catch (error) {
-      console.error("Erro ao buscar perfil:", error)
+    } catch (error: any) {
+      console.error("[AuthProvider] Erro ao buscar perfil:", error?.message || error)
+      if (error?.details) console.error("[AuthProvider] Detalhes do erro:", error.details)
+      if (error?.hint) console.error("[AuthProvider] Dica do banco:", error.hint)
     } finally {
       setLoading(false)
     }

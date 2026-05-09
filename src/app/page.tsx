@@ -132,9 +132,17 @@ export default function Home() {
   useEffect(() => {
     if (loading) return
 
+    console.log("[Page] Redirection check:", { 
+      userId: user?.id, 
+      isActive, 
+      hasProfile: !!profile, 
+      loading 
+    })
+
     if (user) {
       if (!isActive) {
         // 1. Usuário logado mas não vinculado a nenhum perfil
+        console.log("[Page] Redirecionando para /bemvindo (não ativo)")
         router.push("/bemvindo")
       } else if (profile) {
         // 2. Tem perfil, mas verificar se está completo (Data Nasc + Missa Preferencial)
@@ -142,6 +150,7 @@ export default function Home() {
         const hasPreferences = (profile.preferences?.day_preferences?.[6]?.length || 0) > 0
         
         if (!hasBirthDate || !hasPreferences) {
+          console.log("[Page] Redirecionando para /perfil (perfil incompleto)")
           router.push("/perfil")
         }
       }
