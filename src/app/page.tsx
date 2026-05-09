@@ -894,9 +894,9 @@ export default function Home() {
                         }
                       }}
                       onConfirm={async (slotId) => {
-                        if (!user) return
+                        if (!profile) return
                         try {
-                          await confirmSlot(slotId, user.id)
+                          await confirmSlot(slotId, profile.id)
                           toast.success("Presença confirmada!")
                           triggerRefresh()
                         } catch (error) {
