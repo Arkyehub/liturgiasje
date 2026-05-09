@@ -724,7 +724,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
 
                   {/* Botão de Adicionar Leitura (Dentro da Sessão) */}
                   <DropdownMenu>
-                    <DropdownMenuTrigger render={
+                    <DropdownMenuTrigger asChild>
                       <Button variant="outline" size="sm" className="h-7 px-3 font-black text-[9px] uppercase tracking-wider rounded-lg border-stone-500 text-stone-600 bg-white hover:bg-stone-50">
                         <Plus className="mr-1 h-3 w-3" />
                         Adicionar Leitura
