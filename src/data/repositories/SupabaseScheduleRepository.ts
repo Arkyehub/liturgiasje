@@ -195,21 +195,23 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
   }
 
   async listAllSwaps(): Promise<SwapRequest[]> {
+    const today = format(new Date(), 'yyyy-MM-dd')
+
     const { data, error } = await supabase
       .from('schedule_slots')
-      .select(`id, role, profile_id, is_swap_requested, profile:profiles!profile_id (full_name, avatar_url, auth_user_id), mass:masses (date, time, special_description)`)
+      .select(`id, role, profile_id, is_swap_requested, profile:profiles!profile_id (full_name, avatar_url, auth_user_id), mass:masses!inner (date, time, special_description)`)
       .eq('is_swap_requested', true)
-      .gte('mass.date', new Date().toISOString().split('T')[0])
+      .gte('mass.date', today)
       .order('mass(date)', { ascending: true })
 
     if (error) throw error
     return (data || []).map(s => ({
       ...this.mapSlotToDomain(s, s.profile ? { [s.profile_id]: s.profile } : {}),
-      mass: { 
-        date: (s.mass as any)?.date, 
-        time: (s.mass as any)?.time, 
-        specialDescription: (s.mass as any)?.special_description 
-      }
+      mass: s.mass ? { 
+        date: (s.mass as any).date, 
+        time: (s.mass as any).time, 
+        specialDescription: (s.mass as any).special_description 
+      } : null
     })) as SwapRequest[]
   }
 
