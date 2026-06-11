@@ -1,4 +1,4 @@
-import { createClient } from '@/shared/api/supabaseServer';
+import { createClient, createAdminClient } from '@/shared/api/supabaseServer';
 import { NextResponse } from 'next/server';
 import { sendPushNotification } from '@/shared/lib/push';
 
@@ -34,8 +34,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
+    // Usar o cliente administrador para ler as subscrições, pois usuários não-admins
+    // não possuem permissão de leitura (RLS) sobre as subscrições de outros usuários.
+    const adminSupabase = createAdminClient();
+
     // Buscar subscrições (sempre excluindo o próprio remetente)
-    let query = supabase.from('push_subscriptions')
+    let query = adminSupabase.from('push_subscriptions')
       .select('subscription, user_id')
       .neq('user_id', sender.id);
     
@@ -57,9 +61,9 @@ export async function POST(request: Request) {
       (subs || []).map(async (sub: any) => {
         const result = await sendPushNotification(sub.subscription, { title, body, url });
         
-        // Se a subscrição expirou, remove do banco
+        // Se a subscrição expirou, remove do banco usando o cliente administrador
         if (result.error === 'expired') {
-          await supabase
+          await adminSupabase
             .from('push_subscriptions')
             .delete()
             .match({ user_id: sub.user_id, subscription: sub.subscription });

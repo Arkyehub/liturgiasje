@@ -35,7 +35,7 @@ export default function FolhetoPage() {
         )}
         
         <iframe 
-          src={`https://docs.google.com/gview?url=https://pvgjzunalzpwaditseys.supabase.co/storage/v1/object/public/leaflets/folheto_atual.pdf&embedded=true`}
+          src={`https://docs.google.com/gview?url=https://www.arqrio.com.br/app/painel/amissa/amissa.pdf&embedded=true`}
           className="w-full h-full border-none"
           onLoad={() => setIsLoading(false)}
           title="Folheto da Missa"
