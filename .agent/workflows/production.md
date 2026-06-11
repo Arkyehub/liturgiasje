@@ -12,7 +12,7 @@ Este workflow deve ser executado APENAS quando o usuário der o comando explíci
    - `git add .`
    - `git commit -m "chore: bump version to ${APP_VERSION}"`
 3. **Sincronização de Banco**: Atualize a tabela `app_settings` com a nova `APP_VERSION`:
-   - Atualizar `min_version` para coincidir com a nova versão no Supabase SQL Editor. // turbo
+   - Atualizar `min_version` para coincidir com a nova `APP_VERSION` (formato `X.YY`, sem o `.0` final do package.json, ex: '1.32') no Supabase SQL Editor. // turbo
 4. **Merge para Main**: Transfira o conteúdo da `preview` para a `main`:
    - `git checkout main`
    - `git merge preview`
