@@ -148,7 +148,7 @@ export async function GET() {
     let sentCount = 0;
 
     // 5. Enviar as notificações
-    const promises = Object.values(userNotifications).flatMap(async (user) => {
+    const promises = Object.values(userNotifications).flatMap((user) => {
       const userSubs = subsByUser[user.authUserId];
       if (!userSubs || userSubs.length === 0) return [];
 
@@ -185,7 +185,7 @@ export async function GET() {
       });
     });
 
-    await Promise.all(promises.flat());
+    await Promise.all(promises);
 
     return NextResponse.json({
       success: true,
