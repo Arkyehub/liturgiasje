@@ -1,4 +1,4 @@
-import { createClient } from '@/shared/api/supabaseServer';
+import { createAdminClient } from '@/shared/api/supabaseServer';
 import { NextResponse } from 'next/server';
 import { sendPushNotification } from '@/shared/lib/push';
 
@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     
     // 1. Buscar aniversariantes de hoje
     // Usamos rpc ou raw sql se necessário, mas aqui faremos uma busca simples 
