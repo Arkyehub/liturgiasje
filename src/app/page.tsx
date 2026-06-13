@@ -370,7 +370,23 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-stone-50/30 relative">
+    <div className="flex min-h-screen flex-col relative">
+      {/* Camada de Background Isolada (Festa Junina em Junho + Fundo da Página) */}
+      <div className="fixed inset-0 z-0 pointer-events-none" style={{ isolation: 'isolate' }}>
+        <div className="absolute inset-0 bg-stone-50/30" />
+        {new Date().getMonth() === 5 && (
+          <div 
+            className="absolute inset-0 opacity-15"
+            style={{
+              backgroundImage: "url('/bandeirinhas.png')",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+              mixBlendMode: "multiply"
+            }}
+          />
+        )}
+      </div>
       
       {/* Indicador de Pull to Refresh */}
       <div 

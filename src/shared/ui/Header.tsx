@@ -133,12 +133,35 @@ export function Header({
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger className="focus:outline-none">
-                <Avatar className="h-14 w-14 cursor-pointer border-2 border-stone-200 transition-colors hover:border-stone-300">
-                  <AvatarImage src={user?.avatarUrl ?? undefined} />
-                  <AvatarFallback className="bg-stone-100 text-stone-600">
-                    <UserCircle className="h-9 w-9" />
-                  </AvatarFallback>
-                </Avatar>
+                <div className="relative">
+                  {/* Chapéu de Palha Junino condicional */}
+                  {new Date().getMonth() === 5 && (
+                    <svg viewBox="0 0 100 100" className="absolute -top-[18px] left-[2px] z-10 w-11 h-11 -rotate-[15deg] drop-shadow-[0_2px_3px_rgba(0,0,0,0.15)] pointer-events-none">
+                      {/* Copa do chapéu */}
+                      <path d="M 30 50 Q 30 20 50 20 Q 70 20 70 50" fill="#e5c158" stroke="#b69324" strokeWidth="2.5" />
+                      {/* Faixinha vermelha */}
+                      <path d="M 29 48 Q 29 42 50 42 Q 71 42 71 48" fill="#e23a3a" />
+                      {/* Aba do chapéu */}
+                      <ellipse cx="50" cy="53" rx="40" ry="12" fill="#f0d37d" stroke="#b69324" strokeWidth="2.5" />
+                      {/* Detalhes de palha desfiada */}
+                      <line x1="12" y1="53" x2="8" y2="52" stroke="#b69324" strokeWidth="2.5" />
+                      <line x1="88" y1="53" x2="92" y2="54" stroke="#b69324" strokeWidth="2.5" />
+                      <line x1="20" y1="60" x2="18" y2="64" stroke="#b69324" strokeWidth="2.5" />
+                      <line x1="80" y1="60" x2="82" y2="64" stroke="#b69324" strokeWidth="2.5" />
+                      <line x1="50" y1="65" x2="50" y2="68" stroke="#b69324" strokeWidth="2.5" />
+                      {/* Remendo decorativo */}
+                      <path d="M 42 30 L 48 30 L 48 36 L 42 36 Z" fill="#4d94ff" opacity="0.9" />
+                      <line x1="40" y1="33" x2="50" y2="33" stroke="#fff" strokeWidth="1" />
+                      <line x1="45" y1="28" x2="45" y2="38" stroke="#fff" strokeWidth="1" />
+                    </svg>
+                  )}
+                  <Avatar className="h-14 w-14 cursor-pointer border-2 border-stone-200 transition-colors hover:border-stone-300">
+                    <AvatarImage src={user?.avatarUrl ?? undefined} />
+                    <AvatarFallback className="bg-stone-100 text-stone-600">
+                      <UserCircle className="h-9 w-9" />
+                    </AvatarFallback>
+                  </Avatar>
+                </div>
               </DropdownMenuTrigger>
 
               <DropdownMenuContent align="end" className="w-56">
@@ -191,11 +214,34 @@ export function Header({
               className="focus:outline-none transition-transform active:scale-95"
               aria-label="Fazer login com Google"
             >
-              <Avatar className="h-14 w-14 cursor-pointer border-2 border-stone-200 transition-colors hover:border-stone-300">
-                <AvatarFallback className="bg-stone-100 text-stone-600">
-                  <UserCircle className="h-9 w-9" />
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative">
+                {/* Chapéu de Palha Junino condicional */}
+                {new Date().getMonth() === 5 && (
+                  <svg viewBox="0 0 100 100" className="absolute -top-[18px] left-[2px] z-10 w-11 h-11 -rotate-[15deg] drop-shadow-[0_2px_3px_rgba(0,0,0,0.15)] pointer-events-none">
+                    {/* Copa do chapéu */}
+                    <path d="M 30 50 Q 30 20 50 20 Q 70 20 70 50" fill="#e5c158" stroke="#b69324" strokeWidth="2.5" />
+                    {/* Faixinha vermelha */}
+                    <path d="M 29 48 Q 29 42 50 42 Q 71 42 71 48" fill="#e23a3a" />
+                    {/* Aba do chapéu */}
+                    <ellipse cx="50" cy="53" rx="40" ry="12" fill="#f0d37d" stroke="#b69324" strokeWidth="2.5" />
+                    {/* Detalhes de palha desfiada */}
+                    <line x1="12" y1="53" x2="8" y2="52" stroke="#b69324" strokeWidth="2.5" />
+                    <line x1="88" y1="53" x2="92" y2="54" stroke="#b69324" strokeWidth="2.5" />
+                    <line x1="20" y1="60" x2="18" y2="64" stroke="#b69324" strokeWidth="2.5" />
+                    <line x1="80" y1="60" x2="82" y2="64" stroke="#b69324" strokeWidth="2.5" />
+                    <line x1="50" y1="65" x2="50" y2="68" stroke="#b69324" strokeWidth="2.5" />
+                    {/* Remendo decorativo */}
+                    <path d="M 42 30 L 48 30 L 48 36 L 42 36 Z" fill="#4d94ff" opacity="0.9" />
+                    <line x1="40" y1="33" x2="50" y2="33" stroke="#fff" strokeWidth="1" />
+                    <line x1="45" y1="28" x2="45" y2="38" stroke="#fff" strokeWidth="1" />
+                  </svg>
+                )}
+                <Avatar className="h-14 w-14 cursor-pointer border-2 border-stone-200 transition-colors hover:border-stone-300">
+                  <AvatarFallback className="bg-stone-100 text-stone-600">
+                    <UserCircle className="h-9 w-9" />
+                  </AvatarFallback>
+                </Avatar>
+              </div>
             </button>
           )}
         </div>
