@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { AnnouncementCard } from "@/features/announcements/ui/AnnouncementCard"
 import { ScheduleCard } from "@/features/schedule/ui/ScheduleCard"
@@ -42,8 +42,17 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/shared/ui/drawer"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/ui/dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar"
 import { UserAvatar } from "@/shared/ui/UserAvatar"
+import { AlertTriangle } from "lucide-react"
 
 export default function Home() {
   const { user, profile, isActive, loading, signInWithGoogle, signOut } = useAuth()
@@ -102,6 +111,37 @@ export default function Home() {
   const [isUnavailableDrawerOpen, setIsUnavailableDrawerOpen] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
   const processedHashRef = useRef<string | null>(null)
+  
+  const [isUnconfirmedAlertOpen, setIsUnconfirmedAlertOpen] = useState(false)
+
+  // Lista de escalas do usuário logado que não foram confirmadas
+  const myUnconfirmedSlots = useMemo(() => {
+    if (!profile) return []
+    const list: any[] = []
+    upcomingSchedule.forEach(mass => {
+      mass.slots.forEach(slot => {
+        if (slot.profileId === profile.id && !slot.isConfirmed) {
+          list.push({
+            ...slot,
+            massId: mass.id,
+            massDate: mass.date,
+            massTime: mass.time,
+            specialDescription: mass.specialDescription
+          })
+        }
+      })
+    })
+    return list
+  }, [upcomingSchedule, profile])
+
+  // Abrir o Dialog assim que carregar as escalas pendentes não confirmadas
+  useEffect(() => {
+    if (myUnconfirmedSlots.length > 0) {
+      setIsUnconfirmedAlertOpen(true)
+    } else {
+      setIsUnconfirmedAlertOpen(false)
+    }
+  }, [myUnconfirmedSlots.length])
 
   const triggerRefresh = useCallback(async () => {
     if (user?.id && profile) {
@@ -1170,6 +1210,69 @@ export default function Home() {
           </div>
  
         </div>
+
+        {/* Dialog de Escalas Não Confirmadas */}
+        <Dialog open={isUnconfirmedAlertOpen} onOpenChange={setIsUnconfirmedAlertOpen}>
+          <DialogContent className="max-w-md p-6 rounded-2xl border-stone-200 bg-white">
+            <DialogHeader className="flex flex-col items-center text-center space-y-2">
+              <div className="bg-red-50 p-3 rounded-full text-red-600">
+                <AlertTriangle className="h-6 w-6 animate-pulse" />
+              </div>
+              <DialogTitle className="text-lg font-black text-stone-800">
+                Escalas Não Confirmadas!
+              </DialogTitle>
+              <DialogDescription className="text-xs text-stone-500">
+                Você tem {myUnconfirmedSlots.length} {myUnconfirmedSlots.length === 1 ? 'escala pendente' : 'escalas pendentes'} de confirmação. Por favor, confirme sua presença para a equipe.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="my-2 space-y-2 max-h-[220px] overflow-y-auto pr-1">
+              {myUnconfirmedSlots.map((slot) => {
+                const slotDate = parseISO(slot.massDate)
+                const roleName = (({
+                  'C': 'Comentarista',
+                  '1L': 'Primeira Leitura',
+                  '2L': 'Segunda Leitura',
+                  'P': 'Preces',
+                  'L': 'Leitura Única'
+                } as Record<string, string>)[slot.role]) || slot.role;
+
+                return (
+                  <button
+                    key={slot.id}
+                    onClick={() => {
+                      handleNavigateToSlot(slot.id, slot.massDate)
+                      setIsUnconfirmedAlertOpen(false)
+                    }}
+                    className="w-full flex flex-col p-3 rounded-xl border border-red-100 bg-red-50/20 hover:bg-red-50/50 transition-all text-left space-y-1"
+                  >
+                    <div className="flex justify-between items-center text-[10px] font-bold text-red-700">
+                      <span className="uppercase tracking-widest">{roleName}</span>
+                      <span>
+                        {isValid(slotDate) ? format(slotDate, "dd/MM") : "--/--"} às {slot.massTime.substring(0, 5)}
+                      </span>
+                    </div>
+                    {slot.specialDescription && (
+                      <p className="text-[11px] text-stone-500 font-medium truncate">
+                        {slot.specialDescription}
+                      </p>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            <DialogFooter className="flex flex-col gap-2 mt-4 sm:flex-col-reverse">
+              <Button
+                variant="ghost"
+                onClick={() => setIsUnconfirmedAlertOpen(false)}
+                className="w-full text-stone-500 font-bold h-11"
+              >
+                Decidir depois
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
 
       {/* Botões Flutuantes (Fora do scroll para garantir fixação) */}

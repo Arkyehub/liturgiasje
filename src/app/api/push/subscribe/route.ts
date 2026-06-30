@@ -15,6 +15,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
     }
 
+    // Garantir que a subscrição recebida é válida e estruturada como objeto JSON
+    let parsedSubscription = subscription;
+    if (typeof subscription === 'string') {
+      try {
+        parsedSubscription = JSON.parse(subscription);
+      } catch (e) {
+        return NextResponse.json({ error: 'Invalid subscription JSON format' }, { status: 400 });
+      }
+    }
+
+    if (!parsedSubscription || !parsedSubscription.endpoint) {
+      return NextResponse.json({ error: 'Invalid subscription details' }, { status: 400 });
+    }
+
     // Buscar o profile_id correspondente ao auth.uid()
     const { data: profile } = await supabase
       .from('profiles')
@@ -28,7 +42,7 @@ export async function POST(request: Request) {
       .upsert({
         user_id: user.id,
         profile_id: profile?.id || null,
-        subscription: subscription,
+        subscription: parsedSubscription,
         updated_at: new Date().toISOString()
       }, {
         onConflict: 'user_id, subscription'

@@ -90,9 +90,10 @@ export function PWAHandler() {
 
         // Enviar subscrição para o servidor
         try {
+          const subJson = subscription.toJSON ? subscription.toJSON() : subscription;
           await fetch('/api/push/subscribe', {
             method: 'POST',
-            body: JSON.stringify({ subscription }),
+            body: JSON.stringify({ subscription: subJson }),
             headers: { 'Content-Type': 'application/json' }
           });
         } catch (err) {
