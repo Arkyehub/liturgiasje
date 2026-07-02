@@ -6,6 +6,7 @@ export interface Mass {
   monthReference: string
   isPublished: boolean
   slots: ScheduleSlot[]
+  liturgicalColor?: string
 }
 
 export interface ScheduleSlot {

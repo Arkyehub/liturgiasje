@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS public.masses (
     is_published BOOLEAN DEFAULT false,
     photo_url TEXT,
     photo_description TEXT,
+    liturgical_color TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

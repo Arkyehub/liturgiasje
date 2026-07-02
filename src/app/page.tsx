@@ -913,6 +913,7 @@ export default function Home() {
                         id: item.id,
                         time: item.time.substring(0, 5),
                         specialTitle: item.specialDescription,
+                        liturgicalColor: item.liturgicalColor,
                         slots: [...item.slots].sort((a: any, b: any) => 
                           (roleWeights[a.role] || 99) - (roleWeights[b.role] || 99)
                         ).map((s: any) => ({

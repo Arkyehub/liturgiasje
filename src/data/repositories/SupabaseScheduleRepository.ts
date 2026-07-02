@@ -3,6 +3,7 @@ import { Mass, ScheduleSlot, SwapRequest, CreateMassData, CreateSlotData } from 
 import { ScheduleRepository } from "@/domain/repositories/ScheduleRepository"
 import { startOfMonth, endOfMonth, format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { LiturgyService } from "@/shared/api/LiturgyService"
 
 export class SupabaseScheduleRepository implements ScheduleRepository {
   private mapSlotToDomain(slot: any, profilesMap: Record<string, any>): ScheduleSlot {
@@ -62,6 +63,20 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
       if (profiles) profilesMap = Object.fromEntries(profiles.map(p => [p.id, p]))
     }
 
+    // Atualizar cor litúrgica em background de forma assíncrona se estiver nula
+    (masses || []).forEach(async (mass) => {
+      if (!mass.liturgical_color) {
+        try {
+          const color = await LiturgyService.getLiturgyColorForDate(mass.date)
+          if (color) {
+            await supabase.from('masses').update({ liturgical_color: color }).eq('id', mass.id)
+          }
+        } catch (e) {
+          console.error("[Repository] Erro ao preencher cor da missa de forma retroativa:", e)
+        }
+      }
+    })
+
     return (masses || []).map(mass => ({
       id: mass.id,
       date: mass.date,
@@ -69,6 +84,7 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
       specialDescription: mass.special_description,
       monthReference: mass.month_reference,
       isPublished: mass.is_published,
+      liturgicalColor: mass.liturgical_color,
       slots: mass.slots.map((s: any) => this.mapSlotToDomain(s, profilesMap))
     }))
   }
@@ -121,12 +137,15 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
   }
 
   async createMassWithSlots(massData: CreateMassData, slots: CreateSlotData[]): Promise<Mass> {
+    const color = await LiturgyService.getLiturgyColorForDate(massData.date)
+
     const payload = {
       date: massData.date,
       time: massData.time,
       special_description: massData.specialDescription,
       month_reference: massData.monthReference,
-      is_published: false
+      is_published: false,
+      liturgical_color: color || null
     }
     const { data: mass, error: massError } = await supabase.from('masses').insert(payload).select().single()
     if (massError) throw massError
@@ -135,7 +154,16 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
       const { error: slotsError } = await supabase.from('schedule_slots').insert(slotsToInsert)
       if (slotsError) throw slotsError
     }
-    return mass as Mass
+    return {
+      id: mass.id,
+      date: mass.date,
+      time: mass.time,
+      specialDescription: mass.special_description,
+      monthReference: mass.month_reference,
+      isPublished: mass.is_published,
+      liturgicalColor: mass.liturgical_color,
+      slots: []
+    } as Mass
   }
 
   async publishMonth(monthReference: string): Promise<void> {
@@ -176,12 +204,15 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
   }
 
   async updateMass(massId: string, massData: CreateMassData, slots: CreateSlotData[]): Promise<void> {
+    const color = await LiturgyService.getLiturgyColorForDate(massData.date)
+
     const payload = {
       date: massData.date,
       time: massData.time,
       special_description: massData.specialDescription,
       month_reference: massData.monthReference,
-      is_published: false
+      is_published: false,
+      liturgical_color: color || null
     }
     const { error: massError } = await supabase.from('masses').update(payload).eq('id', massId)
     if (massError) throw massError
@@ -279,6 +310,7 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
       specialDescription: mass.special_description,
       monthReference: mass.month_reference,
       isPublished: mass.is_published,
+      liturgicalColor: mass.liturgical_color,
       slots: []
     }))
   }
@@ -330,6 +362,7 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
           specialDescription: massData.special_description,
           monthReference: massData.month_reference,
           isPublished: massData.is_published,
+          liturgicalColor: massData.liturgical_color,
           slots: []
         })
       }
