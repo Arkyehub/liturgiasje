@@ -160,7 +160,7 @@ export function ScheduleCard({
       localColor === 'Roxo' && "border-l-4 border-l-purple-600",
       localColor === 'Vermelho' && "border-l-4 border-l-red-600",
       localColor === 'Rosa' && "border-l-4 border-l-pink-500",
-      localColor === 'Branco' && "border-l-4 border-l-[#d4af37]"
+      localColor === 'Branco' && "border-2 border-[#d4af37]"
     )}>
       {adminBar}
       <CardHeader
@@ -342,16 +342,28 @@ export function ScheduleCard({
 
       {/* Drawer com a Liturgia do Dia */}
       <Drawer open={isLiturgyOpen} onOpenChange={setIsLiturgyOpen}>
-        <DrawerContent className="max-h-[96vh] h-[96vh] bg-stone-50/95 backdrop-blur-md">
+        <DrawerContent className="!data-[vaul-drawer-direction=bottom]:max-h-[96vh] h-[96vh] bg-stone-50/95 backdrop-blur-md">
           <div className="mx-auto w-full max-w-lg px-6 pb-8 overflow-y-auto h-full flex flex-col">
-            <DrawerHeader className="text-center px-0 pb-4 border-b border-stone-200/50 shrink-0">
-              <DrawerTitle className="text-stone-900 font-black text-lg tracking-tight">
-                {liturgyData?.liturgia || "Liturgia Diária"}
-              </DrawerTitle>
-              <DrawerDescription className="text-xs text-stone-500 font-medium mt-1">
-                {date} — Cor: <span className="font-bold text-stone-700">{liturgyData?.cor || "---"}</span>
-              </DrawerDescription>
-            </DrawerHeader>
+            {(() => {
+              const headerColors: Record<string, string> = {
+                Verde: "bg-emerald-600 text-white",
+                Roxo: "bg-purple-600 text-white",
+                Vermelho: "bg-red-600 text-white",
+                Rosa: "bg-pink-500 text-white",
+                Branco: "bg-[#d4af37] text-white",
+              }
+              const currentHeaderColor = localColor ? (headerColors[localColor] || "bg-stone-200 text-stone-800") : "bg-stone-200 text-stone-800"
+              return (
+                <DrawerHeader className={cn("text-center px-4 py-5 shrink-0 rounded-t-xl transition-all", currentHeaderColor)}>
+                  <DrawerTitle className="font-black text-lg tracking-tight text-inherit">
+                    {liturgyData?.liturgia || "Liturgia Diária"}
+                  </DrawerTitle>
+                  <DrawerDescription className="text-xs font-medium mt-1 opacity-90 text-inherit">
+                    {date}
+                  </DrawerDescription>
+                </DrawerHeader>
+              )
+            })()}
 
             <div className="flex-1 overflow-y-auto pr-1">
               {isLoadingLiturgy ? (
