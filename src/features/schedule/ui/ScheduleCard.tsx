@@ -160,7 +160,7 @@ export function ScheduleCard({
       localColor === 'Roxo' && "border-l-4 border-l-purple-600",
       localColor === 'Vermelho' && "border-l-4 border-l-red-600",
       localColor === 'Rosa' && "border-l-4 border-l-pink-500",
-      localColor === 'Branco' && "border-2 border-[#d4af37]"
+      localColor === 'Branco' && "border-l-4 border-l-stone-300"
     )}>
       {adminBar}
       <CardHeader
@@ -350,7 +350,7 @@ export function ScheduleCard({
                 Roxo: "bg-purple-600 text-white",
                 Vermelho: "bg-red-600 text-white",
                 Rosa: "bg-pink-500 text-white",
-                Branco: "bg-[#d4af37] text-white",
+                Branco: "bg-stone-200 text-stone-800",
               }
               const currentHeaderColor = localColor ? (headerColors[localColor] || "bg-stone-200 text-stone-800") : "bg-stone-200 text-stone-800"
               return (
