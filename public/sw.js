@@ -60,9 +60,14 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
           return response;
         })
-        .catch(() => {
+        .catch((err) => {
           // Se falhar a rede, tenta o cache
-          return caches.match(event.request);
+          return caches.match(event.request).then((cachedResponse) => {
+            if (cachedResponse) {
+              return cachedResponse;
+            }
+            throw err; // Relança o erro de rede original se não houver cache
+          });
         })
     );
     return;
@@ -81,8 +86,8 @@ self.addEventListener('fetch', (event) => {
       });
 
       return cachedResponse || fetchPromise;
-    }).catch(() => {
-      // Fallback silencioso
+    }).catch((err) => {
+      throw err; // Evita retornar undefined para event.respondWith
     })
   );
 });
