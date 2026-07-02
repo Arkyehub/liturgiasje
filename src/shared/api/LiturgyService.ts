@@ -86,4 +86,16 @@ export class LiturgyService {
     const data = await this.getLiturgyForDate(dateStr)
     return data ? data.cor : null
   }
+
+  /**
+   * Remove os números dos versículos do texto das leituras
+   */
+  static cleanVersesText(text: string): string {
+    if (!text) return ""
+    // 1. Remove números colados a letras ou aspas (ex: 1No, 24“O, 3Eles)
+    let cleaned = text.replace(/\d+(?=[A-Za-zÀ-ÿ“"'])/g, "")
+    // 2. Remove números soltos seguidos de espaço no início de linhas ou após pontuação (ex: " 25 Para")
+    cleaned = cleaned.replace(/(?<=^|[\.\?\!\;\:]\s+|\n)\d+\s+/g, "")
+    return cleaned
+  }
 }

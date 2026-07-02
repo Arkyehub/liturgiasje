@@ -342,9 +342,9 @@ export function ScheduleCard({
 
       {/* Drawer com a Liturgia do Dia */}
       <Drawer open={isLiturgyOpen} onOpenChange={setIsLiturgyOpen}>
-        <DrawerContent className="max-h-[85vh] bg-stone-50/90 backdrop-blur-md">
-          <div className="mx-auto w-full max-w-lg px-6 pb-8 overflow-y-auto">
-            <DrawerHeader className="text-center px-0 pb-4 border-b border-stone-200/50">
+        <DrawerContent className="max-h-[96vh] h-[96vh] bg-stone-50/95 backdrop-blur-md">
+          <div className="mx-auto w-full max-w-lg px-6 pb-8 overflow-y-auto h-full flex flex-col">
+            <DrawerHeader className="text-center px-0 pb-4 border-b border-stone-200/50 shrink-0">
               <DrawerTitle className="text-stone-900 font-black text-lg tracking-tight">
                 {liturgyData?.liturgia || "Liturgia Diária"}
               </DrawerTitle>
@@ -353,78 +353,90 @@ export function ScheduleCard({
               </DrawerDescription>
             </DrawerHeader>
 
-            {isLoadingLiturgy ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <Loader2 className="h-8 w-8 animate-spin text-stone-400" />
-                <span className="text-xs text-stone-400 font-bold uppercase tracking-wider">Buscando Leituras...</span>
-              </div>
-            ) : liturgyData ? (
-              <div className="space-y-6 mt-6 text-stone-800">
-                {/* Oração da Coleta */}
-                {liturgyData.oracoes?.coleta && (
-                  <div className="bg-white p-4.5 rounded-2xl border border-stone-200/40 shadow-xs">
-                    <h4 className="text-[10px] font-black uppercase text-stone-400 tracking-wider mb-2">Coleta</h4>
-                    <p className="text-xs leading-relaxed text-stone-600 whitespace-pre-line">{liturgyData.oracoes.coleta}</p>
-                  </div>
-                )}
-
-                {/* Primeira Leitura */}
-                {liturgyData.leituras?.primeiraLeitura?.map((l, i) => (
-                  <div key={i} className="bg-white p-5 rounded-[24px] border border-stone-200/40 shadow-xs space-y-3">
-                    <div className="flex justify-between items-baseline border-b border-stone-100 pb-2">
-                      <h4 className="text-[11px] font-black uppercase text-amber-700 tracking-wider">1ª Leitura</h4>
-                      <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">{l.referencia}</span>
+            <div className="flex-1 overflow-y-auto pr-1">
+              {isLoadingLiturgy ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-stone-400" />
+                  <span className="text-xs text-stone-400 font-bold uppercase tracking-wider">Buscando Leituras...</span>
+                </div>
+              ) : liturgyData ? (
+                <div className="space-y-6 mt-6 text-stone-800 pb-10">
+                  {/* Oração da Coleta */}
+                  {liturgyData.oracoes?.coleta && (
+                    <div className="bg-white p-4.5 rounded-2xl border border-stone-200/40 shadow-xs">
+                      <h4 className="text-[10px] font-black uppercase text-stone-400 tracking-wider mb-2">Coleta</h4>
+                      <p className="text-[15px] leading-relaxed text-stone-600 whitespace-pre-line">
+                        {LiturgyService.cleanVersesText(liturgyData.oracoes.coleta)}
+                      </p>
                     </div>
-                    <h5 className="text-xs font-black text-stone-800 italic leading-tight">{l.titulo}</h5>
-                    <p className="text-xs leading-relaxed text-stone-600 whitespace-pre-line">{l.texto}</p>
-                  </div>
-                ))}
+                  )}
 
-                {/* Salmo Responsorial */}
-                {liturgyData.leituras?.salmo?.map((s, i) => (
-                  <div key={i} className="bg-white p-5 rounded-[24px] border border-stone-200/40 shadow-xs space-y-3">
-                    <div className="flex justify-between items-baseline border-b border-stone-100 pb-2">
-                      <h4 className="text-[11px] font-black uppercase text-amber-700 tracking-wider">Salmo Responsorial</h4>
-                      <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">{s.referencia}</span>
+                  {/* Primeira Leitura */}
+                  {liturgyData.leituras?.primeiraLeitura?.map((l, i) => (
+                    <div key={i} className="bg-white p-5 rounded-[24px] border border-stone-200/40 shadow-xs space-y-3">
+                      <div className="flex justify-between items-baseline border-b border-stone-100 pb-2">
+                        <h4 className="text-[11px] font-black uppercase text-amber-700 tracking-wider">1ª Leitura</h4>
+                        <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">{l.referencia}</span>
+                      </div>
+                      <h5 className="text-[14px] font-black text-stone-800 italic leading-tight">{l.titulo}</h5>
+                      <p className="text-[15px] leading-relaxed text-stone-600 whitespace-pre-line">
+                        {LiturgyService.cleanVersesText(l.texto)}
+                      </p>
                     </div>
-                    <div className="bg-amber-50/50 p-4.5 rounded-2xl border border-amber-100/50 text-xs font-black text-amber-900 leading-snug">
-                      Refrão: {s.refrao}
-                    </div>
-                    <p className="text-xs leading-relaxed text-stone-600 whitespace-pre-line">{s.texto}</p>
-                  </div>
-                ))}
+                  ))}
 
-                {/* Segunda Leitura */}
-                {liturgyData.leituras?.segundaLeitura?.map((l, i) => (
-                  <div key={i} className="bg-white p-5 rounded-[24px] border border-stone-200/40 shadow-xs space-y-3">
-                    <div className="flex justify-between items-baseline border-b border-stone-100 pb-2">
-                      <h4 className="text-[11px] font-black uppercase text-amber-700 tracking-wider">2ª Leitura</h4>
-                      <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">{l.referencia}</span>
+                  {/* Salmo Responsorial */}
+                  {liturgyData.leituras?.salmo?.map((s, i) => (
+                    <div key={i} className="bg-white p-5 rounded-[24px] border border-stone-200/40 shadow-xs space-y-3">
+                      <div className="flex justify-between items-baseline border-b border-stone-100 pb-2">
+                        <h4 className="text-[11px] font-black uppercase text-amber-700 tracking-wider">Salmo Responsorial</h4>
+                        <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">{s.referencia}</span>
+                      </div>
+                      <div className="bg-amber-50/50 p-4.5 rounded-2xl border border-amber-100/50 text-[14px] font-black text-amber-900 leading-snug">
+                        Refrão: {LiturgyService.cleanVersesText(s.refrao)}
+                      </div>
+                      <p className="text-[15px] leading-relaxed text-stone-600 whitespace-pre-line">
+                        {LiturgyService.cleanVersesText(s.texto)}
+                      </p>
                     </div>
-                    <h5 className="text-xs font-black text-stone-800 italic leading-tight">{l.titulo}</h5>
-                    <p className="text-xs leading-relaxed text-stone-600 whitespace-pre-line">{l.texto}</p>
-                  </div>
-                ))}
+                  ))}
 
-                {/* Evangelho */}
-                {liturgyData.leituras?.evangelho?.map((l, i) => (
-                  <div key={i} className="bg-white p-5 rounded-[24px] border border-stone-200/40 shadow-xs space-y-3">
-                    <div className="flex justify-between items-baseline border-b border-stone-100 pb-2">
-                      <h4 className="text-[11px] font-black uppercase text-red-600 tracking-wider">Evangelho</h4>
-                      <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">{l.referencia}</span>
+                  {/* Segunda Leitura */}
+                  {liturgyData.leituras?.segundaLeitura?.map((l, i) => (
+                    <div key={i} className="bg-white p-5 rounded-[24px] border border-stone-200/40 shadow-xs space-y-3">
+                      <div className="flex justify-between items-baseline border-b border-stone-100 pb-2">
+                        <h4 className="text-[11px] font-black uppercase text-amber-700 tracking-wider">2ª Leitura</h4>
+                        <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">{l.referencia}</span>
+                      </div>
+                      <h5 className="text-[14px] font-black text-stone-800 italic leading-tight">{l.titulo}</h5>
+                      <p className="text-[15px] leading-relaxed text-stone-600 whitespace-pre-line">
+                        {LiturgyService.cleanVersesText(l.texto)}
+                      </p>
                     </div>
-                    <h5 className="text-xs font-black text-stone-800 italic leading-tight">{l.titulo}</h5>
-                    <p className="text-xs leading-relaxed text-stone-600 whitespace-pre-line">{l.texto}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-16 text-xs text-stone-400 font-bold uppercase tracking-wider">
-                Não foi possível carregar a liturgia.
-              </div>
-            )}
+                  ))}
 
-            <DrawerFooter className="px-0 pt-6">
+                  {/* Evangelho */}
+                  {liturgyData.leituras?.evangelho?.map((l, i) => (
+                    <div key={i} className="bg-white p-5 rounded-[24px] border border-stone-200/40 shadow-xs space-y-3">
+                      <div className="flex justify-between items-baseline border-b border-stone-100 pb-2">
+                        <h4 className="text-[11px] font-black uppercase text-red-600 tracking-wider">Evangelho</h4>
+                        <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">{l.referencia}</span>
+                      </div>
+                      <h5 className="text-[14px] font-black text-stone-800 italic leading-tight">{l.titulo}</h5>
+                      <p className="text-[15px] leading-relaxed text-stone-600 whitespace-pre-line">
+                        {LiturgyService.cleanVersesText(l.texto)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-16 text-xs text-stone-400 font-bold uppercase tracking-wider">
+                  Não foi possível carregar a liturgia.
+                </div>
+              )}
+            </div>
+
+            <DrawerFooter className="px-0 pt-4 shrink-0 border-t border-stone-200/50">
               <DrawerClose asChild>
                 <Button variant="ghost" className="w-full text-stone-500 font-bold h-12 rounded-xl hover:bg-stone-100">
                   Fechar Leituras
