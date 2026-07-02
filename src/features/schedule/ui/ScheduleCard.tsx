@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/shared/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card"
 import { Badge } from "@/shared/ui/badge"
@@ -74,6 +74,7 @@ export function ScheduleCard({
   const [isLiturgyOpen, setIsLiturgyOpen] = useState(false)
   const [liturgyData, setLiturgyData] = useState<LiturgyData | null>(null)
   const [isLoadingLiturgy, setIsLoadingLiturgy] = useState(false)
+  const [localColor, setLocalColor] = useState<string | null>(null)
 
   const allMassIds = items.map(item => item.id);
 
@@ -93,7 +94,21 @@ export function ScheduleCard({
     }
   }
 
-  const liturgicalColor = items.find(item => item.liturgicalColor)?.liturgicalColor
+  useEffect(() => {
+    const dbColor = items.find(item => item.liturgicalColor)?.liturgicalColor
+    if (dbColor) {
+      setLocalColor(dbColor)
+    } else {
+      const fetchColor = async () => {
+        const formattedDate = rawDate.toISOString().split('T')[0]
+        const color = await LiturgyService.getLiturgyColorForDate(formattedDate)
+        if (color) {
+          setLocalColor(color)
+        }
+      }
+      fetchColor()
+    }
+  }, [items, rawDate])
 
   const adminBar = isAdmin && (
     <div className="flex items-center justify-between gap-2 border-b border-stone-100 bg-stone-50/50 px-3 py-1">
@@ -141,11 +156,11 @@ export function ScheduleCard({
       "!overflow-visible border-stone-200 bg-white shadow-sm p-0 gap-0 transition-all",
       !isPublished && isAdmin && "border-2 border-orange-500 ring-2 ring-orange-100",
       isDatePast && !isExpanded && "opacity-80",
-      liturgicalColor === 'Verde' && "border-l-4 border-l-emerald-600",
-      liturgicalColor === 'Roxo' && "border-l-4 border-l-purple-600",
-      liturgicalColor === 'Vermelho' && "border-l-4 border-l-red-600",
-      liturgicalColor === 'Rosa' && "border-l-4 border-l-pink-500",
-      liturgicalColor === 'Branco' && "border-l-4 border-l-[#d4af37]"
+      localColor === 'Verde' && "border-l-4 border-l-emerald-600",
+      localColor === 'Roxo' && "border-l-4 border-l-purple-600",
+      localColor === 'Vermelho' && "border-l-4 border-l-red-600",
+      localColor === 'Rosa' && "border-l-4 border-l-pink-500",
+      localColor === 'Branco' && "border-l-4 border-l-[#d4af37]"
     )}>
       {adminBar}
       <CardHeader
