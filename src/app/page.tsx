@@ -135,6 +135,17 @@ export default function Home() {
     return list
   }, [upcomingSchedule, profile])
 
+  // Lista de trocas ordenadas por data (da mais próxima para a mais distante)
+  const sortedSwaps = useMemo(() => {
+    return [...swaps]
+      .filter(s => s.mass)
+      .sort((a, b) => {
+        const dateTimeA = new Date(`${a.mass.date}T${a.mass.time}`)
+        const dateTimeB = new Date(`${b.mass.date}T${b.mass.time}`)
+        return dateTimeA.getTime() - dateTimeB.getTime()
+      })
+  }, [swaps])
+
   // Abrir o Dialog assim que carregar as escalas pendentes não confirmadas
   useEffect(() => {
     if (myUnconfirmedSlots.length > 0) {
@@ -401,6 +412,17 @@ export default function Home() {
     return () => window.removeEventListener('focus', handleFocus)
   }, [user?.id, isActive, profile, currentDate, loadAnnouncements, loadSchedule, loadSwaps])
 
+  // Garantir que a página comece no topo absoluto ao carregar
+  useEffect(() => {
+    if (!loading) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as any })
+      const mainContainer = document.querySelector('.overflow-y-auto')
+      if (mainContainer) {
+        mainContainer.scrollTop = 0
+      }
+    }
+  }, [loading])
+
 
   if (loading) {
     return (
@@ -461,7 +483,7 @@ export default function Home() {
         <div className="flex-1 overflow-y-auto px-4 py-6 space-y-8 pb-20">
           
           {/* Seção Nova: Solicitações de Troca */}
-          {swaps.filter(s => s.mass).length > 0 && (
+          {sortedSwaps.length > 0 && (
             <section className="space-y-3">
               <div className="flex items-center justify-center px-1">
                 <h2 className="text-xl font-black tracking-tight text-amber-600 text-center">
@@ -469,7 +491,7 @@ export default function Home() {
                 </h2>
               </div>
               <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x">
-                {swaps.filter(s => s.mass).map((swap) => {
+                {sortedSwaps.map((swap) => {
                   const massDate = new Date(swap.mass.date + 'T00:00:00');
                   const roleName = (({
                     'C': 'Comentarista',
@@ -511,7 +533,7 @@ export default function Home() {
                           setTimeout(() => el?.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2'), 2000);
                         }
                       }}
-                      className="flex-none w-[220px] bg-white border border-amber-100 rounded-2xl p-3 shadow-sm hover:shadow-md transition-all active:scale-95 snap-start text-left cursor-pointer"
+                      className="flex-none w-[220px] bg-white border border-stone-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-amber-200 transition-all active:scale-95 snap-start text-left cursor-pointer flex flex-col justify-between"
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => {
@@ -521,39 +543,48 @@ export default function Home() {
                         }
                       }}
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="bg-amber-100 p-1.5 rounded-lg text-amber-700 shrink-0">
-                            <RefreshCw className="h-3.5 w-3.5" />
+                      <div className="space-y-1">
+                        {/* Primeira linha: Símbolo da troca e Dia por extenso com compartilhar à direita */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-black min-w-0">
+                            <RefreshCw className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                            <span className="text-[13px] font-black tracking-tight capitalize truncate">
+                              {isValid(massDate) ? format(massDate, "EEEE dd/MM", { locale: ptBR }) : '--/--'}
+                            </span>
                           </div>
-                          <span className="text-[10px] font-black text-amber-700 uppercase truncate" title={requesterName}>
-                            {requesterName}
-                          </span>
+                          {(swap.profileId === profile?.id) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all shrink-0 ml-1"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleShareSwap(swap);
+                              }}
+                            >
+                              <Share2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
-                        {(swap.profileId === profile?.id) ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 transition-all border border-emerald-100"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleShareSwap(swap);
-                            }}
-                          >
-                            <Share2 className="h-3.5 w-3.5" />
-                          </Button>
-                        ) : (
+                        {/* Segunda linha: Horário - Papel por extenso */}
+                        <p className="text-[11px] font-bold text-black leading-snug">
+                          {swap.mass?.time?.substring(0, 5) || '--:--'} - {roleName}
+                        </p>
+                      </div>
+
+                      <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
                           <UserAvatar 
                             name={requesterName}
                             src={requesterAvatar}
                             isClaimed={!!swap.profile?.authUserId}
-                            className="h-6 w-6 shrink-0"
+                            className="h-8 w-8 shrink-0"
                           />
-                        )}
+                          <span className="text-xs font-bold text-black truncate" title={requesterName}>
+                            {requesterName}
+                          </span>
+                        </div>
                       </div>
-                      <p className="text-[11px] font-bold text-stone-800 leading-snug">
-                        Solicitação para {isValid(massDate) ? format(massDate, "dd/MM (EEEE)", { locale: ptBR }) : "--/--"} às {swap.mass?.time?.substring(0, 5) || '--:--'} - {roleName}
-                      </p>
                     </div>
                   );
                 })}
@@ -1305,7 +1336,7 @@ export default function Home() {
           <DialogContent className="flex flex-col items-center justify-center p-6 max-w-[320px] sm:max-w-sm border-stone-200">
             <DialogTitle className="text-stone-800 text-center font-heading text-lg font-bold">Compartilhar no WhatsApp?</DialogTitle>
             <div className="text-center text-stone-600 text-sm my-2">
-              Gostaria de enviar essa solicitação de troca para o grupo de WhatsApp da comunidade?
+              Gostaria de enviar essa solicitação de troca para o grupo de WhatsApp da Liturgia?
             </div>
             <div className="flex flex-col gap-2 w-full mt-4">
               <Button
