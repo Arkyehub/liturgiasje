@@ -56,9 +56,9 @@ export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, on
     })
   }, [mySlots])
 
-  // 3. Encontrar a primeira leitura NÃO CONFIRMADA
+  // 3. Encontrar a primeira leitura NÃO CONFIRMADA (e sem troca solicitada)
   const firstUnconfirmed = useMemo(() => {
-    return mySlots.find(slot => !slot.isConfirmed)
+    return mySlots.find(slot => !slot.isConfirmed && !slot.isSwapRequested)
   }, [mySlots])
 
   const isAlertMode = !!firstUnconfirmed

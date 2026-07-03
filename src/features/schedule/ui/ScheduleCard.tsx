@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card"
 import { Badge } from "@/shared/ui/badge"
 import { Switch } from "@/shared/ui/switch"
 import { cn } from "@/shared/lib/utils"
-import { CalendarDays, Clock, RefreshCw, CheckCircle, UserPlus, Pencil, Trash2, ChevronDown, ChevronUp, X, BookOpen, Loader2 } from "lucide-react"
+import { CalendarDays, Clock, RefreshCw, CheckCircle, UserPlus, Pencil, Trash2, ChevronDown, ChevronUp, X, BookOpen, Loader2, BookSearch } from "lucide-react"
 import { isPast, isToday, startOfDay } from "date-fns"
 import { UserAvatar } from "@/shared/ui/UserAvatar"
 import {
@@ -166,7 +166,7 @@ export function ScheduleCard({
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-stone-700">
+          <div className="flex items-center gap-2 text-black">
             {isDatePast ? (
               <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
             ) : (
@@ -191,12 +191,12 @@ export function ScheduleCard({
                 e.stopPropagation()
                 handleOpenLiturgy()
               }}
-              className="p-1 hover:bg-stone-200/60 rounded-lg transition-all flex items-center justify-center"
+              className="p-1 hover:bg-stone-200/60 rounded-lg transition-all flex items-center justify-center text-black"
               title="Ver Liturgia Diária"
             >
-              <img src="/bible.png" alt="Bíblia" className="h-5 w-5 object-contain" />
+              <BookSearch className="h-5 w-5" />
             </button>
-            <div className="text-stone-400">
+            <div className="text-black">
               {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </div>
           </div>
@@ -209,10 +209,10 @@ export function ScheduleCard({
             <div key={item.id} className={cn("flex flex-col", itemIndex > 0 && "border-t-4 border-stone-200")}>
               {/* Sub-header do Horário */}
               <div className="flex items-center bg-stone-50/30 px-4 py-2 border-b border-stone-50 gap-3">
-                <div className="flex items-center gap-2 text-stone-600">
+                <div className="flex items-center gap-2 text-black">
                   <Clock className="h-3.5 w-3.5" />
                   <span className="text-xs font-black tracking-tight">
-                    {item.time} {item.specialTitle && <span className="text-stone-600 ml-1"> — {item.specialTitle}</span>}
+                    {item.time} {item.specialTitle && <span className="text-black ml-1"> — {item.specialTitle}</span>}
                   </span>
                 </div>
               </div>
@@ -236,13 +236,13 @@ export function ScheduleCard({
                               ? "bg-red-100 text-red-700 border-red-200 animate-pulse"
                               : slot.isConfirmed
                                 ? "bg-green-100 text-green-700 border-green-600"
-                                : "bg-stone-50 text-stone-600 border-stone-400"
+                                : "bg-stone-50 text-black border-stone-950"
                           }`}>
                           {isDatePast && slot.isSwapRequested ? <X className="h-3.5 w-3.5" /> : slot.isSwapRequested ? <RefreshCw className="h-3.5 w-3.5" /> : slot.role}
                         </div>
 
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[13px] font-bold text-stone-800 leading-tight truncate">
+                          <span className="text-[13px] font-bold text-black leading-tight truncate">
                             {slot.readerName || "---"}
                           </span>
                           {slot.readerName && slot.readerName !== "---" && slot.isConfirmed && (

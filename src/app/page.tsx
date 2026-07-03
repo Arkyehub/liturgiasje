@@ -120,7 +120,7 @@ export default function Home() {
     const list: any[] = []
     upcomingSchedule.forEach(mass => {
       mass.slots.forEach(slot => {
-        if (slot.profileId === profile.id && !slot.isConfirmed) {
+        if (slot.profileId === profile.id && !slot.isConfirmed && !slot.isSwapRequested) {
           list.push({
             ...slot,
             massId: mass.id,
