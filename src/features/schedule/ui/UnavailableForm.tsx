@@ -15,6 +15,7 @@ interface UnavailableFormProps {
 
 export function UnavailableForm({ profileId, onClose }: UnavailableFormProps) {
   const [unavailableDates, setUnavailableDates] = useState<Date[]>([])
+  const [currentMonth, setCurrentMonth] = useState<Date>(new Date())
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -37,6 +38,11 @@ export function UnavailableForm({ profileId, onClose }: UnavailableFormProps) {
 
   const handleSelect = async (date: Date | undefined) => {
     if (!date) return
+
+    // Evitar cliques em datas que não são do mês atual
+    if (date.getMonth() !== currentMonth.getMonth() || date.getFullYear() !== currentMonth.getFullYear()) {
+      return
+    }
 
     const dateStr = format(date, "yyyy-MM-dd")
     try {
@@ -73,11 +79,17 @@ export function UnavailableForm({ profileId, onClose }: UnavailableFormProps) {
           selected={undefined}
           onSelect={handleSelect}
           locale={ptBR}
+          month={currentMonth}
+          onMonthChange={setCurrentMonth}
+          disabled={(date) => date.getMonth() !== currentMonth.getMonth() || date.getFullYear() !== currentMonth.getFullYear()}
           modifiers={{
             unavailable: unavailableDates
           }}
           modifiersClassNames={{
             unavailable: "bg-red-500 text-white hover:bg-red-600 rounded-lg shadow-sm font-bold after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1 after:h-1 after:bg-white/50 after:rounded-full"
+          }}
+          classNames={{
+            outside: "text-transparent bg-transparent hover:bg-transparent pointer-events-none select-none border-none shadow-none opacity-0"
           }}
           className="rounded-2xl border-none shadow-none"
         />

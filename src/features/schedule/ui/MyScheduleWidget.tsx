@@ -63,6 +63,7 @@ export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, on
 
   const isAlertMode = !!firstUnconfirmed
   const activeSlot = isAlertMode ? firstUnconfirmed : nextReading
+  const isSwapActive = !!activeSlot?.isSwapRequested
 
   // 3. Função para scroll suave até o item
 
@@ -120,7 +121,9 @@ export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, on
         "relative overflow-hidden text-white border-b transition-colors duration-500",
         isAlertMode 
           ? "bg-red-600 border-red-900/50" 
-          : "bg-[#064e3b] border-emerald-900/50"
+          : isSwapActive
+            ? "bg-[#9a3412] border-orange-950/50"
+            : "bg-[#064e3b] border-emerald-900/50"
       )}>
         <div className="flex items-center">
           <button 
@@ -133,14 +136,18 @@ export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, on
             }}
             className={cn(
               "flex-1 flex items-center justify-between p-3 transition-all min-w-0",
-              isAlertMode ? "active:bg-red-700" : "active:bg-[#054031]"
+              isAlertMode 
+                ? "active:bg-red-700" 
+                : isSwapActive
+                  ? "active:bg-[#7c2d12]"
+                  : "active:bg-[#054031]"
             )}
           >
             <div className="flex items-center gap-2 min-w-0">
               {isAlertMode ? (
                 <AlertCircle className="h-4 w-4 text-white animate-pulse shrink-0" />
               ) : (
-                <CalendarDays className="h-4 w-4 text-emerald-400 shrink-0" />
+                <CalendarDays className={cn("h-4 w-4 shrink-0", isSwapActive ? "text-orange-300" : "text-emerald-400")} />
               )}
               <p className="text-[12px] font-black tracking-tight truncate uppercase">
                 {isAlertMode ? (
@@ -150,7 +157,7 @@ export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, on
                   </span>
                 ) : (
                   <>
-                    <span className="opacity-70 mr-1.5">Próxima Leitura:</span>
+                    <span className="opacity-70 mr-1.5">{isSwapActive ? "Troca Solicitada:" : "Próxima Leitura:"}</span>
                     {isValid(parseISO(activeSlot.massDate)) ? format(parseISO(activeSlot.massDate), "dd/MM") : "--/--"} às {activeSlot.massTime.substring(0, 5)} - {activeSlot.role}
                   </>
                 )}
@@ -183,11 +190,13 @@ export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, on
               "p-3 transition-colors border-l",
               isAlertMode 
                 ? "hover:bg-red-700 border-red-700/50" 
-                : "hover:bg-emerald-800 border-emerald-800/50"
+                : isSwapActive
+                  ? "hover:bg-[#7c2d12] border-orange-900/50"
+                  : "hover:bg-emerald-800 border-emerald-800/50"
             )}
             title="Ver na escala"
           >
-            <ExternalLink className={cn("h-4 w-4", isAlertMode ? "text-white" : "text-emerald-400")} />
+            <ExternalLink className={cn("h-4 w-4", isAlertMode ? "text-white" : isSwapActive ? "text-orange-300" : "text-emerald-400")} />
           </button>
         </div>
       </div>

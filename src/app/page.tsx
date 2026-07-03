@@ -463,9 +463,8 @@ export default function Home() {
           {/* Seção Nova: Solicitações de Troca */}
           {swaps.filter(s => s.mass).length > 0 && (
             <section className="space-y-3">
-              <div className="flex items-center gap-2 px-1">
-                <RefreshCw className="h-3.5 w-3.5 text-amber-600 animate-spin-slow" />
-                <h2 className="text-xl font-black tracking-tight text-amber-600">
+              <div className="flex items-center justify-center px-1">
+                <h2 className="text-xl font-black tracking-tight text-amber-600 text-center">
                   Solicitações de Troca
                 </h2>
               </div>
