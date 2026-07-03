@@ -113,6 +113,7 @@ export default function Home() {
   const processedHashRef = useRef<string | null>(null)
   
   const [isUnconfirmedAlertOpen, setIsUnconfirmedAlertOpen] = useState(false)
+  const [shareSwapDialogData, setShareSwapDialogData] = useState<any | null>(null)
 
   // Lista de escalas do usuário logado que não foram confirmadas
   const myUnconfirmedSlots = useMemo(() => {
@@ -1099,6 +1100,29 @@ export default function Home() {
                         
                         toast.success("Solicitação de troca publicada!")
                         triggerRefresh()
+
+                        // Procurar informações para abrir o compartilhamento do whatsapp de imediato
+                        let targetMass: any = null
+                        let targetSlot: any = null
+                        schedule.forEach(mass => {
+                          const found = mass.slots.find((s: any) => s.id === swapTargetSlot.id)
+                           if (found) {
+                             targetMass = mass
+                             targetSlot = found
+                           }
+                        })
+
+                        if (targetMass && targetSlot) {
+                          setShareSwapDialogData({
+                            id: swapTargetSlot.id,
+                            role: targetSlot.role,
+                            mass: {
+                              date: targetMass.date,
+                              time: targetMass.time
+                            }
+                          })
+                        }
+                        
                         setSwapTargetSlot(null)
                       } catch (error) {
                         toast.error("Erro ao processar solicitação.")
@@ -1272,6 +1296,40 @@ export default function Home() {
                 className="w-full text-stone-500 font-black h-12 rounded-2xl hover:bg-stone-50 text-xs transition-colors"
               >
                 Decidir depois
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog de Compartilhamento no WhatsApp */}
+        <Dialog open={!!shareSwapDialogData} onOpenChange={(open) => !open && setShareSwapDialogData(null)}>
+          <DialogContent className="flex flex-col items-center justify-center p-6 max-w-[320px] sm:max-w-sm border-stone-200">
+            <DialogTitle className="text-stone-800 text-center font-heading text-lg font-bold">Compartilhar no WhatsApp?</DialogTitle>
+            <div className="text-center text-stone-600 text-sm my-2">
+              Gostaria de enviar essa solicitação de troca para o grupo de WhatsApp da comunidade?
+            </div>
+            <div className="flex flex-col gap-2 w-full mt-4">
+              <Button
+                variant="default"
+                className="w-full font-bold h-12 rounded-xl bg-green-700 hover:bg-green-800 text-white flex items-center justify-center gap-2"
+                onClick={() => {
+                  if (shareSwapDialogData) {
+                    handleShareSwap(shareSwapDialogData)
+                    setShareSwapDialogData(null)
+                  }
+                }}
+              >
+                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.262 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.45L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.623-1.023-5.086-2.884-6.948C16.572 2.014 14.12 1.01 11.66 1.01c-5.44 0-9.866 4.372-9.87 9.802 0 1.714.47 3.387 1.357 4.847l-.994 3.63 3.771-.977zm11.515-5.388c-.28-.14-1.65-.81-1.902-.9-.253-.09-.438-.14-.623.14-.184.28-.713.9-.874 1.09-.16.19-.32.21-.6.07-.28-.14-1.182-.43-2.25-1.385-.83-.74-1.39-1.653-1.55-1.93-.16-.28-.017-.43.12-.57.125-.13.28-.32.42-.48.14-.16.19-.28.28-.46.09-.19.045-.35-.02-.49-.067-.14-.624-1.5-.853-2.06-.224-.546-.474-.472-.65-.48-.17-.008-.363-.01-.557-.01-.19 0-.505.07-.77.36-.264.29-1.007.98-1.007 2.4 0 1.414 1.03 2.784 1.17 2.97.14.19 2.025 3.09 4.908 4.33.685.29 1.22.47 1.637.6.687.22 1.31.19 1.802.118.55-.08 1.65-.67 1.88-1.29.23-.62.23-1.15.16-1.29-.07-.14-.25-.23-.53-.37z"/>
+                </svg>
+                Compartilhar no WhatsApp
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full text-stone-500 font-medium h-12"
+                onClick={() => setShareSwapDialogData(null)}
+              >
+                Agora Não
               </Button>
             </div>
           </DialogContent>
