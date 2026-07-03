@@ -233,10 +233,9 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
       .select(`id, role, profile_id, is_swap_requested, profile:profiles!profile_id (full_name, avatar_url, auth_user_id), mass:masses!inner (date, time, special_description)`)
       .eq('is_swap_requested', true)
       .gte('mass.date', today)
-      .order('mass(date)', { ascending: true })
 
     if (error) throw error
-    return (data || []).map(s => ({
+    const mapped = (data || []).map(s => ({
       ...this.mapSlotToDomain(s, s.profile ? { [s.profile_id]: s.profile } : {}),
       mass: s.mass ? { 
         date: (s.mass as any).date, 
@@ -244,6 +243,13 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
         specialDescription: (s.mass as any).special_description 
       } : null
     })) as SwapRequest[]
+
+    return mapped.sort((a, b) => {
+      if (!a.mass || !b.mass) return 0;
+      const dateTimeA = new Date(`${a.mass.date}T${a.mass.time}`);
+      const dateTimeB = new Date(`${b.mass.date}T${b.mass.time}`);
+      return dateTimeA.getTime() - dateTimeB.getTime();
+    });
   }
 
   async deleteMass(massId: string): Promise<void> {
