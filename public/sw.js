@@ -101,7 +101,7 @@ self.addEventListener('push', (event) => {
     const data = event.data.json();
     const options = {
       body: data.body || 'Nova atualização no Liturgia SJE',
-      icon: '/notification-icon.png', 
+      icon: '/Logo-Liturgia-SJE.png', 
       badge: '/notification-icon.png',
       data: {
         url: data.url || '/'
