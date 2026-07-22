@@ -21,6 +21,10 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Liturgia SJE",
   },
+  other: {
+    "mobile-web-app-capable": "yes",
+    "application-name": "Liturgia SJE",
+  },
   icons: {
     icon: [
       { url: '/icons/favicon.ico' },
