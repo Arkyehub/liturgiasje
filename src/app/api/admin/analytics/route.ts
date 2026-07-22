@@ -30,7 +30,11 @@ export async function GET() {
         mass_id
       `)
 
-    if (slotsError) throw slotsError
+    if (slotsError) {
+      console.warn("[API Analytics Warning] slotsError:", slotsError)
+    }
+
+    const safeSlots = slots || []
 
     // Buscar missas para relacionar de forma segura
     const massIds = Array.from(new Set((slots || []).map(s => s.mass_id).filter(Boolean)))
@@ -63,8 +67,8 @@ export async function GET() {
       : 0
 
     // Rastreio de Trocas e Leitores Originais
-    const swapSlots = slots?.filter(s => s.original_profile_id && s.original_profile_id !== s.profile_id) || []
-    const activeSwapRequests = slots?.filter(s => s.is_swap_requested) || []
+    const swapSlots = safeSlots.filter(s => s.original_profile_id && s.original_profile_id !== s.profile_id)
+    const activeSwapRequests = safeSlots.filter(s => s.is_swap_requested)
 
     // Mapeamento de nomes de leitores por ID
     const profilesMap = Object.fromEntries((profiles || []).map(p => [p.id, p]))
@@ -87,7 +91,7 @@ export async function GET() {
     }).sort((a, b) => new Date(b.massDate || 0).getTime() - new Date(a.massDate || 0).getTime())
 
     // Confirmações pendentes
-    const unconfirmedSlots = (slots || [])
+    const unconfirmedSlots = safeSlots
       .filter(s => !s.is_confirmed && s.profile_id)
       .map(s => {
         const reader = profilesMap[s.profile_id]
@@ -102,7 +106,7 @@ export async function GET() {
           isSwapRequested: s.is_swap_requested
         }
       })
-      .sort((a, b) => new Date(a.massDate || 0).getTime() - new Date(b.massDate || 0).getTime())
+      .sort((a, b) => new Date(a.massDate || 0).getTime() - new Date(a.massDate || 0).getTime())
 
     return NextResponse.json({
       summary: {

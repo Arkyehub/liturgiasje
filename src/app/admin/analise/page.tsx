@@ -96,6 +96,7 @@ export default function AdminAnalyticsPage() {
       const result = await res.json()
       setData(result)
     } catch (error) {
+      console.error("[Analytics Error]:", error)
       toast.error("Erro ao carregar dados de análise.")
     } finally {
       setIsLoading(false)
