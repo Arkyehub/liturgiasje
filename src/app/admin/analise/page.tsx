@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/shared/hooks/useAuth"
-import { Header } from "@/shared/ui/Header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card"
 import { Badge } from "@/shared/ui/badge"
 import { Button } from "@/shared/ui/button"
@@ -13,17 +12,23 @@ import {
   UserX, 
   RefreshCw, 
   Clock, 
-  AlertCircle, 
-  ChevronRight, 
   Loader2, 
   BarChart3, 
-  ArrowLeft,
   ArrowRightLeft,
-  CalendarCheck
+  CalendarCheck,
+  Activity
 } from "lucide-react"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { toast } from "sonner"
+
+interface UserAccessItem {
+  id: string
+  fullName: string
+  role: string
+  whatsapp?: string
+  lastSeenAt?: string
+}
 
 interface AnalyticsData {
   summary: {
@@ -61,6 +66,7 @@ interface AnalyticsData {
     reader: { id: string; fullName: string; whatsapp?: string } | null
     isSwapRequested: boolean
   }>
+  userAccessList: UserAccessItem[]
   activeSwapRequests: Array<{
     id: string
     title: string
@@ -71,12 +77,45 @@ interface AnalyticsData {
   }>
 }
 
+function formatLastSeen(dateStr?: string): string {
+  if (!dateStr) return "Nunca acessou"
+  try {
+    const date = parseISO(dateStr)
+    const now = new Date()
+    const diffMs = Math.max(0, now.getTime() - date.getTime())
+    
+    const diffHoursTotal = Math.floor(diffMs / (1000 * 60 * 60))
+    const days = Math.floor(diffHoursTotal / 24)
+    const hours = diffHoursTotal % 24
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+
+    if (days > 0) {
+      if (hours > 0) {
+        return `há ${days} dia${days > 1 ? 's' : ''} e ${hours} hora${hours > 1 ? 's' : ''} atrás`
+      }
+      return `há ${days} dia${days > 1 ? 's' : ''} atrás`
+    }
+
+    if (hours > 0) {
+      return `há ${hours} hora${hours > 1 ? 's' : ''} e ${minutes} min atrás`
+    }
+
+    if (minutes > 0) {
+      return `há ${minutes} minuto${minutes > 1 ? 's' : ''} atrás`
+    }
+
+    return "acessou há poucos instantes"
+  } catch {
+    return "Data desconhecida"
+  }
+}
+
 export default function AdminAnalyticsPage() {
   const { user, profile, loading: authLoading } = useAuth()
   const router = useRouter()
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<"pending" | "swaps" | "unconfirmed">("pending")
+  const [activeTab, setActiveTab] = useState<"access" | "pending" | "swaps" | "unconfirmed">("access")
 
   useEffect(() => {
     if (!authLoading) {
@@ -114,13 +153,10 @@ export default function AdminAnalyticsPage() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="min-h-screen bg-stone-50/50 flex flex-col">
-        <Header user={profile ? { fullName: profile.fullName, avatarUrl: profile.avatarUrl, role: profile.role } : null} />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-3 text-stone-400">
-            <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
-            <p className="text-sm font-medium">Carregando painel de análise...</p>
-          </div>
+      <div className="min-h-screen bg-stone-50/50 flex flex-col items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-stone-400">
+          <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
+          <p className="text-sm font-medium">Carregando painel de análise...</p>
         </div>
       </div>
     )
@@ -128,13 +164,12 @@ export default function AdminAnalyticsPage() {
 
   if (!data) return null
 
+  // Cálculo da porcentagem de atividade recente para o gráfico
+  const now = new Date().getTime()
+  const maxDiffMs = 7 * 24 * 60 * 60 * 1000 // 7 dias como base de 100% de barra
+
   return (
     <div className="min-h-screen bg-stone-50/60 pb-12">
-      <Header 
-        user={profile ? { fullName: profile.fullName, avatarUrl: profile.avatarUrl, role: profile.role } : null}
-        showBackButton
-      />
-
       <main className="container max-w-4xl mx-auto px-4 pt-6 space-y-6 animate-in fade-in duration-300">
         {/* Cabeçalho da Página */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-stone-200/80 shadow-sm">
@@ -202,7 +237,7 @@ export default function AdminAnalyticsPage() {
           {/* Card 4: Confirmações Pendentes */}
           <div className="bg-white p-4 rounded-3xl border border-stone-200/80 shadow-sm flex flex-col justify-between">
             <div className="flex items-center justify-between text-stone-400 mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500">Pendentes</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500">Escalas Pendentes</span>
               <CalendarCheck className="h-4 w-4 text-rose-500" />
             </div>
             <div>
@@ -213,38 +248,118 @@ export default function AdminAnalyticsPage() {
         </div>
 
         {/* NAVEGAÇÃO DE ABAS */}
-        <div className="flex bg-stone-200/60 p-1 rounded-2xl gap-1">
+        <div className="grid grid-cols-2 sm:grid-cols-4 bg-stone-200/60 p-1 rounded-2xl gap-1">
           <button
-            onClick={() => setActiveTab("pending")}
-            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
-              activeTab === "pending"
+            onClick={() => setActiveTab("access")}
+            className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "access"
                 ? "bg-white text-stone-800 shadow-sm"
                 : "text-stone-500 hover:text-stone-700"
             }`}
           >
-            Sem Acesso ({data.pendingAccounts.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("swaps")}
-            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
-              activeTab === "swaps"
-                ? "bg-white text-stone-800 shadow-sm"
-                : "text-stone-500 hover:text-stone-700"
-            }`}
-          >
-            Histórico de Trocas ({data.swapHistory.length})
+            Acessos ({data.userAccessList.length})
           </button>
           <button
             onClick={() => setActiveTab("unconfirmed")}
-            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
+            className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
               activeTab === "unconfirmed"
                 ? "bg-white text-stone-800 shadow-sm"
                 : "text-stone-500 hover:text-stone-700"
             }`}
           >
-            Presença Pendente ({data.unconfirmedSlots.length})
+            Sem Confirmação ({data.unconfirmedSlots.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("pending")}
+            className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "pending"
+                ? "bg-white text-stone-800 shadow-sm"
+                : "text-stone-500 hover:text-stone-700"
+            }`}
+          >
+            Sem Cadastro ({data.pendingAccounts.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("swaps")}
+            className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "swaps"
+                ? "bg-white text-stone-800 shadow-sm"
+                : "text-stone-500 hover:text-stone-700"
+            }`}
+          >
+            Histórico Trocas ({data.swapHistory.length})
           </button>
         </div>
+
+        {/* ABA 0: GRÁFICO E LISTA DE ACESSO DOS USUÁRIOS */}
+        {activeTab === "access" && (
+          <Card className="rounded-3xl border-stone-200/80 shadow-sm overflow-hidden">
+            <CardHeader className="bg-white pb-3 border-b border-stone-100">
+              <CardTitle className="text-base font-bold text-stone-800 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-amber-600" />
+                  Últimos Acessos dos Usuários
+                </span>
+                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                  {data.userAccessList.length} cadastrados
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 bg-white space-y-4">
+              {data.userAccessList.length === 0 ? (
+                <div className="p-8 text-center text-stone-400 text-sm">
+                  Nenhum usuário com login registrado.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {data.userAccessList.map((u) => {
+                    const lastSeenTime = u.lastSeenAt ? new Date(u.lastSeenAt).getTime() : 0
+                    const diffMs = lastSeenTime > 0 ? Math.max(0, now - lastSeenTime) : maxDiffMs
+                    // Porcentagem da barra de atividade (recentes ficam mais preenchidos)
+                    const activityPercent = Math.max(8, Math.min(100, Math.round(100 - (diffMs / maxDiffMs) * 100)))
+
+                    const isVeryRecent = diffMs < 24 * 60 * 60 * 1000 // Menos de 24 horas
+
+                    return (
+                      <div key={u.id} className="p-3 bg-stone-50/70 rounded-2xl border border-stone-100 space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`h-2.5 w-2.5 rounded-full ${isVeryRecent ? 'bg-emerald-500 animate-pulse' : 'bg-stone-300'}`} />
+                            <h4 className="text-sm font-bold text-stone-800">{u.fullName}</h4>
+                            {u.role === "admin" && (
+                              <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 text-[9px] font-bold py-0">
+                                Admin
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 text-stone-500 text-xs font-semibold">
+                            <Clock className="h-3.5 w-3.5 text-stone-400" />
+                            <span>{formatLastSeen(u.lastSeenAt)}</span>
+                          </div>
+                        </div>
+
+                        {/* Barra visual de recência */}
+                        <div className="w-full bg-stone-200/60 rounded-full h-2 overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              isVeryRecent 
+                                ? 'bg-emerald-500' 
+                                : diffMs < 3 * 24 * 60 * 60 * 1000 
+                                  ? 'bg-amber-500' 
+                                  : 'bg-stone-400'
+                            }`}
+                            style={{ width: `${activityPercent}%` }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* ABA 1: LEITORES SEM ACESSO / CADASTRO */}
         {activeTab === "pending" && (

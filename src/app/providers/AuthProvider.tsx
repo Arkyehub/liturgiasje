@@ -30,6 +30,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const profileData = await makeGetProfileByAuthId().execute(authUserId)
       console.log("[AuthProvider] Perfil encontrado:", profileData)
       setProfile(profileData)
+      if (profileData?.id) {
+        supabase
+          .from("profiles")
+          .update({ last_seen_at: new Date().toISOString() })
+          .eq("id", profileData.id)
+          .then()
+      }
     } catch (error: any) {
       console.error("[AuthProvider] Erro ao buscar perfil:", error?.message || error)
       if (error?.details) console.error("[AuthProvider] Detalhes do erro:", error.details)

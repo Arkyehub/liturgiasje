@@ -8,13 +8,26 @@ export async function GET() {
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // 1. Buscar todos os perfis de leitores
+    // 1. Buscar todos os perfis de leitores com last_seen_at
     const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
-      .select("id, full_name, whatsapp, role, auth_user_id, created_at")
+      .select("id, full_name, whatsapp, role, auth_user_id, created_at, last_seen_at")
       .order("full_name", { ascending: true })
 
     if (profilesError) throw profilesError
+
+    // Buscar logins no auth.users via admin client para fallback de last_seen_at
+    let authUsersMap: Record<string, string | null> = {}
+    try {
+      const { data: authUsers } = await supabase.auth.admin.listUsers()
+      if (authUsers?.users) {
+        authUsersMap = Object.fromEntries(
+          authUsers.users.map(u => [u.id, u.last_sign_in_at || u.created_at || null])
+        )
+      }
+    } catch (e) {
+      console.warn("[Analytics API] Não foi possível buscar auth.users:", e)
+    }
 
     // 2. Buscar todas as escalas de missas (schedule_slots com masses)
     const { data: slots, error: slotsError } = await supabase
@@ -90,9 +103,9 @@ export async function GET() {
       }
     }).sort((a, b) => new Date(b.massDate || 0).getTime() - new Date(a.massDate || 0).getTime())
 
-    // Confirmações pendentes
+    // Confirmações pendentes (Filtrar slots que possuem um leitor atribuído e is_confirmed !== true)
     const unconfirmedSlots = safeSlots
-      .filter(s => !s.is_confirmed && s.profile_id)
+      .filter(s => s.profile_id && s.is_confirmed !== true)
       .map(s => {
         const reader = profilesMap[s.profile_id]
         const massData = massesMap[s.mass_id] || null
@@ -107,6 +120,26 @@ export async function GET() {
         }
       })
       .sort((a, b) => new Date(a.massDate || 0).getTime() - new Date(a.massDate || 0).getTime())
+
+    // Processar acessos dos leitores (User Activity)
+    const userAccessList = (profiles || [])
+      .filter(p => !!p.auth_user_id)
+      .map(p => {
+        const authLastSignIn = p.auth_user_id ? authUsersMap[p.auth_user_id] : null
+        const lastSeen = p.last_seen_at || authLastSignIn || p.created_at
+        return {
+          id: p.id,
+          fullName: p.full_name,
+          role: p.role,
+          whatsapp: p.whatsapp,
+          lastSeenAt: lastSeen
+        }
+      })
+      .sort((a, b) => {
+        const dateA = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0
+        const dateB = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0
+        return dateB - dateA
+      })
 
     return NextResponse.json({
       summary: {
@@ -127,6 +160,7 @@ export async function GET() {
       })),
       swapHistory,
       unconfirmedSlots,
+      userAccessList,
       activeSwapRequests: (announcements || []).map(a => {
         const author = profilesMap[a.author_id]
         return {

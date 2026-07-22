@@ -11,6 +11,7 @@ export interface Profile {
     day_preferences?: Record<string, string[]>
   }
   claimedAt?: string
+  lastSeenAt?: string
   createdAt: string
   updatedAt: string
 }
