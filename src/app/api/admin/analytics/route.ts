@@ -123,14 +123,17 @@ export async function GET() {
       })),
       swapHistory,
       unconfirmedSlots,
-      activeSwapRequests: (announcements || []).map(a => ({
-        id: a.id,
-        title: a.title,
-        content: a.content,
-        createdAt: a.created_at,
-        authorName: (a.author as any)?.full_name || "Desconhecido",
-        slotId: a.related_schedule_slot_id
-      }))
+      activeSwapRequests: (announcements || []).map(a => {
+        const author = profilesMap[a.author_id]
+        return {
+          id: a.id,
+          title: a.title,
+          content: a.content,
+          createdAt: a.created_at,
+          authorName: author?.full_name || "Desconhecido",
+          slotId: a.related_schedule_slot_id
+        }
+      })
     })
   } catch (error: any) {
     console.error("[API Analytics Error]:", error)
