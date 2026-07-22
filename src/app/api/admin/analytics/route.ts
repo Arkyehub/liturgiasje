@@ -19,8 +19,8 @@ export async function GET() {
     // Buscar logins no auth.users via admin client para fallback de last_seen_at
     let authUsersMap: Record<string, string | null> = {}
     try {
-      const { data: authUsers } = await supabase.auth.admin.listUsers()
-      if (authUsers?.users) {
+      const { data: authUsers, error: authUsersError } = await supabase.auth.admin.listUsers()
+      if (!authUsersError && authUsers?.users) {
         authUsersMap = Object.fromEntries(
           authUsers.users.map(u => [u.id, u.last_sign_in_at || u.created_at || null])
         )
