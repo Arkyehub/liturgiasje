@@ -27,33 +27,30 @@ export async function GET() {
         profile_id,
         original_profile_id,
         created_at,
-        mass:masses (
-          id,
-          date,
-          time,
-          special_description
-        )
+        mass_id
       `)
 
     if (slotsError) throw slotsError
 
-    // 3. Buscar solicitações de troca no mural (announcements com tipo 'Troca')
-    const { data: announcements, error: annError } = await supabase
+    // Buscar missas para relacionar de forma segura
+    const massIds = Array.from(new Set((slots || []).map(s => s.mass_id).filter(Boolean)))
+    let massesMap: Record<string, any> = {}
+    if (massIds.length > 0) {
+      const { data: masses } = await supabase
+        .from("masses")
+        .select("id, date, time, special_description")
+        .in("id", massIds)
+      if (masses) {
+        massesMap = Object.fromEntries(masses.map(m => [m.id, m]))
+      }
+    }
+
+    // 3. Buscar solicitações de troca no mural de forma simples e segura
+    const { data: announcements } = await supabase
       .from("announcements")
-      .select(`
-        id,
-        title,
-        content,
-        type,
-        created_at,
-        author_id,
-        related_schedule_slot_id,
-        author:profiles!author_id(id, full_name)
-      `)
+      .select("id, title, content, type, created_at, author_id, related_schedule_slot_id")
       .eq("type", "Troca")
       .order("created_at", { ascending: false })
-
-    if (annError) console.error("Erro ao buscar avisos de troca:", annError)
 
     // PROCESSAMENTO DE MÉTRICAS
 
@@ -75,7 +72,7 @@ export async function GET() {
     const swapHistory = swapSlots.map(s => {
       const original = profilesMap[s.original_profile_id]
       const current = profilesMap[s.profile_id]
-      const massData = s.mass as any
+      const massData = massesMap[s.mass_id] || null
 
       return {
         id: s.id,
@@ -94,7 +91,7 @@ export async function GET() {
       .filter(s => !s.is_confirmed && s.profile_id)
       .map(s => {
         const reader = profilesMap[s.profile_id]
-        const massData = s.mass as any
+        const massData = massesMap[s.mass_id] || null
         return {
           id: s.id,
           role: s.role,
