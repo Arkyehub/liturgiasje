@@ -103,9 +103,15 @@ export async function GET() {
       }
     }).sort((a, b) => new Date(b.massDate || 0).getTime() - new Date(a.massDate || 0).getTime())
 
-    // Confirmações pendentes (Filtrar slots que possuem um leitor atribuído e is_confirmed !== true)
+    // Confirmações pendentes (Filtrar slots com leitor atribuído, não confirmados e de missas a partir de hoje/futuras)
+    const todayStr = new Date().toISOString().split("T")[0]
     const unconfirmedSlots = safeSlots
-      .filter(s => s.profile_id && s.is_confirmed !== true)
+      .filter(s => {
+        if (!s.profile_id || s.is_confirmed === true) return false
+        const massData = massesMap[s.mass_id]
+        if (!massData?.date) return false
+        return massData.date >= todayStr
+      })
       .map(s => {
         const reader = profilesMap[s.profile_id]
         const massData = massesMap[s.mass_id] || null
@@ -119,7 +125,7 @@ export async function GET() {
           isSwapRequested: s.is_swap_requested
         }
       })
-      .sort((a, b) => new Date(a.massDate || 0).getTime() - new Date(a.massDate || 0).getTime())
+      .sort((a, b) => new Date(a.massDate || 0).getTime() - new Date(b.massDate || 0).getTime())
 
     // Processar acessos dos leitores (User Activity)
     const userAccessList = (profiles || [])
