@@ -45,15 +45,25 @@ export function UnavailableForm({ profileId, onClose }: UnavailableFormProps) {
     }
 
     const dateStr = format(date, "yyyy-MM-dd")
+    const isCurrentlySelected = unavailableDates.some(d => format(d, "yyyy-MM-dd") === dateStr)
+
+    // Atualização otimista imediata para resposta instantânea ao toque do usuário
+    setUnavailableDates(prev =>
+      isCurrentlySelected
+        ? prev.filter(d => format(d, "yyyy-MM-dd") !== dateStr)
+        : [...prev, date]
+    )
+
     try {
-      const result = await makeToggleUnavailableDate().execute(profileId, dateStr)
-      if (result.action === 'added') {
-        setUnavailableDates(prev => [...prev, date])
-      } else {
-        setUnavailableDates(prev => prev.filter(d => format(d, "yyyy-MM-dd") !== dateStr))
-      }
+      await makeToggleUnavailableDate().execute(profileId, dateStr)
     } catch (error) {
-      toast.error("Erro ao atualizar data.")
+      // Em caso de falha na API, reverter o estado
+      setUnavailableDates(prev =>
+        isCurrentlySelected
+          ? [...prev, date]
+          : prev.filter(d => format(d, "yyyy-MM-dd") !== dateStr)
+      )
+      toast.error("Erro ao atualizar data no servidor.")
     }
   }
 
@@ -81,15 +91,13 @@ export function UnavailableForm({ profileId, onClose }: UnavailableFormProps) {
           locale={ptBR}
           month={currentMonth}
           onMonthChange={setCurrentMonth}
+          showOutsideDays={false}
           disabled={(date) => date.getMonth() !== currentMonth.getMonth() || date.getFullYear() !== currentMonth.getFullYear()}
           modifiers={{
             unavailable: unavailableDates
           }}
           modifiersClassNames={{
             unavailable: "bg-red-500 text-white hover:bg-red-600 rounded-lg shadow-sm font-bold after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1 after:h-1 after:bg-white/50 after:rounded-full"
-          }}
-          classNames={{
-            outside: "text-transparent bg-transparent hover:bg-transparent pointer-events-none select-none border-none shadow-none opacity-0"
           }}
           className="rounded-2xl border-none shadow-none"
         />
