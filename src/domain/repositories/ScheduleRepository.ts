@@ -1,6 +1,7 @@
-import { Mass, ScheduleSlot, SwapRequest, CreateMassData, CreateSlotData } from "../models/Schedule"
+import { Mass, ScheduleSlot, SwapRequest, CreateMassData, CreateSlotData, ScheduleBatchEntry, RemovedMass } from "../models/Schedule"
 
 export interface ScheduleRepository {
+  saveScheduleBatch(entries: ScheduleBatchEntry[], removed: RemovedMass[]): Promise<void>
   listForMonth(date: Date, isAdmin?: boolean): Promise<Mass[]>
   confirmSlot(slotId: string, profileId: string): Promise<ScheduleSlot>
   requestSwap(slotId: string): Promise<void>
@@ -10,6 +11,7 @@ export interface ScheduleRepository {
   publishMonth(monthReference: string): Promise<void>
   updateMass(massId: string, massData: CreateMassData, slots: CreateSlotData[]): Promise<void>
   listAllSwaps(): Promise<SwapRequest[]>
+  deleteMasses(massIds: string[]): Promise<void>
   deleteMass(massId: string): Promise<void>
   acceptSwap(slotId: string, newProfileId: string): Promise<void>
   checkMassExists(date: string): Promise<Mass[]>

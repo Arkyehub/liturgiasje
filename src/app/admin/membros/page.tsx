@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/shared/hooks/useAuth"
 import { 
   makeListProfiles, 
-  makeDeleteProfile, 
+  makeArchiveProfile,
   makeCreateProfile, 
   makeUpdateProfile 
 } from "@/main/factories/usecases/profiles"
@@ -74,18 +74,19 @@ export default function AdminMembersPage() {
   const handleDelete = async (id: string) => {
     if (!profileToDelete) return
     
-    // Atualização Otimista
+    // A lista é atualizada somente após a confirmação do servidor
     const previousProfiles = [...profiles]
-    setProfiles(current => current.filter(p => p.id !== id))
+
     setIsDeleteDrawerOpen(false)
     
     try {
       setIsDeleting(true)
-      await makeDeleteProfile().execute(id)
-      toast.success("Perfil excluído.")
+      await makeArchiveProfile().execute(id)
+      setProfiles(current => current.filter(p => p.id !== id))
+      toast.success("Membro inativado.")
     } catch (error) {
       setProfiles(previousProfiles)
-      toast.error("Erro ao excluir perfil.")
+      toast.error("Erro ao inativar membro.")
     } finally {
       setIsDeleting(false)
       setProfileToDelete(null)
@@ -311,9 +312,9 @@ export default function AdminMembersPage() {
         <DrawerContent>
           <div className="mx-auto w-full max-w-sm">
             <DrawerHeader className="text-center">
-              <DrawerTitle className="text-stone-800">Excluir Perfil?</DrawerTitle>
+              <DrawerTitle className="text-stone-800">Inativar membro?</DrawerTitle>
               <DrawerDescription>
-                Esta ação removerá o perfil <strong>{profileToDelete?.fullName}</strong> e todos os registros relacionados (escalas, trocas e indisponibilidades) permanentemente. Se o perfil estiver vinculado a uma conta de login, o acesso será mantido mas sem os dados de leitor.
+                O membro <strong>{profileToDelete?.fullName}</strong> deixará de ter acesso ao sistema. As vagas após hoje serão liberadas e o histórico preservado. As celebrações de hoje precisam de revisão manual.
               </DrawerDescription>
             </DrawerHeader>
             <DrawerFooter className="flex flex-col gap-2 pb-8">
@@ -323,7 +324,7 @@ export default function AdminMembersPage() {
                 disabled={isDeleting}
                 onClick={() => profileToDelete && handleDelete(profileToDelete.id)}
               >
-                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sim, Excluir"}
+                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sim, inativar"}
               </Button>
               <DrawerClose asChild>
                 <Button variant="ghost" className="w-full text-stone-500 font-medium h-12" disabled={isDeleting}>

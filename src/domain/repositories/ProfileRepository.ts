@@ -7,7 +7,7 @@ export interface ProfileRepository {
   search(query: string, onlyPending?: boolean): Promise<Profile[]>
   create(data: CreateProfileData): Promise<Profile>
   update(id: string, data: Partial<Profile>): Promise<Profile>
-  delete(id: string): Promise<void>
+  archive(id: string): Promise<void>
   claim(profileId: string, authUserId: string): Promise<Profile>
   uploadAvatar(id: string, file: Blob): Promise<string>
   listBirthdays(): Promise<BirthdayInfo[]>

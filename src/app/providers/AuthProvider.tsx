@@ -23,14 +23,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const fetchProfile = async (authUserId: string) => {
-    setLoading(true)
+  const fetchProfile = async (authUserId: string, silent = false) => {
+    if (!silent) setLoading(true)
     console.log("[AuthProvider] Buscando perfil para authUserId:", authUserId)
     try {
       const profileData = await makeGetProfileByAuthId().execute(authUserId)
       console.log("[AuthProvider] Perfil encontrado:", profileData)
       setProfile(profileData)
-      if (profileData?.id) {
+      if (profileData?.id && profileData.archivedAt === null) {
         supabase
           .from("profiles")
           .update({ last_seen_at: new Date().toISOString() })
@@ -38,11 +38,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .then()
       }
     } catch (error: any) {
+      setProfile(null)
       console.error("[AuthProvider] Erro ao buscar perfil:", error?.message || error)
       if (error?.details) console.error("[AuthProvider] Detalhes do erro:", error.details)
       if (error?.hint) console.error("[AuthProvider] Dica do banco:", error.hint)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -74,6 +75,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
+  useEffect(() => {
+    if (!user?.id) return
+    const refresh = () => { void fetchProfile(user.id, true) }
+    window.addEventListener('focus', refresh)
+    const timer = window.setInterval(refresh, 30000)
+    return () => { window.removeEventListener('focus', refresh); window.clearInterval(timer) }
+  }, [user?.id])
   const signInWithGoogle = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -92,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = {
     user,
     profile,
-    isActive: !!profile,
+    isActive: !!profile && profile.archivedAt === null,
     loading,
     refreshProfile: async () => {
       if (user) await fetchProfile(user.id)

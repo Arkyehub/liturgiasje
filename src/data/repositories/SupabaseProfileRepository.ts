@@ -14,6 +14,7 @@ export class SupabaseProfileRepository implements ProfileRepository {
   private mapToDomain(p: any): Profile {
     return {
       id: p.id,
+      archivedAt: p.archived_at,
       authUserId: p.auth_user_id,
       fullName: p.full_name,
       email: p.email,
@@ -41,7 +42,7 @@ export class SupabaseProfileRepository implements ProfileRepository {
   }
 
   async listAll(): Promise<Profile[]> {
-    const { data, error } = await supabase.from('profiles').select('*').order('full_name')
+    const { data, error } = await supabase.from('profiles').select('*').is('archived_at', null).order('full_name')
     if (error) throw error
     return (data || []).map(this.mapToDomain)
   }
@@ -52,7 +53,7 @@ export class SupabaseProfileRepository implements ProfileRepository {
       ? `%${digitsOnly.split("").join("%")}%` 
       : `%${query}%`
 
-    let builder = supabase.from('profiles').select('*')
+    let builder = supabase.from('profiles').select('*').is('archived_at', null)
     
     if (onlyPending) {
       builder = builder.is('auth_user_id', null)
@@ -86,12 +87,19 @@ export class SupabaseProfileRepository implements ProfileRepository {
   }
 
   async update(id: string, data: Partial<Profile>): Promise<Profile> {
+    if (data.role !== undefined) {
+      if (Object.keys(data).some(key => key !== 'role')) throw new Error('ROLE_UPDATE_MUST_BE_SEPARATE')
+      const { error } = await supabase.rpc('set_member_role', { target_profile_id: id, new_role: data.role })
+      if (error) throw error
+      const profile = await this.getById(id)
+      if (!profile) throw new Error('PROFILE_NOT_FOUND')
+      return profile
+    }
     const updateData: any = {}
     if (data.fullName) updateData.full_name = data.fullName
     if (data.email !== undefined) updateData.email = data.email
     if (data.avatarUrl !== undefined) updateData.avatar_url = data.avatarUrl
     if (data.whatsapp !== undefined) updateData.whatsapp = data.whatsapp
-    if (data.role !== undefined) updateData.role = data.role
     if (data.birthDate !== undefined) updateData.birth_date = data.birthDate
     if (data.preferences !== undefined) updateData.preferences = data.preferences
     if (data.authUserId !== undefined) updateData.auth_user_id = data.authUserId
@@ -107,7 +115,7 @@ export class SupabaseProfileRepository implements ProfileRepository {
     return this.mapToDomain(profile)
   }
 
-  async delete(id: string): Promise<void> {
+  async archive(id: string): Promise<void> {
     const response = await fetch('/api/admin/profiles/delete', {
       method: 'POST',
       body: JSON.stringify({ profileId: id }),
@@ -151,7 +159,7 @@ export class SupabaseProfileRepository implements ProfileRepository {
   }
 
   async listBirthdays(): Promise<BirthdayInfo[]> {
-    const { data, error } = await supabase.from('profiles').select('id, full_name, avatar_url, birth_date, auth_user_id').not('birth_date', 'is', null).order('birth_date')
+    const { data, error } = await supabase.from('profiles').select('id, full_name, avatar_url, birth_date, auth_user_id').is('archived_at', null).not('birth_date', 'is', null).order('birth_date')
     if (error) throw error
     return (data || []).map(p => ({
       id: p.id,

@@ -1,3 +1,4 @@
+-- Arquivamento e histórico requerem também migration_archive_profiles.sql (rascunho não homologado).
 -- 1. Tabelas de Identidade e Usuários
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -10,6 +11,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     birth_date DATE,
     preferences JSONB DEFAULT '{}',
     claimed_at TIMESTAMPTZ,
+    last_seen_at TIMESTAMPTZ,
+    archived_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -22,6 +25,7 @@ CREATE TABLE IF NOT EXISTS public.masses (
     special_description TEXT,
     external_group TEXT, -- Ex: "Catequese"
     month_reference TEXT NOT NULL, -- Ex: "2026-04"
+    schedule_revision BIGINT NOT NULL DEFAULT 0,
     is_published BOOLEAN DEFAULT false,
     photo_url TEXT,
     photo_description TEXT,
@@ -108,7 +112,7 @@ AS $$
 BEGIN
   RETURN EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE auth_user_id = auth.uid() AND role = 'admin'
+    WHERE auth_user_id = auth.uid() AND role = 'admin' AND archived_at IS NULL
   );
 END;
 $$;

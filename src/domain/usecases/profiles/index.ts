@@ -43,10 +43,10 @@ export class UpdateProfile {
   }
 }
 
-export class DeleteProfile {
+export class ArchiveProfile {
   constructor(private readonly repository: ProfileRepository) {}
   async execute(id: string): Promise<void> {
-    return this.repository.delete(id)
+    return this.repository.archive(id)
   }
 }
 

@@ -24,6 +24,7 @@ import { supabase } from "@/shared/api/supabase"
 import { cn } from "@/shared/lib/utils"
 import { toast } from "sonner"
 import { APP_VERSION } from "@/shared/constants/version"
+import { scheduleErrorMessage } from "@/features/schedule/scheduleErrorMessage"
 import { usePullToRefresh } from "@/shared/hooks/usePullToRefresh"
 import {
   Sheet,
@@ -90,7 +91,7 @@ export default function Home() {
     requestSwap,
     cancelSwap,
     acceptSwap,
-    deleteMass,
+    deleteMasses,
     publishMonth,
     updateMassesStatus
   } = useSchedule()
@@ -958,8 +959,11 @@ export default function Home() {
                             'L': 'Leitura Única'
                           } as Record<string, string>)[s.role]) || s.role,
                           readerName: s.readerName,
+                          readerArchived: !!s.profile?.archivedAt,
+                          previousAssignments: s.previousAssignments,
                           avatarUrl: s.avatarUrl,
-                          originalReaderName: s.originalReader?.fullName,
+                          originalReaderName: s.originalProfile?.fullName,
+                          originalReaderArchived: !!s.originalProfile?.archivedAt,
                           isConfirmed: s.isConfirmed,
                           isSwapRequested: s.isSwapRequested,
                           isClaimed: s.isClaimed,
@@ -1084,12 +1088,12 @@ export default function Home() {
                       setIsDeletingSchedule(true)
                       try {
                         // Exclui todos os horários vinculados ao card (dia)
-                        await Promise.all(scheduleToDelete.map(id => deleteMass(id)))
+                        await deleteMasses(scheduleToDelete)
                         toast.success("Dia removido da escala.")
                         triggerRefresh()
                         setScheduleToDelete(null)
                       } catch (error) {
-                        toast.error("Erro ao excluir horários do dia.")
+                        toast.error(scheduleErrorMessage(error, "Erro ao excluir horários do dia."))
                       } finally {
                         setIsDeletingSchedule(false)
                       }

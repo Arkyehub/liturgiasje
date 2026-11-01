@@ -1,17 +1,26 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { createClient as createSessionClient } from "@/shared/api/supabaseServer"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export async function GET() {
   try {
+    const session = await createSessionClient()
+    const { data: { user }, error: authError } = await session.auth.getUser()
+    if (authError || !user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
+    const { data: profile, error: profileError } = await session.from("profiles")
+      .select("role, archived_at").eq("auth_user_id", user.id).maybeSingle()
+    if (profileError || !profile || profile.role !== "admin" || profile.archived_at !== null) {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
+    }
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // 1. Buscar todos os perfis de leitores com last_seen_at
     const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
-      .select("id, full_name, whatsapp, role, auth_user_id, created_at, last_seen_at")
+      .select("id, full_name, whatsapp, role, auth_user_id, created_at, last_seen_at, archived_at")
       .order("full_name", { ascending: true })
 
     if (profilesError) throw profilesError
@@ -65,15 +74,16 @@ export async function GET() {
     // 3. Buscar solicitações de troca no mural de forma simples e segura
     const { data: announcements } = await supabase
       .from("announcements")
-      .select("id, title, content, type, created_at, author_id, related_schedule_slot_id")
+      .select("id, title, content, type, created_at, profile_id, related_schedule_slot_id")
       .eq("type", "Troca")
       .order("created_at", { ascending: false })
 
     // PROCESSAMENTO DE MÉTRICAS
 
-    const totalReaders = profiles?.length || 0
-    const activeAccounts = profiles?.filter(p => !!p.auth_user_id) || []
-    const pendingAccounts = profiles?.filter(p => !p.auth_user_id) || []
+    const activeProfiles = (profiles || []).filter(p => p.archived_at === null)
+    const totalReaders = activeProfiles.length
+    const activeAccounts = activeProfiles.filter(p => !!p.auth_user_id)
+    const pendingAccounts = activeProfiles.filter(p => !p.auth_user_id)
 
     const engagementRate = totalReaders > 0 
       ? Math.round((activeAccounts.length / totalReaders) * 100) 
@@ -128,7 +138,7 @@ export async function GET() {
       .sort((a, b) => new Date(a.massDate || 0).getTime() - new Date(b.massDate || 0).getTime())
 
     // Processar acessos dos leitores (User Activity)
-    const userAccessList = (profiles || [])
+    const userAccessList = activeProfiles
       .filter(p => !!p.auth_user_id)
       .map(p => {
         const authLastSignIn = p.auth_user_id ? authUsersMap[p.auth_user_id] : null
@@ -168,7 +178,7 @@ export async function GET() {
       unconfirmedSlots,
       userAccessList,
       activeSwapRequests: (announcements || []).map(a => {
-        const author = profilesMap[a.author_id]
+        const author = profilesMap[a.profile_id]
         return {
           id: a.id,
           title: a.title,

@@ -4,6 +4,7 @@ import { supabase } from "@/shared/api/supabase"
 jest.mock("@/shared/api/supabase", () => ({
   supabase: {
     from: jest.fn(),
+    rpc: jest.fn().mockResolvedValue({error:null}),
     storage: {
       from: jest.fn()
     },

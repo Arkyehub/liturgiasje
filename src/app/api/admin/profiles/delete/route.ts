@@ -1,117 +1,27 @@
-import { createClient, createAdminClient } from '@/shared/api/supabaseServer';
-import { NextResponse } from 'next/server';
+import { createClient } from '@/shared/api/supabaseServer'
+import { NextResponse } from 'next/server'
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(request: Request) {
   try {
-    const { profileId } = await request.json();
-
-    if (!profileId) {
-      return NextResponse.json({ error: 'ID do perfil não fornecido' }, { status: 400 });
+    const body = await request.json().catch(() => null)
+    if (typeof body?.profileId !== 'string' || !uuid.test(body.profileId)) {
+      return NextResponse.json({ error: 'ID inválido' }, { status: 400 })
     }
-
-    const supabase = await createClient();
-    
-    // 1. Verificar se o usuário atual é admin
-    const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
-    if (authError || !currentUser) {
-      return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    const { data, error } = await supabase.rpc('archive_member', { target_profile_id: body.profileId })
+    if (error) {
+      if (error.code === '42501') return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
+      if (error.code === 'P0002') return NextResponse.json({ error: 'Perfil não encontrado' }, { status: 404 })
+      return NextResponse.json({ error: 'Não foi possível inativar o membro' }, { status: 500 })
     }
-
-    const { data: currentUserProfile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('auth_user_id', currentUser.id)
-      .single();
-
-    if (currentUserProfile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Acesso negado: Apenas administradores podem excluir perfis' }, { status: 403 });
-    }
-
-    // 2. Buscar o perfil para deletar
-    const { data: profileToDelete, error: fetchError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', profileId)
-      .single();
-
-    if (fetchError || !profileToDelete) {
-      return NextResponse.json({ error: 'Perfil não encontrado' }, { status: 404 });
-    }
-
-    const authUserId = profileToDelete.auth_user_id;
-    const adminSupabase = createAdminClient();
-
-    // 3. LIMPEZA DE ESCALAS (schedule_slots)
-    // Resetar qualquer vaga que este perfil ocupe
-    const { error: slotsError } = await adminSupabase
-      .from('schedule_slots')
-      .update({
-        profile_id: null,
-        is_confirmed: false,
-        is_swap_requested: false
-      })
-      .or(`profile_id.eq.${profileId},original_reader_id.eq.${authUserId || '00000000-0000-0000-0000-000000000000'},reader_id.eq.${authUserId || '00000000-0000-0000-0000-000000000000'}`);
-
-    if (slotsError) {
-      console.error('Erro ao limpar slots:', slotsError);
-    }
-
-    // 4. LIMPEZA DE INDISPONIBILIDADES
-    const { error: unavailError } = await adminSupabase
-      .from('unavailable_dates')
-      .delete()
-      .eq('profile_id', profileId);
-    
-    if (unavailError) console.error('Erro ao limpar indisponibilidades:', unavailError);
-
-    // 5. LIMPEZA DE AVISOS, VISUALIZAÇÕES E INSCRIÇÕES PUSH
-    // Remover visualizações de avisos feitas por este perfil
-    const { error: viewsError } = await adminSupabase
-      .from('announcement_views')
-      .delete()
-      .eq('profile_id', profileId);
-
-    if (viewsError) console.error('Erro ao limpar visualizações:', viewsError);
-
-    // Remover avisos de troca vinculados ou criados pelo perfil
-    const { error: announcementsError } = await adminSupabase
-      .from('announcements')
-      .delete()
-      .eq('profile_id', profileId);
-    
-    if (announcementsError) console.error('Erro ao limpar avisos:', announcementsError);
-
-    const { error: pushError } = await adminSupabase
-      .from('push_subscriptions')
-      .delete()
-      .eq('profile_id', profileId);
-
-    if (pushError) console.error('Erro ao limpar push:', pushError);
-
-    // 6. REMOÇÃO DE AUTH (se houver vínculo)
-    if (authUserId) {
-      const { error: authDeleteError } = await adminSupabase.auth.admin.deleteUser(authUserId);
-      if (authDeleteError) {
-        console.error('Erro ao deletar usuário do Auth:', authDeleteError);
-      }
-    }
-
-    // 7. REMOÇÃO DO PERFIL
-    const { error: finalDeleteError } = await adminSupabase
-      .from('profiles')
-      .delete()
-      .eq('id', profileId);
-
-    if (finalDeleteError) {
-      throw finalDeleteError;
-    }
-
-    return NextResponse.json({ success: true, message: 'Perfil e registros vinculados excluídos com sucesso' });
-
-  } catch (error: any) {
-    console.error('Erro na rota de exclusão de perfil:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (data !== 'archived' && data !== 'already_archived') return NextResponse.json({ error: 'Resultado inesperado' }, { status: 500 })
+    return NextResponse.json({ success: true, status: data })
+  } catch {
+    return NextResponse.json({ error: 'Não foi possível inativar o membro' }, { status: 500 })
   }
 }

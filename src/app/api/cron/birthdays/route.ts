@@ -5,6 +5,9 @@ import { sendPushNotification } from '@/shared/lib/push';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+  if (!process.env.CRON_SECRET || request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const supabase = createAdminClient();
     
@@ -17,8 +20,9 @@ export async function GET(request: Request) {
     const monthDay = `${month}-${day}`;
 
     const { data: users, error: usersError } = await supabase
-      .from('users')
-      .select('full_name, birth_date');
+      .from('profiles')
+      .select('full_name, birth_date, auth_user_id')
+      .is('archived_at', null);
 
     if (usersError) throw usersError;
 
@@ -44,9 +48,11 @@ export async function GET(request: Request) {
 
     if (subsError) throw subsError;
 
+    const activeIds = new Set((users || []).map(user => user.auth_user_id).filter(Boolean));
+
     // 3. Disparar notificações
     const results = await Promise.all(
-      (subs || []).map(async (sub: any) => {
+      (subs || []).filter(sub => activeIds.has(sub.user_id)).map(async (sub) => {
         const result = await sendPushNotification(sub.subscription, { 
           title, 
           body, 

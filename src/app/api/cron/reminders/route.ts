@@ -17,6 +17,7 @@ interface ProfileData {
   id: string;
   full_name: string;
   auth_user_id: string | null;
+  archived_at: string | null;
 }
 
 interface MassData {
@@ -41,7 +42,10 @@ interface PushSubscriptionData {
   subscription: Record<string, unknown>;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  if (!process.env.CRON_SECRET || request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     // Para tarefas em background/cron que não possuem sessão ativa de usuário,
     // usamos o cliente com privilégios de administrador (bypass RLS)
@@ -62,7 +66,7 @@ export async function GET() {
         profile_id,
         is_confirmed,
         mass:masses!inner(id, date, time, special_description, is_published),
-        profile:profiles!profile_id(id, full_name, auth_user_id)
+        profile:profiles!profile_id(id, full_name, auth_user_id, archived_at)
       `)
       .eq('mass.date', tomorrowStr)
       .eq('mass.is_published', true)
@@ -95,7 +99,7 @@ export async function GET() {
       // Como a relação pode retornar um objeto ou array no Supabase, normalizamos para objeto
       const p = Array.isArray(slot.profile) ? slot.profile[0] : slot.profile;
       const m = Array.isArray(slot.mass) ? slot.mass[0] : slot.mass;
-      if (!p || !p.auth_user_id) continue;
+      if (!p || !p.auth_user_id || p.archived_at !== null) continue;
 
       const authUserId = p.auth_user_id;
       const roleName = ROLE_MAP[slot.role] || slot.role;

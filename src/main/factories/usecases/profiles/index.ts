@@ -5,7 +5,7 @@ import {
   SearchProfiles, 
   CreateProfile, 
   UpdateProfile, 
-  DeleteProfile, 
+  ArchiveProfile,
   ClaimProfile, 
   UploadAvatar, 
   ListBirthdays 
@@ -27,7 +27,7 @@ export const makeListProfiles = () => new ListProfiles(profileRepository)
 export const makeSearchProfiles = () => new SearchProfiles(profileRepository)
 export const makeCreateProfile = () => new CreateProfile(profileRepository)
 export const makeUpdateProfile = () => new UpdateProfile(profileRepository)
-export const makeDeleteProfile = () => new DeleteProfile(profileRepository)
+export const makeArchiveProfile = () => new ArchiveProfile(profileRepository)
 export const makeClaimProfile = () => new ClaimProfile(profileRepository)
 export const makeUploadAvatar = () => new UploadAvatar(profileRepository)
 export const makeListBirthdays = () => new ListBirthdays(profileRepository)

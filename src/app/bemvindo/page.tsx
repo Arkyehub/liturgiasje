@@ -67,6 +67,10 @@ export default function OnboardingPage() {
     )
   }
 
+  if (profile?.archivedAt) {
+    return <div className="min-h-screen p-8 text-center"><h1>Acesso inativado</h1><p>Entre em contato com a administração.</p><Button onClick={signOut}>Sair</Button></div>
+  }
+
   return (
     <div className="min-h-screen bg-stone-50/50 px-4 py-12">
       <div className="mx-auto max-w-md space-y-8">

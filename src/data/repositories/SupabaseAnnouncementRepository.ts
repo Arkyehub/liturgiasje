@@ -111,6 +111,9 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       .eq('id', id)
       .single()
 
+    const { error } = await supabase.rpc('delete_announcement_safely', { target_announcement_id: id })
+    if (error) throw error
+
     if (ann) {
       const pathsToDelete: string[] = []
       const imgUrls = [...(ann.image_urls || []), ann.image_url].filter(Boolean) as string[]
@@ -134,8 +137,7 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
       }
     }
 
-    const { error } = await supabase.from('announcements').delete().eq('id', id)
-    if (error) throw error
+
   }
 
   async markAsRead(announcementId: string, profileId: string): Promise<void> {

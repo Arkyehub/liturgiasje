@@ -1,5 +1,7 @@
 "use client"
 
+import { scheduleErrorMessage } from '@/features/schedule/scheduleErrorMessage'
+
 import { useState, useEffect } from "react"
 import { Button } from "@/shared/ui/button"
 import { Input } from "@/shared/ui/input"
@@ -27,9 +29,9 @@ import { makeListProfiles } from "@/main/factories/usecases/profiles"
 import { 
   makeCheckMassExists, 
   makeGetProfilesUsage, 
-  makeDeleteMass, 
-  makeUpdateMass, 
-  makeCreateMassWithSlots,
+  makeSaveScheduleBatch,
+
+
   makeListOccupiedDatesForMonth,
   makeListSchedulesForMonth
 } from "@/main/factories/usecases/schedule"
@@ -60,6 +62,7 @@ interface Slot {
 
 interface Session {
   dbId?: string
+  scheduleRevision?: number
   tempId: string
   time: string
   description: string
@@ -69,6 +72,7 @@ interface Session {
 export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: ScheduleFormProps) {
   const [date, setDate] = useState("")
   const [sessions, setSessions] = useState<Session[]>([])
+  const [removedMasses, setRemovedMasses] = useState<{ id: string; expectedRevision?: number }[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({})
   const [activeMonthRef, setActiveMonthRef] = useState(format(currentMonth, "yyyy-MM"))
@@ -145,6 +149,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
   }
 
   useEffect(() => {
+    setRemovedMasses([])
     if (initialData && Array.isArray(initialData)) {
       setDate(initialData[0].date)
       
@@ -166,6 +171,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
 
         return {
           dbId: item.id,
+          scheduleRevision: item.scheduleRevision,
           tempId: Math.random().toString(36).substring(2, 9),
           time: item.time?.substring(0, 5) || "",
           description: item.specialDescription || item.specialTitle || "",
@@ -269,20 +275,11 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
     setSessions([...sessions, createEmptySession()])
   }
 
-  const removeSession = async (tempId: string, dbId?: string) => {
-    if (dbId) {
-      try {
-        await makeDeleteMass().execute(dbId)
-        toast.success("Horário excluído.")
-      } catch (error) {
-        console.error("Erro ao excluir:", error)
-        toast.error("Erro ao excluir horário.")
-        return
-      }
-    }
-    setSessions(prev => prev.filter(s => s.tempId !== tempId))
+  const removeSession = (tempId: string, dbId?: string) => {
+    const session = sessions.find(item => item.tempId === tempId)
+    if (dbId) setRemovedMasses(previous => [...previous, { id: dbId, expectedRevision: session?.scheduleRevision }])
+    setSessions(previous => previous.filter(item => item.tempId !== tempId))
   }
-
   const updateSessionField = (tempId: string, field: keyof Session, value: any) => {
     setSessions(sessions.map(s => s.tempId === tempId ? { ...s, [field]: value } : s))
   }
@@ -352,12 +349,6 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
         return
       }
       
-      // Se houver slots adicionados, eles precisam ter um leitor selecionado
-      const unassigned = sess.slots.find(s => !s.profileId)
-      if (unassigned) {
-        toast.error(`Escolha um leitor para ${unassigned.roleLabel} na missa das ${sess.time}`)
-        return
-      }
     }
 
     // Validação de duplicidade no formulário
@@ -371,7 +362,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
     // Validação de duplicidade contra o banco de dados
     for (const sess of sessions) {
       const conflict = existingMassesFromDb.find(m => 
-        m.time.substring(0, 5) === sess.time && m.id !== sess.dbId
+        m.time.substring(0, 5) === sess.time && m.id !== sess.dbId && !removedMasses.some(removed => removed.id === m.id)
       )
       
       if (conflict) {
@@ -382,34 +373,18 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
 
     setIsSaving(true)
     try {
-      // Salva cada sessão sequencialmente
-      for (const sess of sessions) {
-        const actualMonthRef = format(new Date(date + 'T00:00:00'), "yyyy-MM")
-        
-        const massData = {
-          date,
-          time: `${sess.time}:00`,
-          specialDescription: sess.description,
-          monthReference: actualMonthRef
-        }
-        
-        const slotsData = sess.slots.map(s => ({
-          role: s.roleLabel,
-          profileId: s.profileId
-        }))
-
-        if (sess.dbId) {
-          await makeUpdateMass().execute(sess.dbId, massData, slotsData)
-        } else {
-          await makeCreateMassWithSlots().execute(massData, slotsData)
-        }
-      }
-
+      const actualMonthRef = format(new Date(date + 'T00:00:00'), "yyyy-MM")
+      const entries = sessions.map(sess => ({
+        massId: sess.dbId,
+        massData: { expectedRevision: sess.scheduleRevision, date, time: `${sess.time}:00`, specialDescription: sess.description, monthReference: actualMonthRef },
+        slots: sess.slots.map(slot => ({ id: /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(slot.id) ? slot.id : undefined, role: slot.roleLabel, profileId: slot.profileId }))
+      }))
+      await makeSaveScheduleBatch().execute(entries, removedMasses)
       toast.success("Escala salva com sucesso!")
       onSuccess()
       onClose()
     } catch (error) {
-      toast.error("Erro ao salvar escala. Tente novamente.")
+      toast.error(scheduleErrorMessage(error, "Erro ao salvar escala. Tente novamente."))
     } finally {
       setIsSaving(false)
     }
@@ -594,6 +569,9 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
                                 <CommandList>
                                   <CommandEmpty>Nenhum leitor encontrado.</CommandEmpty>
                                   <CommandGroup>
+                                    {slot.profileId && <CommandItem value="liberar vaga" onSelect={() => {
+                                      setSessions(current => current.map(session => session.tempId === sess.tempId ? { ...session, slots: session.slots.map(item => item.id === slot.id ? { ...item, profileId: "", profileName: "", isOpen: false } : item) } : session))
+                                    }}>Liberar vaga</CommandItem>}
                                     {(() => {
                                       const sortedProfiles = [...profiles].sort((a, b) => {
                                         const prefA = checkPreference(a, sess.time, date) ? 1 : 0

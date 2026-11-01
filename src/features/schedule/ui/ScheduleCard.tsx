@@ -25,9 +25,12 @@ interface ReaderSlot {
   role: "C" | "1L" | "2L" | "P" | "L"
   roleName?: string
   readerName?: string
+  readerArchived?: boolean
+  previousAssignments?: { fullName: string; occurredAt: string; archived: boolean }[]
   avatarUrl?: string
   isClaimed?: boolean
   originalReaderName?: string
+  originalReaderArchived?: boolean
   isConfirmed: boolean
   isSwapRequested: boolean
   isMine?: boolean
@@ -242,9 +245,12 @@ export function ScheduleCard({
                         </div>
 
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[13px] font-bold text-black leading-tight truncate">
-                            {slot.readerName || "---"}
+                          <span className={cn("text-[13px] font-bold leading-tight truncate", slot.readerArchived ? "text-red-700" : "text-black")}>
+                            {slot.readerName || "---"}{slot.readerArchived && " · membro removido"}
                           </span>
+                          {!!slot.previousAssignments?.length && (
+                            <span className="text-[10px] text-red-700">Anteriormente: {slot.previousAssignments.map(p => `${p.fullName}${p.archived ? " · membro removido" : ""}`).join(", ")}</span>
+                          )}
                           {slot.readerName && slot.readerName !== "---" && slot.isConfirmed && (
                             <UserAvatar 
                               name={slot.readerName}
@@ -254,8 +260,8 @@ export function ScheduleCard({
                             />
                           )}
                           {slot.originalReaderName && slot.readerName !== slot.originalReaderName && (
-                            <span className="text-[9px] font-medium text-stone-400 italic shrink-0">
-                              (subst. {slot.originalReaderName})
+                            <span className={cn("text-[9px] font-medium italic shrink-0", slot.originalReaderArchived ? "text-red-700" : "text-stone-400")}>
+                              (subst. {slot.originalReaderName}{slot.originalReaderArchived && " · membro removido"})
                             </span>
                           )}
                         </div>

@@ -19,10 +19,14 @@ export async function POST(request: Request) {
     // Apenas admins podem disparar notificações genéricas. 
     // Usuários comuns podem apenas avisar sobre solicitações de troca.
     const { data: senderProfile, error: profileError } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', sender.id)
+      .from('profiles')
+      .select('role, archived_at')
+      .eq('auth_user_id', sender.id)
       .single();
+
+    if (profileError || !senderProfile || senderProfile.archived_at !== null) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const isAdmin = senderProfile?.role === 'admin';
     const isSwapNotification = 
@@ -57,8 +61,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: subsError.message }, { status: 500 });
     }
 
+    const userIds = [...new Set((subs || []).map(sub => sub.user_id))];
+    const { data: activeProfiles, error: activeError } = userIds.length
+      ? await adminSupabase.from('profiles').select('auth_user_id').in('auth_user_id', userIds).is('archived_at', null)
+      : { data: [], error: null };
+    if (activeError) return NextResponse.json({ error: 'Unable to resolve active recipients' }, { status: 500 });
+    const activeIds = new Set((activeProfiles || []).map(profile => profile.auth_user_id));
     const results = await Promise.all(
-      (subs || []).map(async (sub: any) => {
+      (subs || []).filter(sub => activeIds.has(sub.user_id)).map(async (sub) => {
         const result = await sendPushNotification(sub.subscription, { title, body, url });
         
         // Se a subscrição expirou, remove do banco usando o cliente administrador

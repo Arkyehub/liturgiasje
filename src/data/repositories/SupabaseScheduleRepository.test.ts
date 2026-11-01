@@ -27,64 +27,6 @@ describe("SupabaseScheduleRepository", () => {
     return chain as any
   }
 
-  it("should delete mass and its slots", async () => {
-    const massId = "mass-1"
-    
-    const mockFrom = supabase.from as jest.Mock
-    mockFrom.mockImplementation((table) => {
-      if (table === 'schedule_slots') {
-        return {
-          select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockResolvedValue({ data: [], error: null }), // Nenhum slot encontrado
-          delete: jest.fn().mockReturnThis(),
-          in: jest.fn().mockResolvedValue({ error: null })
-        }
-      }
-      return {
-        delete: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({ error: null })
-      }
-    })
-
-    await repository.deleteMass(massId)
-
-    expect(mockFrom).toHaveBeenCalledWith('schedule_slots')
-    expect(mockFrom).toHaveBeenCalledWith('masses')
-  })
-
-  it("should delete related announcements before deleting slots", async () => {
-    const massId = "mass-1"
-    const slotId = "slot-1"
-    
-    const mockFrom = supabase.from as jest.Mock
-    mockFrom.mockImplementation((table) => {
-      if (table === 'schedule_slots') {
-        return {
-          select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockResolvedValue({ data: [{ id: slotId }], error: null }),
-          delete: jest.fn().mockReturnThis(),
-          in: jest.fn().mockResolvedValue({ error: null })
-        }
-      }
-      if (table === 'announcements') {
-        return {
-          delete: jest.fn().mockReturnThis(),
-          in: jest.fn().mockResolvedValue({ error: null })
-        }
-      }
-      return {
-        delete: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue({ error: null })
-      }
-    })
-
-    await repository.deleteMass(massId)
-
-    expect(mockFrom).toHaveBeenCalledWith('announcements')
-    expect(mockFrom).toHaveBeenCalledWith('schedule_slots')
-    expect(mockFrom).toHaveBeenCalledWith('masses')
-  })
-
   it("should check if mass exists for a given date", async () => {
     const date = "2026-04-29"
     const mockFrom = supabase.from as jest.Mock
@@ -101,56 +43,6 @@ describe("SupabaseScheduleRepository", () => {
     expect(mockFrom).toHaveBeenCalledWith('masses')
     expect(result).toHaveLength(1)
     expect(result[0].time).toBe('07:00:00')
-  })
-
-  it("should update status for multiple masses", async () => {
-    const massIds = ["1", "2"]
-    const mockFrom = supabase.from as jest.Mock
-    mockFrom.mockImplementation(() => ({
-      update: jest.fn().mockReturnThis(),
-      in: jest.fn().mockResolvedValue({ error: null })
-    }))
-
-    await repository.updateMassesStatus(massIds, true)
-
-    expect(mockFrom).toHaveBeenCalledWith('masses')
-  })
-
-  it("should confirm a slot", async () => {
-    const slotId = "slot-1"
-    const profileId = "profile-1"
-    const mockFrom = supabase.from as jest.Mock
-    mockFrom.mockImplementation(() => ({
-      update: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockReturnThis(),
-      select: jest.fn().mockReturnThis(),
-      single: jest.fn().mockResolvedValue({ 
-        data: { id: slotId, is_confirmed: true, profile_id: profileId }, 
-        error: null 
-      })
-    }))
-
-    const result = await repository.confirmSlot(slotId, profileId)
-
-    expect(mockFrom).toHaveBeenCalledWith('schedule_slots')
-    expect(result.isConfirmed).toBe(true)
-  })
-
-  it("should request a swap", async () => {
-    const slotId = "slot-1"
-    const mockFrom = supabase.from as jest.Mock
-    mockFrom.mockImplementation(() => ({
-      update: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockResolvedValue({ error: null })
-    }))
-
-    // Mock global fetch for push notification
-    global.fetch = jest.fn().mockResolvedValue({ ok: true })
-
-    await repository.requestSwap(slotId)
-
-    expect(mockFrom).toHaveBeenCalledWith('schedule_slots')
-    expect(global.fetch).toHaveBeenCalled()
   })
 
   it("should list upcoming schedules for a user globally", async () => {

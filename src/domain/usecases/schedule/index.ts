@@ -1,5 +1,5 @@
 import { ScheduleRepository } from "../../repositories/ScheduleRepository"
-import { Mass, ScheduleSlot, SwapRequest, CreateMassData, CreateSlotData } from "../../models/Schedule"
+import { Mass, ScheduleSlot, SwapRequest, CreateMassData, CreateSlotData, ScheduleBatchEntry, RemovedMass } from "../../models/Schedule"
 
 export class ListSchedulesForMonth {
   constructor(private readonly scheduleRepository: ScheduleRepository) {}
@@ -104,4 +104,14 @@ export class ListUpcomingSchedulesForUser {
   async execute(profileId: string): Promise<Mass[]> {
     return this.scheduleRepository.listUpcomingForUser(profileId)
   }
+}
+
+export class SaveScheduleBatch {
+  constructor(private readonly repository: ScheduleRepository) {}
+  async execute(entries: ScheduleBatchEntry[], removed: RemovedMass[]): Promise<void> { return this.repository.saveScheduleBatch(entries, removed) }
+}
+
+export class DeleteMasses {
+  constructor(private readonly repository: ScheduleRepository) {}
+  async execute(ids: string[]): Promise<void> { return this.repository.deleteMasses(ids) }
 }

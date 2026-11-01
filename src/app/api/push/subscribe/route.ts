@@ -32,9 +32,13 @@ export async function POST(request: Request) {
     // Buscar o profile_id correspondente ao auth.uid()
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, archived_at')
       .eq('auth_user_id', user.id)
       .single();
+
+    if (!profile || profile.archived_at !== null) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     // Upsert a subscrição para o usuário
     const { error } = await supabase

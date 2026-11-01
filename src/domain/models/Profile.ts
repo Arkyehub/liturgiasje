@@ -1,5 +1,6 @@
 export interface Profile {
   id: string
+  archivedAt?: string | null
   authUserId?: string | null // Link to auth.users.id
   fullName: string
   email?: string | null

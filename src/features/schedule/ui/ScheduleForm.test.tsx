@@ -7,6 +7,7 @@ import { toast } from "sonner"
 // Mocks
 jest.mock("@/main/factories/usecases/schedule", () => ({
   makeCheckMassExists: jest.fn(),
+  makeSaveScheduleBatch: jest.fn(() => ({ execute: jest.fn().mockResolvedValue(undefined) })),
   makeCreateMassWithSlots: jest.fn(),
   makeUpdateMass: jest.fn(),
   makeDeleteMass: jest.fn(),
