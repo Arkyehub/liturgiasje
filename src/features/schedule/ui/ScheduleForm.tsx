@@ -596,14 +596,17 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
                                           <CommandItem
                                             key={p.id}
                                             value={p.fullName}
+                                            disabled={isUnavailable}
                                             onSelect={() => {
-                                              if (isAlreadyScheduled) {
-                                                toast.warning(`${p.fullName} já está escalado(a) neste dia!`, {
+                                              if (isUnavailable) {
+                                                toast.warning(`${p.fullName} informou que não poderá participar nesta data.`, {
                                                   duration: 5000,
                                                   icon: <AlertCircle className="h-4 w-4 text-amber-600" />
                                                 })
-                                              } else if (isUnavailable) {
-                                                toast.warning(`${p.fullName} informou que não poderá participar nesta data.`, {
+                                                return
+                                              }
+                                              if (isAlreadyScheduled) {
+                                                toast.warning(`${p.fullName} já está escalado(a) neste dia!`, {
                                                   duration: 5000,
                                                   icon: <AlertCircle className="h-4 w-4 text-amber-600" />
                                                 })

@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { ScheduleForm } from "./ScheduleForm"
 import { makeCheckMassExists, makeCreateMassWithSlots, makeGetProfilesUsage, makeListOccupiedDatesForMonth, makeListSchedulesForMonth } from "@/main/factories/usecases/schedule"
 import { makeListProfiles, makeListUnavailableByDate } from "@/main/factories/usecases/profiles"
+import userEvent from "@testing-library/user-event"
 import { toast } from "sonner"
 
 // Mocks
@@ -36,17 +37,15 @@ jest.mock("@/shared/ui/TimeRoller", () => ({
 }))
 
 // Mock de ícones para evitar erros de renderização
-jest.mock("lucide-react", () => ({
-  Plus: () => <div />,
-  Search: () => <div />,
-  Trash2: () => <div />,
-  Calendar: () => <div />,
-  Clock: () => <div />,
-  Type: () => <div />,
-  CheckCircle2: () => <div />,
-  User: () => <div />,
-  AlertCircle: () => <div />
+jest.mock("lucide-react", () => new Proxy({ __esModule: true }, {
+  get: (target, prop) => (prop in target ? (target as any)[prop] : () => <div />)
 }))
+
+beforeAll(() => {
+  // cmdk/popover depend on browser APIs missing from jsdom
+  ;(global as any).ResizeObserver ||= class { observe() {} unobserve() {} disconnect() {} }
+  Element.prototype.scrollIntoView ||= () => {}
+})
 
 describe("ScheduleForm Validation", () => {
   const mockCurrentMonth = new Date(2026, 3, 1) // Abril 2026
@@ -125,5 +124,31 @@ describe("ScheduleForm Validation", () => {
 
     // Primeiro carregamento (Abril) - baseado no mockCurrentMonth (2026-04-01)
     await waitFor(() => expect(mockGetUsage).toHaveBeenCalledWith("2026-04"))
+  })
+
+  it("should not allow selecting a reader who is unavailable on the date", async () => {
+    const profiles = [
+      { id: "p-ok", fullName: "Disponivel Teste", role: "reader", createdAt: "", updatedAt: "" },
+      { id: "p-un", fullName: "Indisponivel Teste", role: "reader", createdAt: "", updatedAt: "" }
+    ]
+    ;(makeListProfiles as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue(profiles) })
+    ;(makeListUnavailableByDate as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue(["p-un"]) })
+
+    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
+    fireEvent.click(screen.getByText("30"))
+    await waitFor(() => expect(makeListUnavailableByDate).toHaveBeenCalled())
+
+    await userEvent.click(await screen.findByText(/Adicionar leitura/i))
+    await userEvent.click(await screen.findByText(/Leitor \(L\)/))
+    await userEvent.click(await screen.findByText("Selecionar..."))
+    const blocked = await screen.findByText(/Indisponivel Teste \(Indisponível\)/)
+    expect(blocked.closest("[cmdk-item]")).toHaveAttribute("data-disabled", "true")
+
+    await userEvent.click(blocked)
+    expect(screen.queryByText("Indisponivel Teste", { selector: "span.truncate" })).not.toBeInTheDocument()
+    expect(screen.getByText("Selecionar...")).toBeInTheDocument()
+
+    await userEvent.click(await screen.findByText(/^Disponivel Teste/))
+    await waitFor(() => expect(screen.queryByText("Selecionar...")).not.toBeInTheDocument())
   })
 })
