@@ -9,6 +9,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { VersionChecker } from "@/features/pwa/ui/VersionChecker";
 import { AuthProvider } from "@/app/providers/AuthProvider";
 import { PersistentHeader } from "@/shared/ui/PersistentHeader";
+import { ScrollToTop } from "@/shared/ui/ScrollToTop";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -56,6 +57,7 @@ export default function RootLayout({
       <body className={`${inter.className} min-h-full bg-background text-foreground antialiased`}>
         <AuthProvider>
           <PersistentHeader />
+          <ScrollToTop />
           <VersionChecker />
           <PWAHandler />
           {children}
