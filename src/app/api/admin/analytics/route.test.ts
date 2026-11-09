@@ -37,4 +37,34 @@ describe('admin analytics authorization', () => {
     expect(createServiceClient).toHaveBeenCalled()
     expect(response.status).toBe(200)
   })
+  it('still computes slot metrics when schedule_slots has no original_profile_id column', async () => {
+    ;(createClient as jest.Mock).mockResolvedValue(session({ role: 'admin', archived_at: null }))
+    const future = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10)
+    const tables: Record<string, unknown[]> = {
+      profiles: [{ id: 'p1', full_name: 'Ana', whatsapp: null, role: 'reader', auth_user_id: 'u1', created_at: '2026-01-01', last_seen_at: null, archived_at: null }],
+      // linhas como no Production: sem original_profile_id
+      schedule_slots: [{ id: 's1', role: '1L', is_confirmed: false, is_swap_requested: false, profile_id: 'p1', created_at: '2026-01-01', mass_id: 'm1' }],
+      masses: [{ id: 'm1', date: future, time: '09:00:00', special_description: null }],
+      announcements: [],
+    }
+    const selects: Record<string, unknown[]> = {}
+    const from = (table: string) => {
+      const query: Record<string, unknown> = {
+        select: (columns: string) => { (selects[table] ||= []).push(columns); return query },
+        eq: () => query, in: () => query, order: () => query,
+        then: (resolve: (value: unknown) => void) => resolve({ data: tables[table] ?? [], error: null }),
+      }
+      return query
+    }
+    ;(createServiceClient as jest.Mock).mockReturnValue({ from, auth: { admin: { listUsers: async () => ({ data: { users: [] }, error: null }) } } })
+
+    const response = await GET()
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(selects.schedule_slots).toEqual(['*'])
+    expect(body.summary.unconfirmedSlotsCount).toBe(1)
+    expect(body.summary.totalSwapsExecuted).toBe(0)
+    expect(body.unconfirmedSlots[0]).toMatchObject({ id: 's1', massDate: future })
+  })
 })

@@ -41,16 +41,9 @@ export async function GET() {
     // 2. Buscar todas as escalas de missas (schedule_slots com masses)
     const { data: slots, error: slotsError } = await supabase
       .from("schedule_slots")
-      .select(`
-        id,
-        role,
-        is_confirmed,
-        is_swap_requested,
-        profile_id,
-        original_profile_id,
-        created_at,
-        mass_id
-      `)
+      // select("*") de propósito: original_profile_id não existe em todos os bancos (ex.: Production);
+      // pedir a coluna explicitamente faz a consulta inteira falhar (400) e zera escalas pendentes e trocas.
+      .select("*")
 
     if (slotsError) {
       console.warn("[API Analytics Warning] slotsError:", slotsError)
