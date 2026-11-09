@@ -246,10 +246,10 @@ export function ScheduleCard({
 
                         <div className="flex items-center gap-2 min-w-0">
                           <span className={cn("text-[13px] font-bold leading-tight truncate", slot.readerArchived ? "text-red-700" : "text-black")}>
-                            {slot.readerName || "---"}{slot.readerArchived && " · membro removido"}
+                            {slot.readerName || "---"}{slot.readerArchived && " · membro inativo"}
                           </span>
                           {!!slot.previousAssignments?.length && (
-                            <span className="text-[10px] text-red-700">Anteriormente: {slot.previousAssignments.map(p => `${p.fullName}${p.archived ? " · membro removido" : ""}`).join(", ")}</span>
+                            <span className="text-[10px] text-red-700">Anteriormente: {slot.previousAssignments.map(p => `${p.fullName}${p.archived ? " · membro inativo" : ""}`).join(", ")}</span>
                           )}
                           {slot.readerName && slot.readerName !== "---" && slot.isConfirmed && (
                             <UserAvatar 
@@ -261,7 +261,7 @@ export function ScheduleCard({
                           )}
                           {slot.originalReaderName && slot.readerName !== slot.originalReaderName && (
                             <span className={cn("text-[9px] font-medium italic shrink-0", slot.originalReaderArchived ? "text-red-700" : "text-stone-400")}>
-                              (subst. {slot.originalReaderName}{slot.originalReaderArchived && " · membro removido"})
+                              (subst. {slot.originalReaderName}{slot.originalReaderArchived && " · membro inativo"})
                             </span>
                           )}
                         </div>
