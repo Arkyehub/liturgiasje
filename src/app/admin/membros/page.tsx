@@ -6,6 +6,8 @@ import { useAuth } from "@/shared/hooks/useAuth"
 import { 
   makeListProfiles, 
   makeArchiveProfile,
+  makeUnarchiveProfile,
+  makeListArchivedProfiles,
   makeCreateProfile, 
   makeUpdateProfile 
 } from "@/main/factories/usecases/profiles"
@@ -30,7 +32,7 @@ import { MemberForm } from "@/features/members/ui/MemberForm"
 import { Input } from "@/shared/ui/input"
 import { Button } from "@/shared/ui/button"
 import { UserAvatar } from "@/shared/ui/UserAvatar"
-import { Loader2, Search, Plus, Edit2, Trash2, UserCircle, UserKey } from "lucide-react"
+import { Loader2, Search, Plus, Edit2, Trash2, UserCircle, UserKey, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 
 export default function AdminMembersPage() {
@@ -47,6 +49,10 @@ export default function AdminMembersPage() {
   const [profileToDelete, setProfileToDelete] = useState<Profile | null>(null)
   const [isDeleteDrawerOpen, setIsDeleteDrawerOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedProfiles, setArchivedProfiles] = useState<Profile[]>([])
+  const [profileToReactivate, setProfileToReactivate] = useState<Profile | null>(null)
+  const [isReactivating, setIsReactivating] = useState(false)
 
   // Verificar se é admin
   useEffect(() => {
@@ -68,6 +74,35 @@ export default function AdminMembersPage() {
       toast.error("Erro ao carregar perfis.")
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const loadArchived = async () => {
+    try {
+      setIsLoading(true)
+      setArchivedProfiles(await makeListArchivedProfiles().execute())
+    } catch (error) {
+      toast.error("Erro ao carregar membros inativos.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (showArchived && profile?.role === 'admin') loadArchived()
+  }, [showArchived])
+
+  const handleReactivate = async (id: string) => {
+    try {
+      setIsReactivating(true)
+      await makeUnarchiveProfile().execute(id)
+      setArchivedProfiles(current => current.filter(p => p.id !== id))
+      toast.success("Membro reativado. Ele já pode entrar novamente.")
+    } catch (error) {
+      toast.error("Erro ao reativar membro.")
+    } finally {
+      setIsReactivating(false)
+      setProfileToReactivate(null)
     }
   }
 
@@ -94,11 +129,11 @@ export default function AdminMembersPage() {
   }
 
   const filteredProfiles = useMemo(() => {
-    return profiles.filter(p => 
+    return (showArchived ? archivedProfiles : profiles).filter(p =>
       p.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.whatsapp?.includes(searchTerm)
     )
-  }, [profiles, searchTerm])
+  }, [profiles, archivedProfiles, showArchived, searchTerm])
 
 
   if (loading || (user && !profile)) {
@@ -134,6 +169,11 @@ export default function AdminMembersPage() {
               }} className="rounded-xl bg-stone-800 hover:bg-black">
                 <Plus className="h-4 w-4" />
               </Button>
+            </div>
+
+            <div className="flex gap-2">
+              <Button variant={showArchived ? "outline" : "default"} size="sm" className="rounded-xl" onClick={() => setShowArchived(false)}>Ativos</Button>
+              <Button variant={showArchived ? "default" : "outline"} size="sm" className="rounded-xl" onClick={() => setShowArchived(true)}>Inativos</Button>
             </div>
 
             <div className="space-y-3">
@@ -178,6 +218,17 @@ export default function AdminMembersPage() {
                      </div>
                      
                      <div className="flex items-center gap-1 shrink-0">
+                       {showArchived ? (
+                         <Button
+                           variant="ghost"
+                           size="icon"
+                           onClick={() => setProfileToReactivate(p)}
+                           className="h-8 w-8 text-stone-400 hover:text-green-700"
+                           title="Reativar membro"
+                         >
+                           <RotateCcw className="h-4 w-4" />
+                         </Button>
+                       ) : (<>
                        {p.authUserId && (
                          <Button 
                            variant="ghost" 
@@ -211,6 +262,7 @@ export default function AdminMembersPage() {
                        >
                          <Trash2 className="h-4 w-4" />
                        </Button>
+                       </>)}
                      </div>
                    </div>
                  ))
@@ -299,6 +351,34 @@ export default function AdminMembersPage() {
               </Button>
               <DrawerClose asChild>
                 <Button variant="ghost" className="w-full text-stone-500 font-medium h-12" disabled={isSubmittingRole}>
+                  Cancelar
+                </Button>
+              </DrawerClose>
+            </DrawerFooter>
+          </div>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Drawer de Confirmação de Reativação */}
+      <Drawer open={!!profileToReactivate} onOpenChange={(open) => { if (!open && !isReactivating) setProfileToReactivate(null) }}>
+        <DrawerContent>
+          <div className="mx-auto w-full max-w-sm">
+            <DrawerHeader className="text-center">
+              <DrawerTitle className="text-stone-800">Reativar membro?</DrawerTitle>
+              <DrawerDescription>
+                O membro <strong>{profileToReactivate?.fullName}</strong> poderá entrar novamente no sistema como leitor. As vagas liberadas na inativação não são restauradas.
+              </DrawerDescription>
+            </DrawerHeader>
+            <DrawerFooter className="flex flex-col gap-2 pb-8">
+              <Button
+                className="w-full font-bold h-12 rounded-xl bg-stone-800 hover:bg-black text-white"
+                disabled={isReactivating}
+                onClick={() => profileToReactivate && handleReactivate(profileToReactivate.id)}
+              >
+                {isReactivating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sim, reativar"}
+              </Button>
+              <DrawerClose asChild>
+                <Button variant="ghost" className="w-full text-stone-500 font-medium h-12" disabled={isReactivating}>
                   Cancelar
                 </Button>
               </DrawerClose>

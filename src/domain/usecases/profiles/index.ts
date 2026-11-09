@@ -50,6 +50,20 @@ export class ArchiveProfile {
   }
 }
 
+export class ListArchivedProfiles {
+  constructor(private readonly repository: ProfileRepository) {}
+  async execute(): Promise<Profile[]> {
+    return this.repository.listArchived()
+  }
+}
+
+export class UnarchiveProfile {
+  constructor(private readonly repository: ProfileRepository) {}
+  async execute(id: string): Promise<void> {
+    return this.repository.unarchive(id)
+  }
+}
+
 export class ClaimProfile {
   constructor(private readonly repository: ProfileRepository) {}
   async execute(profileId: string, authUserId: string): Promise<Profile> {

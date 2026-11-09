@@ -95,6 +95,25 @@ END $$;
 REVOKE ALL ON FUNCTION public.archive_member(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.archive_member(uuid) TO authenticated;
 
+-- Reactivation is an explicit administrator action. Freed slots are not restored (the history keeps them),
+-- and a former administrator returns as a reader so privileges are never restored implicitly.
+CREATE OR REPLACE FUNCTION public.unarchive_member(target_profile_id uuid) RETURNS text
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+DECLARE actor uuid := auth.uid(); target public.profiles%ROWTYPE;
+BEGIN
+  PERFORM pg_advisory_xact_lock(13739001);
+  IF actor IS NULL OR NOT EXISTS (SELECT 1 FROM public.profiles WHERE auth_user_id = actor AND role = 'admin' AND archived_at IS NULL) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+  SELECT * INTO target FROM public.profiles WHERE id = target_profile_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'profile_not_found' USING ERRCODE = 'P0002'; END IF;
+  IF target.archived_at IS NULL THEN RETURN 'not_archived'; END IF;
+  UPDATE public.profiles SET archived_at = NULL, role = 'reader' WHERE id = target_profile_id;
+  RETURN 'unarchived';
+END $$;
+REVOKE ALL ON FUNCTION public.unarchive_member(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.unarchive_member(uuid) TO authenticated;
+
 -- History contains references to people; only active members may read it.
 CREATE OR REPLACE FUNCTION public.is_active_member() RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$

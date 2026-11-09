@@ -47,6 +47,12 @@ export class SupabaseProfileRepository implements ProfileRepository {
     return (data || []).map(this.mapToDomain)
   }
 
+  async listArchived(): Promise<Profile[]> {
+    const { data, error } = await supabase.from('profiles').select('*').not('archived_at', 'is', null).order('full_name')
+    if (error) throw error
+    return (data || []).map(this.mapToDomain)
+  }
+
   async search(query: string, onlyPending: boolean = false): Promise<Profile[]> {
     const digitsOnly = query.replace(/\D/g, "")
     const whatsappQuery = (digitsOnly && digitsOnly.length >= 4) 
@@ -125,6 +131,19 @@ export class SupabaseProfileRepository implements ProfileRepository {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || "Erro ao excluir perfil");
+    }
+  }
+
+  async unarchive(id: string): Promise<void> {
+    const response = await fetch('/api/admin/profiles/unarchive', {
+      method: 'POST',
+      body: JSON.stringify({ profileId: id }),
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || "Erro ao reativar perfil");
     }
   }
 
