@@ -32,7 +32,7 @@ import { MemberForm } from "@/features/members/ui/MemberForm"
 import { Input } from "@/shared/ui/input"
 import { Button } from "@/shared/ui/button"
 import { UserAvatar } from "@/shared/ui/UserAvatar"
-import { Loader2, Search, Plus, Edit2, Trash2, UserCircle, UserKey, RotateCcw } from "lucide-react"
+import { Loader2, Search, Plus, Edit2, Trash2, UserCircle, UserKey, RotateCcw, LineChart } from "lucide-react"
 import { toast } from "sonner"
 
 export default function AdminMembersPage() {
@@ -218,6 +218,16 @@ export default function AdminMembersPage() {
                      </div>
                      
                      <div className="flex items-center gap-1 shrink-0">
+                       <Button
+                         variant="ghost"
+                         size="icon"
+                         onClick={() => router.push(`/admin/membros/${p.id}`)}
+                         className="h-8 w-8 text-stone-400 hover:text-stone-800"
+                         title="Analisar membro"
+                         aria-label={`Analisar ${p.fullName}`}
+                       >
+                         <LineChart className="h-4 w-4" />
+                       </Button>
                        {showArchived ? (
                          <Button
                            variant="ghost"

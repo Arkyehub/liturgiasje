@@ -1,5 +1,5 @@
 import { supabase } from "@/shared/api/supabase"
-import { Mass, ScheduleSlot, SwapRequest, CreateMassData, CreateSlotData, ScheduleBatchEntry, RemovedMass } from "@/domain/models/Schedule"
+import { MemberReading, Mass, ScheduleSlot, SwapRequest, CreateMassData, CreateSlotData, ScheduleBatchEntry, RemovedMass } from "@/domain/models/Schedule"
 import { ScheduleRepository } from "@/domain/repositories/ScheduleRepository"
 import { startOfMonth, endOfMonth, format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -259,6 +259,32 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
     const { data, error } = await supabase.from('masses').select('date').eq('month_reference', monthReference)
     if (error) throw error
     return [...new Set((data || []).map(m => m.date))]
+  }
+
+  async listReadingsByProfile(profileId: string): Promise<MemberReading[]> {
+    const { data, error } = await supabase
+      .from('schedule_slots')
+      .select('id, mass_id, role, is_confirmed, profile_id, original_profile_id, mass:masses!inner(date, time, special_description, is_published)')
+      .eq('profile_id', profileId)
+      .eq('mass.is_published', true)
+
+    if (error) throw error
+
+    return (data || [])
+      .map((slot: any) => {
+        const mass = Array.isArray(slot.mass) ? slot.mass[0] : slot.mass
+        return {
+          slotId: slot.id,
+          massId: slot.mass_id,
+          date: mass.date,
+          time: String(mass.time).slice(0, 5),
+          role: slot.role,
+          specialDescription: mass.special_description ?? null,
+          isConfirmed: !!slot.is_confirmed,
+          isSwapTakeover: !!slot.original_profile_id && slot.original_profile_id !== slot.profile_id
+        } as MemberReading
+      })
+      .sort((a, b) => (a.date === b.date ? b.time.localeCompare(a.time) : b.date.localeCompare(a.date)))
   }
 
   async listUpcomingForUser(profileId: string): Promise<Mass[]> {

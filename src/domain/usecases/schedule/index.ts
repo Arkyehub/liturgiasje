@@ -1,5 +1,5 @@
 import { ScheduleRepository } from "../../repositories/ScheduleRepository"
-import { Mass, ScheduleSlot, SwapRequest, CreateMassData, CreateSlotData, ScheduleBatchEntry, RemovedMass } from "../../models/Schedule"
+import { MemberReading, Mass, ScheduleSlot, SwapRequest, CreateMassData, CreateSlotData, ScheduleBatchEntry, RemovedMass } from "../../models/Schedule"
 
 export class ListSchedulesForMonth {
   constructor(private readonly scheduleRepository: ScheduleRepository) {}
@@ -26,6 +26,13 @@ export class CancelScheduleSwap {
   constructor(private readonly scheduleRepository: ScheduleRepository) {}
   async execute(slotId: string): Promise<void> {
     return this.scheduleRepository.cancelSwapRequest(slotId)
+  }
+}
+
+export class ListMemberReadings {
+  constructor(private readonly scheduleRepository: ScheduleRepository) {}
+  async execute(profileId: string): Promise<MemberReading[]> {
+    return this.scheduleRepository.listReadingsByProfile(profileId)
   }
 }
 

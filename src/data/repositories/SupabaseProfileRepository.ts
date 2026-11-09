@@ -24,6 +24,7 @@ export class SupabaseProfileRepository implements ProfileRepository {
       birthDate: p.birth_date,
       preferences: p.preferences,
       claimedAt: p.claimed_at,
+      lastSeenAt: p.last_seen_at,
       createdAt: p.created_at,
       updatedAt: p.updated_at
     }

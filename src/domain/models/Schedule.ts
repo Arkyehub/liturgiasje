@@ -37,6 +37,17 @@ export interface ScheduleSlot {
   } | null
 }
 
+export interface MemberReading {
+  slotId: string
+  massId: string
+  date: string // yyyy-MM-dd
+  time: string // HH:mm
+  role: string
+  specialDescription?: string | null
+  isConfirmed: boolean
+  isSwapTakeover: boolean // o membro assumiu a vaga de outra pessoa por troca
+}
+
 export interface SwapRequest extends ScheduleSlot {
   mass: {
     date: string
