@@ -264,7 +264,9 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
   async listReadingsByProfile(profileId: string): Promise<MemberReading[]> {
     const { data, error } = await supabase
       .from('schedule_slots')
-      .select('id, mass_id, role, is_confirmed, profile_id, original_profile_id, mass:masses!inner(date, time, special_description, is_published)')
+      // select('*') de propósito: original_profile_id não existe em todos os bancos (ex.: Production),
+      // e pedir a coluna explicitamente faria a consulta inteira falhar com 400.
+      .select('*, mass:masses!inner(date, time, special_description, is_published)')
       .eq('profile_id', profileId)
       .eq('mass.is_published', true)
 

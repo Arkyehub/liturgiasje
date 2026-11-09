@@ -31,6 +31,20 @@ test('lists only published readings of the member, newest first, with swap flag'
   expect(readings[0].isSwapTakeover).toBe(false)
 })
 
+test('works when the database has no original_profile_id column', async () => {
+  const builder = chain({
+    error: null,
+    data: [{ id: 's1', mass_id: 'm1', role: 'L', is_confirmed: false, profile_id: 'p', mass: { date: '2026-03-01', time: '07:00:00', special_description: null } }]
+  })
+  ;(supabase.from as jest.Mock).mockReturnValue(builder)
+
+  const readings = await new SupabaseScheduleRepository().listReadingsByProfile('p')
+
+  expect(builder.select).toHaveBeenCalledWith(expect.stringMatching(/^\*,/))
+  expect(readings).toHaveLength(1)
+  expect(readings[0].isSwapTakeover).toBe(false)
+})
+
 test('propagates database errors', async () => {
   ;(supabase.from as jest.Mock).mockReturnValue(chain({ error: new Error('denied'), data: null }))
   await expect(new SupabaseScheduleRepository().listReadingsByProfile('p')).rejects.toThrow('denied')
