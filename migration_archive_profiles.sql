@@ -1,4 +1,5 @@
--- DRAFT: incomplete RLS, grants and history integration; do not apply to any database.
+-- v1.39 member archiving. Validated against an isolated PostgreSQL mirroring the Supabase Preview policies
+-- (tests/database). Recovery: migration_archive_profiles_rollback.sql. Never apply to Production without explicit authorization.
 -- Same-day celebrations are conservatively left untouched because duration and timezone are not stored.
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS last_seen_at timestamptz;
@@ -22,6 +23,9 @@ CREATE OR REPLACE FUNCTION public.guard_profile_admin_state() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
 BEGIN
   PERFORM pg_advisory_xact_lock(13739001);
+  IF auth.uid() IS NOT NULL AND OLD.archived_at IS NOT NULL AND OLD.auth_user_id IS NULL AND NEW.auth_user_id IS NOT NULL THEN
+    RAISE EXCEPTION 'archived_profile_claim_forbidden' USING ERRCODE = '42501';
+  END IF;
   IF OLD.role = 'admin' AND OLD.archived_at IS NULL
      AND (NEW.role IS DISTINCT FROM 'admin' OR NEW.archived_at IS NOT NULL) THEN
     IF OLD.auth_user_id = auth.uid() AND NEW.archived_at IS NOT NULL THEN
@@ -119,7 +123,7 @@ CREATE OR REPLACE FUNCTION public.is_active_member() RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
   SELECT EXISTS (SELECT 1 FROM public.profiles WHERE auth_user_id = auth.uid() AND archived_at IS NULL)
 $$;
-REVOKE ALL ON FUNCTION public.is_active_member() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_active_member() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.is_active_member() TO authenticated;
 DROP POLICY IF EXISTS assignment_history_read ON public.schedule_assignment_history;
 CREATE POLICY assignment_history_read ON public.schedule_assignment_history FOR SELECT TO authenticated USING (public.is_active_member());
@@ -151,7 +155,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
     SELECT 1 FROM public.profiles WHERE auth_user_id = auth.uid() AND archived_at IS NOT NULL
   )
 $$;
-REVOKE ALL ON FUNCTION public.actor_not_archived() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.actor_not_archived() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.actor_not_archived() TO authenticated;
 DO $$
 DECLARE table_name text;
@@ -161,6 +165,17 @@ BEGIN
     EXECUTE format('CREATE POLICY deny_archived_actor ON public.%I AS RESTRICTIVE FOR ALL TO authenticated USING (public.actor_not_archived()) WITH CHECK (public.actor_not_archived())', table_name);
   END LOOP;
 END $$;
+-- app_settings stays publicly readable (version check), but archived actors may not write it.
+DO $$
+DECLARE cmd text;
+BEGIN
+  FOREACH cmd IN ARRAY ARRAY['INSERT','UPDATE','DELETE'] LOOP
+    EXECUTE format('DROP POLICY IF EXISTS deny_archived_actor_%s ON public.app_settings', lower(cmd));
+  END LOOP;
+  CREATE POLICY deny_archived_actor_insert ON public.app_settings AS RESTRICTIVE FOR INSERT TO authenticated WITH CHECK (public.actor_not_archived());
+  CREATE POLICY deny_archived_actor_update ON public.app_settings AS RESTRICTIVE FOR UPDATE TO authenticated USING (public.actor_not_archived()) WITH CHECK (public.actor_not_archived());
+  CREATE POLICY deny_archived_actor_delete ON public.app_settings AS RESTRICTIVE FOR DELETE TO authenticated USING (public.actor_not_archived());
+END $$;
 DROP POLICY IF EXISTS profiles_archived_read_guard ON public.profiles;
 CREATE POLICY profiles_archived_read_guard ON public.profiles AS RESTRICTIVE FOR SELECT TO authenticated
   USING (public.actor_not_archived() OR auth_user_id = auth.uid());
@@ -169,8 +184,7 @@ CREATE POLICY profiles_archived_update_guard ON public.profiles AS RESTRICTIVE F
   USING (public.actor_not_archived()) WITH CHECK (public.actor_not_archived());
 REVOKE DELETE ON public.profiles FROM PUBLIC, anon, authenticated;
 
--- DRAFT: role and archive changes must not be writable through the Data API.
--- Recheck all inherited privileges and policies in the isolated Supabase environment.
+-- Role and archive changes must not be writable through the Data API (verified by the check below).
 REVOKE UPDATE ON public.profiles FROM PUBLIC, anon, authenticated;
 DO $$
 DECLARE columns_to_grant text;

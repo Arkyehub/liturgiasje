@@ -7,3 +7,9 @@ Ordem: `fixture.sql`, schema do commit base `git show HEAD:schema.sql`, `fixture
 `concurrency.cjs` confirma o container de teste pelo nome, imagem, ausência de rede e portas. Ele exige o banco `audit_final4` já inicializado pela ordem acima e cria dados sintéticos próprios. Executa cada par nas duas ordens. Alterar o nome do banco exige revisar a configuração do script; nunca o aponte para um banco existente.
 
 `legacy-reproduction.sql`, `archive-integration.sql`, `direct-unassignment.sql`, `edit-history.sql` e `rollback.sql` registram testes de etapas anteriores. Alguns dependem de permissões diretas que a migration agora revoga e, portanto, não compõem a sequência atual de regressão.
+
+## Espelho das policies do Preview (v1.39)
+
+`fixture-preview-policies.sql` reproduz as policies e grants observados (somente leitura) no Supabase Preview e substitui `fixture-policies.sql` quando se quer testar contra o estado real. `preview-archived-actor.sql` (após a migration) prova que um administrador arquivado não escreve em `app_settings`, avisos, missas etc., que `app_settings` continua legível por `anon` e que um perfil arquivado sem vínculo não pode ser reivindicado. `unarchive.sql` cobre a reativação. Para a concorrência sem Docker: `PG_LOCAL_SOCKET_DIR=<dir do socket> PG_LOCAL_PORT=<porta> PG_LOCAL_DB=audit_final4 node tests/database/concurrency.cjs`.
+
+Recuperação: `migration_archive_profiles_rollback.sql` remove tudo o que a migration criou, preserva colunas e histórico e restaura os grants anteriores.

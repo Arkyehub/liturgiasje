@@ -1,4 +1,4 @@
--- Arquivamento e histórico requerem também migration_archive_profiles.sql (rascunho não homologado).
+-- Arquivamento e histórico requerem também migration_archive_profiles.sql (homologada no Preview; rollback em migration_archive_profiles_rollback.sql).
 -- 1. Tabelas de Identidade e Usuários
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
