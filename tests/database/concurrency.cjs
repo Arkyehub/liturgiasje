@@ -1,11 +1,16 @@
 const {execFileSync, spawn} = require('child_process')
-const container = 'liturgiasje-boundary-20261031', db = 'audit_final4'
-const inspect = JSON.parse(execFileSync('docker',['inspect',container],{encoding:'utf8'}))[0]
-if (inspect.HostConfig.NetworkMode !== 'none' || inspect.Config.Image !== 'postgres:17-alpine' || Object.keys(inspect.HostConfig.PortBindings || {}).length) throw Error('test container is not isolated')
-const args = sql => ['exec',container,'psql','-X','-q','-v','ON_ERROR_STOP=1','-U','postgres','-d',db,'-c',sql]
-const sql = q => execFileSync('docker',args(q),{encoding:'utf8'})
+const local = process.env.PG_LOCAL_SOCKET_DIR // e.g. /tmp: runs psql against a throwaway local cluster instead of Docker
+const container = 'liturgiasje-boundary-20261031', db = process.env.PG_LOCAL_DB || 'audit_final4'
+if (!local) {
+  const inspect = JSON.parse(execFileSync('docker',['inspect',container],{encoding:'utf8'}))[0]
+  if (inspect.HostConfig.NetworkMode !== 'none' || inspect.Config.Image !== 'postgres:17-alpine' || Object.keys(inspect.HostConfig.PortBindings || {}).length) throw Error('test container is not isolated')
+}
+const psqlArgs = ['-X','-q','-v','ON_ERROR_STOP=1','-U','postgres','-d',db]
+const args = sql => local ? psqlArgs.concat(['-h',local,'-p',process.env.PG_LOCAL_PORT || '5432','-c',sql]) : ['exec',container,'psql'].concat(psqlArgs,['-c',sql])
+const bin = local ? 'psql' : 'docker'
+const sql = q => execFileSync(bin,args(q),{encoding:'utf8'})
 const admin='10000000-0000-0000-0000-000000000001'
-const run = q => new Promise(resolve => { const p=spawn('docker',args(q)); let out=''; p.stdout.on('data',x=>out+=x); p.stderr.on('data',x=>out+=x); p.on('close',code=>resolve({code,out})) })
+const run = q => new Promise(resolve => { const p=spawn(bin,args(q)); let out=''; p.stdout.on('data',x=>out+=x); p.stderr.on('data',x=>out+=x); p.on('close',code=>resolve({code,out})) })
 const tx=(actor,body,hold=false)=>`BEGIN; SET ROLE authenticated; SELECT set_config('request.jwt.claim.sub','${actor}',true); ${body}; ${hold?'SELECT pg_sleep(2);':''} COMMIT;`
 const edit=(m,s,p,rev,time)=>`SELECT public.update_mass_with_slots('${m}',jsonb_build_object('date','2099-12-01','time','${time}','month_reference','2099-12','expected_revision',${rev}),jsonb_build_array(jsonb_build_object('id','${s}','role','1L','profileId','${p}')))`
 const sleep=ms=>new Promise(r=>setTimeout(r,ms))
