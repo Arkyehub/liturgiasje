@@ -63,7 +63,7 @@ test("separates past readings from upcoming ones and summarises them", () => {
 test("limits the history and reveals more on demand", () => {
   const readings = Array.from({ length: 12 }, (_, i) => reading(`r${i}`, `2026-0${(i % 9) + 1}-1${i % 9}`))
   render(<MemberAnalysisView profile={profile} readings={readings} unavailableDates={[]} today={TODAY} />)
-  expect(screen.getByRole("button", { name: /Mostrar mais \(4\)/ })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /Mostrar mais \(2\)/ })).toBeInTheDocument()
 })
 
 test("lists unavailable dates and ignores duplicates", () => {

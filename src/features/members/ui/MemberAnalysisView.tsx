@@ -33,7 +33,7 @@ export const ROLE_LABELS: Record<string, string> = {
 
 // O app guarda as preferências com a chave "6" para Domingo (ver ScheduleForm.checkPreference).
 const WEEKDAYS: Record<string, string> = { "0": "Domingo", "1": "Segunda", "2": "Terça", "3": "Quarta", "4": "Quinta", "5": "Sexta", "6": "Domingo" }
-const PAGE_SIZE = 8
+const PAGE_SIZE = 10
 
 interface MemberAnalysisViewProps {
   profile: Profile
@@ -84,40 +84,38 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 function ReadingRow({ reading, upcoming }: { reading: MemberReading; upcoming?: boolean }) {
   const date = parseISO(reading.date)
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-stone-100 bg-white p-3">
-      <div
-        className={cn(
-          "flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl border",
-          upcoming ? "border-amber-200 bg-amber-50 text-amber-800" : "border-stone-100 bg-stone-50 text-stone-800"
-        )}
-      >
-        <span className="text-base font-black leading-none">{format(date, "dd")}</span>
-        <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wider opacity-70">
+    <div className="flex items-center gap-3 py-2.5">
+      <div className="flex w-12 shrink-0 items-baseline gap-1">
+        <span className={cn("text-sm font-black leading-none", upcoming ? "text-amber-700" : "text-stone-800")}>{format(date, "dd")}</span>
+        <span className="text-[9px] font-bold uppercase tracking-wider text-stone-400">
           {format(date, "EEEE", { locale: ptBR }).slice(0, 3)}
         </span>
       </div>
 
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <p className="truncate text-sm font-bold text-stone-800">{ROLE_LABELS[reading.role] ?? reading.role}</p>
-        <p className="flex items-center gap-1 text-[11px] text-stone-500">
-          <Clock className="h-3 w-3" />
-          {reading.time}
-          {reading.specialDescription ? <span className="truncate"> · {reading.specialDescription}</span> : null}
-        </p>
-      </div>
-
-      <div className="flex shrink-0 flex-col items-end gap-1">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-green-200 bg-green-50 text-[10px] font-black text-green-700">
-          {reading.role}
-        </span>
-        {reading.isSwapTakeover && (
-          <Badge className="border-amber-200 bg-amber-100 px-1.5 py-0 text-[8px] font-bold uppercase tracking-wider text-amber-700 hover:bg-amber-100">
-            Troca
-          </Badge>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-stone-800">{ROLE_LABELS[reading.role] ?? reading.role}</p>
+        {(reading.isSwapTakeover || reading.specialDescription) && (
+          <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+            {reading.isSwapTakeover && (
+              <Badge className="shrink-0 border-amber-200 bg-amber-100 px-1.5 py-0 text-[8px] font-bold uppercase tracking-wider text-amber-700 hover:bg-amber-100">
+                Troca
+              </Badge>
+            )}
+            {reading.specialDescription && <span className="truncate text-[10px] text-stone-400">{reading.specialDescription}</span>}
+          </div>
         )}
       </div>
+
+      <span className="shrink-0 text-xs font-medium tabular-nums text-stone-500">{reading.time}</span>
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-green-200 bg-green-50 text-[9px] font-black text-green-700">
+        {reading.role}
+      </span>
     </div>
   )
+}
+
+function ReadingList({ children }: { children: React.ReactNode }) {
+  return <div className="divide-y divide-stone-100 rounded-2xl border border-stone-100 bg-white px-3">{children}</div>
 }
 
 export function MemberAnalysisView({ profile, readings, unavailableDates, today }: MemberAnalysisViewProps) {
@@ -349,11 +347,11 @@ export function MemberAnalysisView({ profile, readings, unavailableDates, today 
         {upcoming.length > 0 && (
           <div className="space-y-3">
             <SectionLabel icon={CalendarCheck}>Próximas escalas</SectionLabel>
-            <div className="space-y-2">
+            <ReadingList>
               {upcoming.map((reading) => (
                 <ReadingRow key={reading.slotId} reading={reading} upcoming />
               ))}
-            </div>
+            </ReadingList>
           </div>
         )}
 
@@ -370,15 +368,15 @@ export function MemberAnalysisView({ profile, readings, unavailableDates, today 
               Este membro ainda não realizou leituras.
             </p>
           ) : (
-            <div className="space-y-5">
+            <div className="space-y-4">
               {pastByMonth.map((group) => (
-                <div key={group.key} className="space-y-2">
+                <div key={group.key} className="space-y-1.5">
                   <p className="text-xs font-bold text-stone-500">{group.label}</p>
-                  <div className="space-y-2">
+                  <ReadingList>
                     {group.items.map((reading) => (
                       <ReadingRow key={reading.slotId} reading={reading} />
                     ))}
-                  </div>
+                  </ReadingList>
                 </div>
               ))}
 
