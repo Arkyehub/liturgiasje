@@ -6,6 +6,12 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
+  // Pré-carregamentos do Next (<Link> visíveis na tela) não precisam renovar a sessão e eram uma
+  // das maiores fontes de chamadas ao Auth do Supabase.
+  if (request.headers.get('next-router-prefetch') || request.headers.get('purpose') === 'prefetch') {
+    return supabaseResponse
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 

@@ -88,8 +88,10 @@ export class SupabaseAnnouncementRepository implements AnnouncementRepository {
 
     if (error) throw error
     
-    // Buscar o role do usuário atual para filtrar rascunhos
-    const { data: { user } } = await supabase.auth.getUser()
+    // Buscar o role do usuário atual para filtrar rascunhos.
+    // getSession() lê a sessão local (sem ida à rede); é só filtro de exibição, a segurança é garantida pelo RLS.
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     const { data: profileData } = user ? await supabase.from('profiles').select('role').eq('auth_user_id', user.id).single() : { data: null }
     const isAdmin = profileData?.role === 'admin'
 
