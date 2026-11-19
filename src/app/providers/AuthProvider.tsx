@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from "react"
 import { supabase } from "@/shared/api/supabase"
 import { User, AuthChangeEvent, Session } from "@supabase/supabase-js"
 import { makeGetProfileByAuthId } from "@/main/factories/usecases/profiles"
@@ -18,38 +18,63 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Campos que mudam sozinhos a cada acesso e não alteram nada na tela.
+const VOLATILE_PROFILE_FIELDS: (keyof Profile)[] = ["lastSeenAt", "updatedAt"]
+
+/** Compara perfis ignorando campos voláteis, para manter a mesma referência quando nada mudou. */
+export function isSameProfile(a: Profile | null, b: Profile | null): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  const strip = (p: Profile) => JSON.stringify({ ...p, ...Object.fromEntries(VOLATILE_PROFILE_FIELDS.map((k) => [k, null])) })
+  return strip(a) === strip(b)
+}
+
+const BACKGROUND_REFRESH_MS = 5 * 60 * 1000 // atualização em segundo plano (aba visível)
+const MIN_FOCUS_REFRESH_MS = 60 * 1000 // ao voltar para a aba, no máximo 1 atualização por minuto
+const LAST_SEEN_THROTTLE_MS = 10 * 60 * 1000 // escreve last_seen_at no máximo a cada 10 minutos
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const currentUserId = useRef<string | null>(null)
+  const lastRefreshAt = useRef(0)
+  const lastSeenWrittenAt = useRef(0)
 
-  const fetchProfile = async (authUserId: string, silent = false) => {
+  const touchLastSeen = useCallback((profileId: string) => {
+    const now = Date.now()
+    if (now - lastSeenWrittenAt.current < LAST_SEEN_THROTTLE_MS) return
+    lastSeenWrittenAt.current = now
+    supabase
+      .from("profiles")
+      .update({ last_seen_at: new Date(now).toISOString() })
+      .eq("id", profileId)
+      .then(({ error }) => {
+        if (error) console.error("[AuthProvider] Erro ao registrar último acesso:", error.message)
+      })
+  }, [])
+
+  const fetchProfile = useCallback(async (authUserId: string, silent = false) => {
     if (!silent) setLoading(true)
-    console.log("[AuthProvider] Buscando perfil para authUserId:", authUserId)
+    lastRefreshAt.current = Date.now()
     try {
       const profileData = await makeGetProfileByAuthId().execute(authUserId)
-      console.log("[AuthProvider] Perfil encontrado:", profileData)
-      setProfile(profileData)
-      if (profileData?.id && profileData.archivedAt === null) {
-        supabase
-          .from("profiles")
-          .update({ last_seen_at: new Date().toISOString() })
-          .eq("id", profileData.id)
-          .then()
-      }
-    } catch (error: any) {
+      // Mantém a mesma referência quando nada mudou: telas que dependem de `profile` não refazem consultas.
+      setProfile((previous) => (isSameProfile(previous, profileData) ? previous : profileData))
+      if (profileData?.id && profileData.archivedAt === null) touchLastSeen(profileData.id)
+    } catch (error) {
       setProfile(null)
-      console.error("[AuthProvider] Erro ao buscar perfil:", error?.message || error)
-      if (error?.details) console.error("[AuthProvider] Detalhes do erro:", error.details)
-      if (error?.hint) console.error("[AuthProvider] Dica do banco:", error.hint)
+      const e = error as { message?: string; details?: string; hint?: string }
+      console.error("[AuthProvider] Erro ao buscar perfil:", e?.message || "erro desconhecido", e?.details ?? "", e?.hint ?? "")
     } finally {
       if (!silent) setLoading(false)
     }
-  }
+  }, [touchLastSeen])
 
   useEffect(() => {
     // 1. Verificar usuário atual ao montar
     supabase.auth.getUser().then(({ data: { user } }) => {
+      currentUserId.current = user?.id ?? null
       setUser(user)
       if (user) {
         fetchProfile(user.id)
@@ -58,13 +83,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    // 2. Escutar mudanças na autenticação
+    // 2. Escutar mudanças na autenticação.
+    // O Supabase repete eventos (ex.: SIGNED_IN, TOKEN_REFRESHED) ao voltar para a aba para o MESMO usuário:
+    // nesse caso não há "carregando" nem troca de usuário, só uma atualização silenciosa.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event: AuthChangeEvent, session: Session | null) => {
-        const currentUser = session?.user ?? null
-        setUser(currentUser)
-        if (currentUser) {
-          fetchProfile(currentUser.id)
+        const sessionUser = session?.user ?? null
+        if (sessionUser && sessionUser.id === currentUserId.current) {
+          setUser((previous) => (previous?.id === sessionUser.id ? previous : sessionUser))
+          return
+        }
+        currentUserId.current = sessionUser?.id ?? null
+        setUser(sessionUser)
+        if (sessionUser) {
+          fetchProfile(sessionUser.id)
         } else {
           setProfile(null)
           setLoading(false)
@@ -73,15 +105,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     )
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [fetchProfile])
 
   useEffect(() => {
     if (!user?.id) return
-    const refresh = () => { void fetchProfile(user.id, true) }
-    window.addEventListener('focus', refresh)
-    const timer = window.setInterval(refresh, 30000)
-    return () => { window.removeEventListener('focus', refresh); window.clearInterval(timer) }
-  }, [user?.id])
+    const refresh = () => {
+      if (document.visibilityState === "hidden") return
+      void fetchProfile(user.id, true)
+    }
+    // Ao voltar para a aba/app: atualiza, mas no máximo uma vez por minuto.
+    const refreshOnReturn = () => {
+      if (Date.now() - lastRefreshAt.current >= MIN_FOCUS_REFRESH_MS) refresh()
+    }
+    window.addEventListener("focus", refreshOnReturn)
+    document.addEventListener("visibilitychange", refreshOnReturn)
+    const timer = window.setInterval(refresh, BACKGROUND_REFRESH_MS)
+    return () => {
+      window.removeEventListener("focus", refreshOnReturn)
+      document.removeEventListener("visibilitychange", refreshOnReturn)
+      window.clearInterval(timer)
+    }
+  }, [user?.id, fetchProfile])
+
   const signInWithGoogle = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -97,17 +142,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
-  const value = {
-    user,
-    profile,
-    isActive: !!profile && profile.archivedAt === null,
-    loading,
-    refreshProfile: async () => {
-      if (user) await fetchProfile(user.id)
-    },
-    signInWithGoogle,
-    signOut,
-  }
+  const refreshProfile = useCallback(async () => {
+    if (user) await fetchProfile(user.id)
+  }, [user, fetchProfile])
+
+  const value = useMemo(
+    () => ({
+      user,
+      profile,
+      isActive: !!profile && profile.archivedAt === null,
+      loading,
+      refreshProfile,
+      signInWithGoogle,
+      signOut,
+    }),
+    // signInWithGoogle/signOut só usam o cliente do Supabase e setters estáveis
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user, profile, loading, refreshProfile]
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

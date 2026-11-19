@@ -48,7 +48,7 @@ export default function MemberAnalysisPage() {
     return () => {
       cancelled = true
     }
-  }, [id, user, viewer, loading, router])
+  }, [id, user?.id, viewer?.role, loading, router])
 
   if (loading || (!data && !error)) {
     return (

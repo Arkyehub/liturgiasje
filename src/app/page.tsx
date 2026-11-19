@@ -57,6 +57,10 @@ import { AlertTriangle } from "lucide-react"
 
 export default function Home() {
   const { user, profile, isActive, loading, signInWithGoogle, signOut } = useAuth()
+  // Valores primitivos para dependências de efeitos: o objeto `profile` não deve disparar recargas.
+  const profileId = profile?.id ?? null
+  const isAdminRole = profile?.role === "admin"
+  const lastFocusReloadAt = useRef(0)
   const router = useRouter()
   const [currentDate, setCurrentDate] = useState(new Date())
   const pendingScrollSlotId = useRef<string | null>(null)
@@ -391,27 +395,30 @@ export default function Home() {
 
 
   useEffect(() => {
-    if (user?.id && isActive && profile) {
-      loadAnnouncements(profile.id)
-      loadSchedule(currentDate, profile?.role === "admin")
-      loadUpcomingSchedule(profile.id)
+    if (user?.id && isActive && profileId) {
+      loadAnnouncements(profileId)
+      loadSchedule(currentDate, isAdminRole)
+      loadUpcomingSchedule(profileId)
       loadSwaps()
       loadBirthdays()
     }
-  }, [user?.id, profile, isActive, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate])
+  }, [user?.id, profileId, isAdminRole, isActive, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate])
 
   // Recarregar dados ao focar na janela (volta ao PWA ou aba)
   useEffect(() => {
     const handleFocus = () => {
-      if (user?.id && isActive && profile) {
-        loadAnnouncements(profile.id, true)
-        loadSchedule(currentDate, profile?.role === "admin", true)
+      // No máximo uma atualização por minuto ao voltar para a aba
+      if (Date.now() - lastFocusReloadAt.current < 60_000) return
+      if (user?.id && isActive && profileId) {
+        lastFocusReloadAt.current = Date.now()
+        loadAnnouncements(profileId, true)
+        loadSchedule(currentDate, isAdminRole, true)
         loadSwaps()
       }
     }
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
-  }, [user?.id, isActive, profile, currentDate, loadAnnouncements, loadSchedule, loadSwaps])
+  }, [user?.id, isActive, profileId, isAdminRole, currentDate, loadAnnouncements, loadSchedule, loadSwaps])
 
   // Garantir que a página comece no topo absoluto ao carregar
   useEffect(() => {

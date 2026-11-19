@@ -63,7 +63,7 @@ export default function AdminMembersPage() {
         loadProfiles()
       }
     }
-  }, [user, profile, loading])
+  }, [user?.id, profile?.role, loading])
 
   const loadProfiles = async () => {
     try {
