@@ -24,9 +24,13 @@ export default function MemberAnalysisPage() {
   const [data, setData] = useState<AnalysisData | null>(null)
   const [error, setError] = useState(false)
 
+  // Valores primitivos: a identidade do usuário/perfil não deve disparar novas consultas.
+  const userId = user?.id
+  const viewerIsAdmin = viewer?.role === "admin"
+
   useEffect(() => {
     if (loading) return
-    if (!user || viewer?.role !== "admin") {
+    if (!userId || !viewerIsAdmin) {
       router.push("/")
       return
     }
@@ -48,7 +52,7 @@ export default function MemberAnalysisPage() {
     return () => {
       cancelled = true
     }
-  }, [id, user?.id, viewer?.role, loading, router])
+  }, [id, userId, viewerIsAdmin, loading, router])
 
   if (loading || (!data && !error)) {
     return (

@@ -156,8 +156,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithGoogle,
       signOut,
     }),
-    // signInWithGoogle/signOut só usam o cliente do Supabase e setters estáveis
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [user, profile, loading, refreshProfile]
   )
 
