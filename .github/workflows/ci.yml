@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, preview, "feature/**", "fix/**"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Testes
+        run: npx jest --ci
+      - name: Build
+        run: npm run build
+        env:
+          # Valores fictícios: o build não acessa o banco.
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+      - name: Vulnerabilidades em produção
+        run: npm audit --omit=dev --audit-level=high
+      - name: Lint (informativo)
+        # O projeto ainda tem dívida de lint (no-explicit-any). Mostra o resultado sem bloquear o merge.
+        run: npx eslint src || true
