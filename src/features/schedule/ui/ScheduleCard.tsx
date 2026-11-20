@@ -250,7 +250,7 @@ export function ScheduleCard({
                     >
                       {slot.readerName && slot.readerName !== "---" ? (
                         <span className={cn(
-                          "flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-2 ring-offset-2 ring-offset-transparent transition-all",
+                          "flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-[1.5px] ring-offset-2 ring-offset-transparent transition-all",
                           slot.isSwapRequested
                             ? "ring-[#E0824A]"
                             : slot.isConfirmed
