@@ -59,11 +59,11 @@ export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
   if (members.length === 0) return null
 
   return (
-    <Card ref={cardRef} className="overflow-hidden border-stone-200 bg-white shadow-sm transition-all">
+    <Card ref={cardRef} className="gap-0 overflow-hidden rounded-[20px] border border-[#F1DFAE] bg-[#FDF4DC] py-0 shadow-none ring-0 transition-all">
       {/* CAPA DO CARD */}
       <div 
         onClick={() => setIsExpanded(!isExpanded)}
-        className="cursor-pointer px-3 py-2 hover:bg-stone-50 transition-colors"
+        className="min-h-16 cursor-pointer px-4 py-3 transition-colors hover:bg-[#FBEFC9]"
       >
         <div className="flex items-center justify-between">
           <div className="flex flex-col w-full">
@@ -98,19 +98,22 @@ export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
             ) : (
               // Modo Padrão
               <div className="flex items-center gap-3">
-                <div className="bg-amber-50 p-1.5 rounded-xl text-amber-600">
-                  <Cake className="h-4 w-4" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8B21E] text-[#322113]">
+                  <Cake className="h-5 w-5" />
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-stone-800">
-                    Aniversariantes do Mês de <span className="capitalize">{format(currentMonth, "MMMM", { locale: ptBR })}</span>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[15px] font-extrabold text-stone-800">
+                    Aniversariantes de <span>{format(currentMonth, "MMMM", { locale: ptBR })}</span>
+                  </span>
+                  <span className="text-[13px] text-[#6B5D50]">
+                    {members.length} {members.length === 1 ? "membro" : "membros"}
                   </span>
                 </div>
               </div>
             )}
           </div>
           
-          <div className="text-stone-300">
+          <div className="text-[#6B5D50]">
             {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
           </div>
         </div>
@@ -118,7 +121,7 @@ export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
 
       {/* LISTA EXPANDIDA */}
       {isExpanded && (
-        <div className="border-t border-stone-100 bg-stone-50/30 p-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="border-t border-[#F1DFAE] bg-[#FFFAEB] p-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
           <p className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-2">
             Lista de {format(currentMonth, "MMMM", { locale: ptBR })}
           </p>
@@ -129,7 +132,7 @@ export function BirthdayCard({ members, currentMonth }: BirthdayCardProps) {
               const isTodayBirthday = birthDate.getDate() === today.getDate() && birthDate.getMonth() === today.getMonth()
               
               return (
-                <div key={m.id} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-stone-100 shadow-sm">
+                <div key={m.id} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-[#F1DFAE] shadow-sm">
                   <div className="flex items-center gap-3">
                     <div className="relative">
                       <UserAvatar 

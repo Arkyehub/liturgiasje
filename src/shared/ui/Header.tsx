@@ -71,7 +71,7 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container relative flex h-20 items-center justify-between px-4 max-w-md mx-auto">
+      <div className="container relative flex h-[68px] items-center justify-between px-4 max-w-md mx-auto">
         {/* Botão Voltar (Opcional) */}
         {showBackButton && (
           <button
@@ -102,13 +102,13 @@ export function Header({
             <img
               src="/Logo-Liturgia-SJE.png"
               alt="Logo Liturgia SJE"
-              className={`${centerLogo ? 'h-10 w-auto' : 'h-14 w-auto'} drop-shadow-sm group-hover:drop-shadow-md transition-all`}
+              className={`${centerLogo ? 'h-9 w-9' : 'h-11 w-11'} rounded-xl shadow-md shadow-[#322113]/20 group-hover:shadow-lg transition-all`}
             />
             <div className={`flex flex-col ${centerLogo ? 'items-start' : ''}`}>
-              <h1 className={`${centerLogo ? 'text-lg' : 'text-xl'} font-black tracking-tight text-stone-800 leading-none`}>
+              <h1 className={`${centerLogo ? 'text-base' : 'text-[19px]'} font-black tracking-tight text-stone-800 leading-none`}>
                 Liturgia SJE
               </h1>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#8A7A66]">
                 Painel do Leitor
               </span>
             </div>
@@ -136,7 +136,7 @@ export function Header({
                 <div className="relative">
                   {/* Chapéu de Palha Junino condicional */}
                   {new Date().getMonth() === 5 && (
-                    <svg viewBox="0 0 100 100" className="absolute -top-[18px] left-[2px] z-10 w-11 h-11 -rotate-[15deg] drop-shadow-[0_2px_3px_rgba(0,0,0,0.15)] pointer-events-none">
+                    <svg viewBox="0 0 100 100" className="absolute -top-[16px] left-0 z-10 w-10 h-10 -rotate-[15deg] drop-shadow-[0_2px_3px_rgba(0,0,0,0.15)] pointer-events-none">
                       {/* Copa do chapéu */}
                       <path d="M 30 50 Q 30 20 50 20 Q 70 20 70 50" fill="#e5c158" stroke="#b69324" strokeWidth="2.5" />
                       {/* Faixinha vermelha */}
@@ -155,10 +155,10 @@ export function Header({
                       <line x1="45" y1="28" x2="45" y2="38" stroke="#fff" strokeWidth="1" />
                     </svg>
                   )}
-                  <Avatar className="h-14 w-14 cursor-pointer border-2 border-stone-200 transition-colors hover:border-stone-300">
+                  <Avatar className="h-12 w-12 cursor-pointer border-2 border-[#E8B21E] transition-colors hover:border-[#d8a516]">
                     <AvatarImage src={user?.avatarUrl ?? undefined} />
                     <AvatarFallback className="bg-stone-100 text-stone-600">
-                      <UserCircle className="h-9 w-9" />
+                      <UserCircle className="h-7 w-7" />
                     </AvatarFallback>
                   </Avatar>
                 </div>
@@ -225,7 +225,7 @@ export function Header({
               <div className="relative">
                 {/* Chapéu de Palha Junino condicional */}
                 {new Date().getMonth() === 5 && (
-                  <svg viewBox="0 0 100 100" className="absolute -top-[18px] left-[2px] z-10 w-11 h-11 -rotate-[15deg] drop-shadow-[0_2px_3px_rgba(0,0,0,0.15)] pointer-events-none">
+                  <svg viewBox="0 0 100 100" className="absolute -top-[16px] left-0 z-10 w-10 h-10 -rotate-[15deg] drop-shadow-[0_2px_3px_rgba(0,0,0,0.15)] pointer-events-none">
                     {/* Copa do chapéu */}
                     <path d="M 30 50 Q 30 20 50 20 Q 70 20 70 50" fill="#e5c158" stroke="#b69324" strokeWidth="2.5" />
                     {/* Faixinha vermelha */}
@@ -244,9 +244,9 @@ export function Header({
                     <line x1="45" y1="28" x2="45" y2="38" stroke="#fff" strokeWidth="1" />
                   </svg>
                 )}
-                <Avatar className="h-14 w-14 cursor-pointer border-2 border-stone-200 transition-colors hover:border-stone-300">
+                <Avatar className="h-12 w-12 cursor-pointer border-2 border-[#E8B21E] transition-colors hover:border-[#d8a516]">
                   <AvatarFallback className="bg-stone-100 text-stone-600">
-                    <UserCircle className="h-9 w-9" />
+                    <UserCircle className="h-7 w-7" />
                   </AvatarFallback>
                 </Avatar>
               </div>
