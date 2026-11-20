@@ -79,13 +79,15 @@ describe("ScheduleForm Validation", () => {
     fireEvent.change(timeInputs[0], { target: { value: "07:00" } })
     fireEvent.change(timeInputs[1], { target: { value: "07:00" } })
 
-    // Tentar salvar
-    const saveBtn = screen.getByText(/Salvar Rascunho/i)
-    fireEvent.click(saveBtn)
+    // Horário repetido: avisa no card e trava o salvamento
+    expect((await screen.findAllByText(/Já existe uma missa às 07:00 neste dia/))).toHaveLength(2)
+    expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled()
+    expect(screen.getAllByRole("button", { name: /Concluir missa/i })[0]).toBeDisabled()
 
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("Existem missas com o mesmo horário neste formulário.")
-    })
+    // Corrigindo um dos horários, libera
+    fireEvent.change(timeInputs[1], { target: { value: "09:00" } })
+    await waitFor(() => expect(screen.queryByText(/Já existe uma missa às/)).not.toBeInTheDocument())
+    expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled()
   })
 
   it("should prevent saving if time already exists in database", async () => {
@@ -107,13 +109,8 @@ describe("ScheduleForm Validation", () => {
     const timeInput = screen.getByLabelText(/Horário/i)
     fireEvent.change(timeInput, { target: { value: "19:00" } })
 
-    // Tentar salvar
-    const saveBtn = screen.getByText(/Salvar Rascunho/i)
-    fireEvent.click(saveBtn)
-
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("Já existe uma missa cadastrada para o horário 19:00 neste dia.")
-    })
+    expect(await screen.findByText(/Já existe uma missa às 19:00 neste dia/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled()
   })
 
   it("should fetch usage counts for the initial month", async () => {
@@ -194,5 +191,14 @@ describe("ScheduleForm Validation", () => {
     expect(items).toHaveLength(1)
     expect(items[0]).toHaveAttribute("data-disabled", "true")
     expect(screen.getByText("Já escalado")).toBeInTheDocument()
+  })
+
+  it("should suggest a free time for a new mass instead of repeating one", async () => {
+    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
+    fireEvent.click(screen.getByText("30"))
+    fireEvent.click(await screen.findByText(/Adicionar outro Horário/i))
+
+    const timeInputs = screen.getAllByLabelText(/Horário/i) as HTMLInputElement[]
+    expect(timeInputs.map(i => i.value)).toEqual(["07:00", "09:00"])
   })
 })
