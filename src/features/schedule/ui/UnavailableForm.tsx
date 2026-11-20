@@ -6,7 +6,7 @@ import { ptBR } from "date-fns/locale"
 import { format } from "date-fns"
 import { makeListUnavailableByProfile, makeToggleUnavailableDate } from "@/main/factories/usecases/profiles"
 import { toast } from "sonner"
-import { Loader2, CalendarX, AlertCircle } from "lucide-react"
+import { Loader2, CalendarX } from "lucide-react"
 
 interface UnavailableFormProps {
   profileId: string
@@ -67,6 +67,10 @@ export function UnavailableForm({ profileId, onClose }: UnavailableFormProps) {
     }
   }
 
+  const monthCount = unavailableDates.filter(
+    d => d.getMonth() === currentMonth.getMonth() && d.getFullYear() === currentMonth.getFullYear()
+  ).length
+
   if (isLoading) {
     return (
       <div className="flex h-60 items-center justify-center">
@@ -76,14 +80,8 @@ export function UnavailableForm({ profileId, onClose }: UnavailableFormProps) {
   }
 
   return (
-    <div className="space-y-6 py-2">
-      <div className="flex flex-col gap-1.5 px-1">
-        <p className="text-xs text-stone-500 font-medium">
-          Clique nos dias do calendário para marcar sua indisponibilidade.
-        </p>
-      </div>
-
-      <div className="bg-white rounded-3xl border border-stone-100 shadow-xl shadow-stone-200/40 p-2 flex justify-center overflow-hidden">
+    <div className="space-y-3">
+      <div className="flex justify-center overflow-hidden rounded-2xl border border-[#E9DFCB] bg-[#FAF5E6] p-1">
         <Calendar
           mode="single"
           selected={undefined}
@@ -97,12 +95,19 @@ export function UnavailableForm({ profileId, onClose }: UnavailableFormProps) {
             unavailable: unavailableDates
           }}
           modifiersClassNames={{
-            unavailable: "bg-red-500 text-white hover:bg-red-600 rounded-lg shadow-sm font-bold after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1 after:h-1 after:bg-white/50 after:rounded-full"
+            unavailable: "bg-[#A23F06] text-white hover:bg-[#8A3505] rounded-lg font-bold"
           }}
-          className="rounded-2xl border-none shadow-none"
+          className="rounded-2xl border-none bg-transparent shadow-none"
         />
       </div>
-
+      <p className="flex items-center justify-center gap-1.5 text-xs font-semibold text-[#6B5D50]">
+        <CalendarX className="h-3.5 w-3.5" />
+        {monthCount === 0
+          ? "Nenhum dia marcado neste mês"
+          : monthCount === 1
+            ? "1 dia marcado neste mês"
+            : `${monthCount} dias marcados neste mês`}
+      </p>
     </div>
   )
 }

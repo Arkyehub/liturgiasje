@@ -250,13 +250,13 @@ export function ScheduleCard({
                     >
                       {slot.readerName && slot.readerName !== "---" ? (
                         <span className={cn(
-                          "flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-[1.5px] ring-offset-2 ring-offset-transparent transition-all",
+                          "flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-1 ring-offset-2 ring-offset-transparent transition-all",
                           slot.isSwapRequested
-                            ? "ring-[#E0824A]"
+                            ? "ring-[#E0824A]/60"
                             : slot.isConfirmed
-                              ? "ring-[#2E8B57]"
+                              ? "ring-[#2E8B57]/55"
                               : slot.isMine
-                                ? "ring-[#E8B21E]"
+                                ? "ring-[#E8B21E]/70"
                                 : "ring-transparent"
                         )}>
                           <UserAvatar
