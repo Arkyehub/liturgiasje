@@ -1,13 +1,14 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Mass } from "@/domain/models/Schedule"
-import { Card } from "@/shared/ui/card"
-import { AlertCircle, CalendarDays, CheckCircle, ChevronDown, ChevronRight, ExternalLink } from "lucide-react"
-import { format, isAfter, startOfDay, parseISO, isValid } from "date-fns"
+import { BookOpen, CalendarDays, Check, CheckCircle, ChevronDown, Clock, ExternalLink, RefreshCw } from "lucide-react"
+import { differenceInCalendarDays, format, isValid, parseISO, startOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/shared/lib/utils"
-import { roleLabel as roleName } from "@/shared/constants/roles"
+import { roleLabel } from "@/shared/constants/roles"
+import { LiturgyService, LiturgyData } from "@/shared/api/LiturgyService"
+import { LiturgySheet } from "@/features/schedule/ui/LiturgySheet"
 
 interface MyScheduleWidgetProps {
   schedule: Mass[]
@@ -15,173 +16,283 @@ interface MyScheduleWidgetProps {
   userName?: string
   userAvatar?: string | null
   onNavigateToSlot: (slotId: string, date: string) => void
+  onConfirm: (slotId: string) => void
+  onRequestSwap: (slotId: string) => void
+  onCancelSwap: (slotId: string) => void
 }
 
-export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, onNavigateToSlot }: MyScheduleWidgetProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+interface MySlot {
+  id: string
+  role: string
+  isConfirmed: boolean
+  isSwapRequested: boolean
+  massDate: string
+  massTime: string
+  specialDescription?: string
+}
 
-  // 1. Filtrar todas as escalas do usuário no mês
+function greeting(hour: number) {
+  if (hour < 12) return "Bom dia"
+  if (hour < 18) return "Boa tarde"
+  return "Boa noite"
+}
+
+function whenLabel(days: number) {
+  if (days <= 0) return "HOJE"
+  if (days === 1) return "AMANHÃ"
+  return `EM ${days} DIAS`
+}
+
+/** Referência bíblica da leitura da pessoa, quando a função tem uma leitura própria. */
+function referenceFor(role: string, data: LiturgyData | null): string | null {
+  if (!data) return null
+  if (role === "1L" || role === "L") return data.leituras?.primeiraLeitura?.[0]?.referencia ?? null
+  if (role === "2L") return data.leituras?.segundaLeitura?.[0]?.referencia ?? data.leituras?.primeiraLeitura?.[0]?.referencia ?? null
+  return null
+}
+
+export function MyScheduleWidget({
+  schedule,
+  profileId,
+  userName,
+  onNavigateToSlot,
+  onConfirm,
+  onRequestSwap,
+  onCancelSwap,
+}: MyScheduleWidgetProps) {
+  const [isListOpen, setIsListOpen] = useState(false)
+  const [isLiturgyOpen, setIsLiturgyOpen] = useState(false)
+  const [liturgy, setLiturgy] = useState<{ date: string; data: LiturgyData | null } | null>(null)
+
+  // Minhas escalas, em ordem cronológica
   const mySlots = useMemo(() => {
-    const slots: any[] = []
+    const slots: MySlot[] = []
     schedule.forEach(mass => {
       mass.slots.forEach(slot => {
-        const isMine = slot.profileId === profileId
-        if (isMine) {
+        if (slot.profileId === profileId) {
           slots.push({
-            ...slot,
+            id: slot.id,
+            role: slot.role,
+            isConfirmed: !!slot.isConfirmed,
+            isSwapRequested: !!slot.isSwapRequested,
             massDate: mass.date,
             massTime: mass.time,
-            specialDescription: mass.specialDescription
+            specialDescription: mass.specialDescription,
           })
         }
       })
     })
-
-    // Ordenar por data e hora
-    return slots.sort((a, b) => {
-      const dateA = new Date(`${a.massDate}T${a.massTime}`)
-      const dateB = new Date(`${b.massDate}T${b.massTime}`)
-      return dateA.getTime() - dateB.getTime()
-    })
+    return slots.sort((a, b) =>
+      new Date(`${a.massDate}T${a.massTime}`).getTime() - new Date(`${b.massDate}T${b.massTime}`).getTime()
+    )
   }, [schedule, profileId])
 
-  // 2. Encontrar a próxima leitura (primeira leitura futura ou hoje)
-  const nextReading = useMemo(() => {
-    const today = startOfDay(new Date())
-    return mySlots.find(slot => {
-      const slotDate = parseISO(slot.massDate)
-      return isAfter(slotDate, today) || format(slotDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')
-    })
-  }, [mySlots])
-
-  // 3. Encontrar a primeira leitura NÃO CONFIRMADA (e sem troca solicitada)
-  const firstUnconfirmed = useMemo(() => {
-    return mySlots.find(slot => !slot.isConfirmed && !slot.isSwapRequested)
-  }, [mySlots])
-
-  const isAlertMode = !!firstUnconfirmed
-  const activeSlot = isAlertMode ? firstUnconfirmed : nextReading
-  const isSwapActive = !!activeSlot?.isSwapRequested
-
-  // 4. Filtrar para mostrar apenas a próxima e as subsequentes (ignorar passadas)
+  // Próxima leitura: de hoje em diante
   const futureSlots = useMemo(() => {
-    if (!nextReading) return []
-    const index = mySlots.findIndex(s => s.id === nextReading.id)
-    return mySlots.slice(index)
-  }, [mySlots, nextReading])
+    const todayKey = format(startOfDay(new Date()), "yyyy-MM-dd")
+    return mySlots.filter(slot => slot.massDate >= todayKey)
+  }, [mySlots])
 
+  const next = futureSlots[0]
   const otherReadings = futureSlots.slice(1)
 
-  if (mySlots.length === 0) {
-    return (
-      <Card className="rounded-none border-x-0 border-t-0 border-dashed border-[#E9DFCB] bg-white p-3 shadow-none ring-0">
-        <div className="flex items-center justify-center gap-2 py-1 text-[#6B5D50]">
+  // Liturgia da próxima leitura (para mostrar a referência no botão "Ler e ensaiar")
+  const nextDate = next?.massDate
+  useEffect(() => {
+    if (!nextDate) return
+    let cancelled = false
+    LiturgyService.getLiturgyForDate(nextDate)
+      .then(data => { if (!cancelled) setLiturgy({ date: nextDate, data }) })
+      .catch(() => { if (!cancelled) setLiturgy({ date: nextDate, data: null }) })
+    return () => { cancelled = true }
+  }, [nextDate])
+
+  const now = new Date()
+  const firstName = (userName || "").trim().split(/\s+/)[0]
+  const liturgyData = liturgy && liturgy.date === nextDate ? liturgy.data : null
+
+  const renderCard = () => {
+    if (mySlots.length === 0) {
+      return (
+        <div className="flex items-center justify-center gap-2 py-3 text-[#6B5D50]">
           <CalendarDays className="h-4 w-4" />
           <span className="text-sm font-medium italic">Você não tem leituras futuras.</span>
         </div>
-      </Card>
-    )
-  }
-
-  if (!nextReading) {
-    return (
-      <Card className="rounded-none border-x-0 border-t-0 border-dashed border-green-200 bg-white p-3 shadow-none ring-0">
-        <div className="flex items-center justify-center gap-2 py-1 text-green-700">
+      )
+    }
+    if (!next) {
+      return (
+        <div className="flex items-center justify-center gap-2 py-3 text-[#1E6B43]">
           <CheckCircle className="h-5 w-5" />
-          <span className="text-sm font-bold uppercase tracking-tight">Suas leituras deste mês foram concluídas!</span>
+          <span className="text-sm font-bold">Suas leituras deste mês foram concluídas!</span>
         </div>
-      </Card>
-    )
-  }
+      )
+    }
 
-  const tone = isAlertMode
-    ? { bar: "bg-[#322113]", press: "active:bg-[#241810]", divider: "border-white/15", icon: "bg-[#E8B21E] text-[#322113]", label: "text-[#E8C76A]", accent: "text-[#E8C76A]" }
-    : isSwapActive
-      ? { bar: "bg-[#7c2d12]", press: "active:bg-[#661f0b]", divider: "border-white/15", icon: "bg-orange-300 text-[#7c2d12]", label: "text-orange-200", accent: "text-orange-200" }
-      : { bar: "bg-[#064e3b]", press: "active:bg-[#054031]", divider: "border-white/15", icon: "bg-emerald-300 text-[#064e3b]", label: "text-emerald-200", accent: "text-emerald-200" }
+    const date = parseISO(next.massDate)
+    const validDate = isValid(date)
+    const days = validDate ? differenceInCalendarDays(date, startOfDay(now)) : 0
+    const monthShort = validDate ? format(date, "MMM", { locale: ptBR }).replace(".", "").toUpperCase() : "--"
+    const weekdayShort = validDate
+      ? format(date, "EEEE", { locale: ptBR }).normalize("NFD").replace(/[̀-ͯ]/g, "").slice(0, 3).toUpperCase()
+      : "--"
+    const reference = referenceFor(next.role, liturgyData)
+    const time = next.massTime.substring(0, 5)
 
-  const label = isAlertMode ? "Confirmar escala" : isSwapActive ? "Troca solicitada" : "Próxima leitura"
-
-  const renderWhen = (slot: any) => {
-    const date = parseISO(slot.massDate)
     return (
       <>
-        <span className="capitalize">{isValid(date) ? format(date, "EEE dd/MM", { locale: ptBR }) : "--/--"}</span>
-        {" "}às {slot.massTime.substring(0, 5)} · {roleName(slot.role)}
+        <button
+          type="button"
+          onClick={() => onNavigateToSlot(next.id, next.massDate)}
+          className="flex w-full items-center gap-4 text-left"
+          aria-label="Ver esta leitura na escala"
+        >
+          <span className="flex h-[88px] w-[72px] shrink-0 flex-col items-center justify-center rounded-2xl bg-[#E8B21E] leading-none text-[#322113]">
+            <span className="text-[11px] font-extrabold tracking-wider">{monthShort}</span>
+            <span className="my-1 text-[32px] font-black">{validDate ? format(date, "d") : "--"}</span>
+            <span className="text-[11px] font-extrabold tracking-wider">{weekdayShort}</span>
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#8A5A00]">
+              Sua próxima leitura · {whenLabel(days)}
+            </span>
+            <span className="text-[22px] font-black leading-tight tracking-tight text-[#241A10]">
+              {roleLabel(next.role)} · {time}
+            </span>
+            {next.specialDescription && (
+              <span className="truncate text-sm text-[#6B5D50]">{next.specialDescription}</span>
+            )}
+          </span>
+          <ExternalLink className="h-[18px] w-[18px] shrink-0 self-start text-[#8A7A66]" aria-hidden="true" />
+        </button>
+
+        {/* Situação da presença */}
+        {next.isSwapRequested ? (
+          <div className="mt-4 flex items-center gap-2 rounded-xl bg-[#FDEBDD] px-3 py-2.5 text-sm font-bold text-[#A23F06]">
+            <RefreshCw className="h-[18px] w-[18px] shrink-0" />
+            Troca solicitada · aguardando alguém assumir
+          </div>
+        ) : next.isConfirmed ? (
+          <div className="mt-4 flex items-center gap-2 rounded-xl bg-[#E6F2EA] px-3 py-2.5 text-sm font-bold text-[#1E6B43]">
+            <Check className="h-[18px] w-[18px] shrink-0" strokeWidth={3} />
+            Presença confirmada
+          </div>
+        ) : (
+          <>
+            <div className="mt-4 flex items-center gap-2 rounded-xl bg-[#FFF3D1] px-3 py-2.5 text-sm font-bold text-[#7A4F00]">
+              <Clock className="h-[18px] w-[18px] shrink-0" />
+              A equipe aguarda sua confirmação
+            </div>
+            <button
+              type="button"
+              onClick={() => onConfirm(next.id)}
+              className="mt-3 flex h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-[#322113] text-base font-extrabold text-white shadow-sm transition-all active:scale-[0.98]"
+            >
+              <Check className="h-5 w-5 text-[#E8B21E]" strokeWidth={3} />
+              Confirmar presença
+            </button>
+          </>
+        )}
+
+        {/* Ler e ensaiar / Pedir troca */}
+        <div className="mt-3 grid grid-cols-2 gap-2.5">
+          <button
+            type="button"
+            onClick={() => setIsLiturgyOpen(true)}
+            className="flex min-h-[56px] items-center gap-2.5 rounded-2xl border border-[#E9DFCB] bg-[#FAF5E6] px-3 py-2 text-left transition-colors active:bg-[#F4EEDD]"
+          >
+            <BookOpen className="h-5 w-5 shrink-0 text-[#322113]" />
+            <span className="flex min-w-0 flex-col leading-tight">
+              <span className="text-[15px] font-extrabold text-[#241A10]">Ler e ensaiar</span>
+              <span className="truncate font-serif text-xs italic text-[#6B5D50]">{reference || "Liturgia do dia"}</span>
+            </span>
+          </button>
+
+          {next.isSwapRequested ? (
+            <button
+              type="button"
+              onClick={() => onCancelSwap(next.id)}
+              className="flex min-h-[56px] items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-3 py-2 text-[15px] font-extrabold text-red-700 transition-colors active:bg-red-50"
+            >
+              Cancelar troca
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onRequestSwap(next.id)}
+              className="flex min-h-[56px] items-center justify-center gap-2 rounded-2xl border border-[#E9DFCB] bg-[#FAF5E6] px-3 py-2 text-[15px] font-extrabold text-[#241A10] transition-colors active:bg-[#F4EEDD]"
+            >
+              <RefreshCw className="h-[18px] w-[18px]" />
+              Pedir troca
+            </button>
+          )}
+        </div>
+
+        {/* Outras leituras do mês */}
+        {otherReadings.length > 0 && (
+          <div className="mt-3 border-t border-[#F1EADC] pt-1">
+            <button
+              type="button"
+              onClick={() => setIsListOpen(!isListOpen)}
+              aria-expanded={isListOpen}
+              className="flex min-h-11 w-full items-center justify-between text-sm font-bold text-[#6B5D50]"
+            >
+              <span>
+                {otherReadings.length === 1 ? "Mais 1 leitura neste mês" : `Mais ${otherReadings.length} leituras neste mês`}
+              </span>
+              <ChevronDown className={cn("h-[18px] w-[18px] transition-transform duration-300", isListOpen && "rotate-180")} />
+            </button>
+            {isListOpen && (
+              <ul className="animate-in slide-in-from-top-2 duration-300">
+                {otherReadings.map(slot => {
+                  const d = parseISO(slot.massDate)
+                  return (
+                    <li key={slot.id}>
+                      <button
+                        type="button"
+                        onClick={() => onNavigateToSlot(slot.id, slot.massDate)}
+                        className="flex min-h-11 w-full items-center justify-between gap-3 text-left text-[13px] font-bold text-[#322113]"
+                      >
+                        <span className="truncate">
+                          <span className="capitalize">{isValid(d) ? format(d, "EEE dd/MM", { locale: ptBR }) : "--/--"}</span>
+                          {" "}às {slot.massTime.substring(0, 5)} · {roleLabel(slot.role)}
+                          {slot.isSwapRequested && <span className="text-[#A23F06]"> · troca aberta</span>}
+                        </span>
+                        <ExternalLink className="h-4 w-4 shrink-0 text-[#8A7A66]" aria-hidden="true" />
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+
+        <LiturgySheet
+          dateKey={next.massDate}
+          dateLabel={validDate ? format(date, "EEEE, dd/MM", { locale: ptBR }) : ""}
+          open={isLiturgyOpen}
+          onOpenChange={setIsLiturgyOpen}
+          preloaded={liturgyData}
+        />
       </>
     )
   }
 
   return (
     <div className="w-full">
-      {/* Barra Principal - Próxima Leitura ou Alerta de Confirmação */}
-      <div className={cn("relative overflow-hidden text-white transition-colors duration-500", tone.bar)}>
-        <div className="flex items-stretch">
-          <button
-            onClick={() => {
-              if (!isAlertMode && otherReadings.length > 0) {
-                setIsExpanded(!isExpanded)
-              } else {
-                onNavigateToSlot(activeSlot.id, activeSlot.massDate)
-              }
-            }}
-            aria-expanded={!isAlertMode && otherReadings.length > 0 ? isExpanded : undefined}
-            className={cn("flex min-h-14 min-w-0 flex-1 items-center gap-3 py-2 pl-4 pr-3 text-left transition-colors", tone.press)}
-          >
-            <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full", tone.icon)}>
-              {isAlertMode ? <AlertCircle className="h-[18px] w-[18px]" /> : <CalendarDays className="h-[18px] w-[18px]" />}
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className={cn("text-[11px] font-extrabold uppercase tracking-widest", tone.label)}>{label}</span>
-              <span className="truncate text-sm font-bold">{renderWhen(activeSlot)}</span>
-            </span>
-            {!isAlertMode && otherReadings.length > 0 && (
-              <ChevronDown className={cn("h-[18px] w-[18px] shrink-0 transition-transform duration-300", tone.accent, isExpanded && "rotate-180")} />
-            )}
-            {isAlertMode && <ChevronRight className={cn("h-[18px] w-[18px] shrink-0", tone.accent)} />}
-          </button>
-
-          {/* Botão de Scroll Direto */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onNavigateToSlot(activeSlot.id, activeSlot.massDate)
-            }}
-            className={cn("flex w-[52px] shrink-0 items-center justify-center border-l transition-colors", tone.divider, tone.press)}
-            title="Ver na escala"
-            aria-label="Ver na escala"
-          >
-            <ExternalLink className="h-[18px] w-[18px]" />
-          </button>
+      {/* Faixa marrom com saudação; o cartão invade a faixa */}
+      <div className="rounded-b-[28px] bg-[#322113] px-4 pb-16 pt-5 text-white">
+        <p className="text-[15px] capitalize text-[#E8D9BC]">{format(now, "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
+        <h2 className="mt-1 text-[32px] font-black leading-tight tracking-tight">
+          {greeting(now.getHours())}{firstName ? `, ${firstName}` : ""}
+        </h2>
+      </div>
+      <div className="-mt-11 px-4">
+        <div className="rounded-[24px] border border-[#EFE6D2] bg-white p-4 shadow-[0_10px_30px_rgba(50,33,19,0.14)]">
+          {renderCard()}
         </div>
       </div>
-
-      {/* Lista Expandida - Outras Leituras */}
-      {isExpanded && otherReadings.length > 0 && (
-        <div className="grid divide-y divide-[#E9DFCB] border-b border-[#E9DFCB] bg-[#F4EEDD] animate-in slide-in-from-top-2 duration-300">
-          {otherReadings.map((slot, index) => (
-            <div key={slot.id} className="flex items-stretch">
-              <button
-                onClick={() => onNavigateToSlot(slot.id, slot.massDate)}
-                className="flex min-h-12 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-left text-[#322113] transition-colors active:bg-[#EADFCB]"
-              >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#EADFCB] text-[11px] font-extrabold">
-                  {index + 2}
-                </span>
-                <span className="truncate text-[13px] font-bold">{renderWhen(slot)}</span>
-              </button>
-              <button
-                onClick={() => onNavigateToSlot(slot.id, slot.massDate)}
-                className="flex w-[52px] shrink-0 items-center justify-center border-l border-[#E9DFCB] text-[#322113]/60 transition-colors active:bg-[#EADFCB]"
-                title="Ver na escala"
-                aria-label="Ver na escala"
-              >
-                <ExternalLink className="h-[18px] w-[18px]" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
