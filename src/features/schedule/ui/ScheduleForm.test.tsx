@@ -175,4 +175,24 @@ describe("ScheduleForm Validation", () => {
     expect(onEditExisting).toHaveBeenCalledWith("2026-04-30")
     expect(screen.queryByText(/Adicionar outro Horário/i)).not.toBeInTheDocument()
   })
+
+  it("should block a reader who is already scheduled on the same day", async () => {
+    const profiles = [{ id: "p-ok", fullName: "Disponivel Teste", role: "reader", createdAt: "", updatedAt: "" }]
+    ;(makeListProfiles as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue(profiles) })
+
+    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
+    fireEvent.click(screen.getByText("30"))
+
+    await userEvent.click(await screen.findByRole("button", { name: /^Leitor$/ }))
+    await userEvent.click(await screen.findByRole("button", { name: /^Leitor$/ }))
+
+    await userEvent.click((await screen.findAllByText("Escolher leitor"))[0])
+    await userEvent.click(await screen.findByText(/^Disponivel Teste/))
+
+    await userEvent.click((await screen.findAllByText("Escolher leitor"))[0])
+    const items = (await screen.findAllByText("Disponivel Teste")).map(el => el.closest("[cmdk-item]")).filter(Boolean)
+    expect(items).toHaveLength(1)
+    expect(items[0]).toHaveAttribute("data-disabled", "true")
+    expect(screen.getByText("Já escalado")).toBeInTheDocument()
+  })
 })
