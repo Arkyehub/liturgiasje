@@ -1281,22 +1281,23 @@ export default function Home() {
           {/* Drawer de Datas Indisponíveis */}
           <Drawer open={isUnavailableDrawerOpen} onOpenChange={setIsUnavailableDrawerOpen}>
             <DrawerContent>
-              <div className="mx-auto w-full max-w-md p-6 overflow-y-auto max-h-[90vh]">
-                <DrawerHeader className="px-1 text-left">
-                  <DrawerTitle className="text-lg font-black text-stone-800 leading-tight">
-                    Informe os dias que você <span className="text-red-600 underline decoration-red-200 underline-offset-4">não poderá</span> participar
-                  </DrawerTitle>
+              <div className="mx-auto w-full max-w-sm px-4 overflow-y-auto max-h-[90vh]">
+                <DrawerHeader className="px-0 text-center">
+                  <DrawerTitle className="text-xl font-black text-stone-900">Dias indisponíveis</DrawerTitle>
+                  <DrawerDescription>
+                    Toque nos dias em que você <span className="font-bold text-[#A23F06]">não poderá</span> participar. Salvamos na hora.
+                  </DrawerDescription>
                 </DrawerHeader>
                 {profile && (
-                    <UnavailableForm 
-                      profileId={profile.id} 
-                      onClose={() => setIsUnavailableDrawerOpen(false)} 
-                    />
+                  <UnavailableForm
+                    profileId={profile.id}
+                    onClose={() => setIsUnavailableDrawerOpen(false)}
+                  />
                 )}
-                <DrawerFooter className="px-0 pt-4">
+                <DrawerFooter className="px-0 pb-8">
                   <DrawerClose asChild>
-                    <Button variant="default" className="w-full h-12 rounded-xl bg-stone-800 hover:bg-stone-900 text-white font-bold border-none">
-                      Salvar e Fechar Calendário
+                    <Button variant="default" className="w-full font-bold h-12 rounded-xl bg-[#322113] hover:bg-[#241709] text-white">
+                      Concluir
                     </Button>
                   </DrawerClose>
                 </DrawerFooter>
