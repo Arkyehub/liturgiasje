@@ -5,13 +5,6 @@ import { scheduleErrorMessage } from '@/features/schedule/scheduleErrorMessage'
 import { useState, useEffect } from "react"
 import { Button } from "@/shared/ui/button"
 import { Input } from "@/shared/ui/input"
-import { Label } from "@/shared/ui/label"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/shared/ui/dropdown-menu"
 import {
   Command,
   CommandEmpty,
@@ -37,7 +30,8 @@ import {
 } from "@/main/factories/usecases/schedule"
 import { makeListUnavailableByDate } from "@/main/factories/usecases/profiles"
 import { Profile } from "@/domain/models/Profile"
-import { Plus, Search, Trash2, Type, CheckCircle2, User, AlertCircle, Eye } from "lucide-react"
+import { Plus, Trash2, AlertCircle, Eye, Pencil, Check, ChevronDown, CalendarDays } from "lucide-react"
+import { roleLabel as roleName } from "@/shared/constants/roles"
 import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { toast } from "sonner"
@@ -49,6 +43,8 @@ interface ScheduleFormProps {
   onSuccess: () => void
   onClose: () => void
   initialData?: any
+  /** Abre a edição do dia que já tem escala (aviso de duplicidade). */
+  onEditExisting?: (date: string) => void
 }
 
 interface Slot {
@@ -57,7 +53,6 @@ interface Slot {
   roleLabel: string
   profileId: string
   profileName: string
-  isOpen: boolean
 }
 
 interface Session {
@@ -67,9 +62,10 @@ interface Session {
   time: string
   description: string
   slots: Slot[]
+  collapsed?: boolean
 }
 
-export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: ScheduleFormProps) {
+export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, onEditExisting }: ScheduleFormProps) {
   const [date, setDate] = useState("")
   const [sessions, setSessions] = useState<Session[]>([])
   const [removedMasses, setRemovedMasses] = useState<{ id: string; expectedRevision?: number }[]>([])
@@ -78,6 +74,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
   const [activeMonthRef, setActiveMonthRef] = useState(format(currentMonth, "yyyy-MM"))
   const [isSaving, setIsSaving] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
+  const [pickerTarget, setPickerTarget] = useState<{ sessTempId: string; slotId: string } | null>(null)
   const [unavailableUserIds, setUnavailableUserIds] = useState<string[]>([])
   const [hasExistingScale, setHasExistingScale] = useState(false)
   const [existingMassesFromDb, setExistingMassesFromDb] = useState<any[]>([])
@@ -164,8 +161,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
             roleType,
             roleLabel: s.role,
             profileId: s.profileId,
-            profileName: s.readerName || s.profileName || s.reader?.fullName,
-            isOpen: false
+            profileName: s.readerName || s.profileName || s.reader?.fullName
           }
         })
 
@@ -175,7 +171,8 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
           tempId: Math.random().toString(36).substring(2, 9),
           time: item.time?.substring(0, 5) || "",
           description: item.specialDescription || item.specialTitle || "",
-          slots: mappedSlots
+          slots: mappedSlots,
+          collapsed: true
         }
       })
       setSessions(mappedSessions)
@@ -290,8 +287,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
       roleType,
       roleLabel: "",
       profileId: "",
-      profileName: "",
-      isOpen: false
+      profileName: ""
     }
     setSessions(sessions.map(sess => {
       if (sess.tempId === sessionTempId) {
@@ -316,19 +312,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
     setSessions(sessions.map(sess => {
       if (sess.tempId === sessionTempId) {
         const updatedSlots = sess.slots.map(s => 
-          s.id === slotId ? { ...s, profileId: profile.id, profileName: profile.fullName, isOpen: false } : s
-        )
-        return { ...sess, slots: updatedSlots }
-      }
-      return sess
-    }))
-  }
-
-  const setSlotPopoverOpen = (sessionTempId: string, slotId: string, isOpen: boolean) => {
-    setSessions(sessions.map(sess => {
-      if (sess.tempId === sessionTempId) {
-        const updatedSlots = sess.slots.map(s => 
-          s.id === slotId ? { ...s, isOpen } : s
+          s.id === slotId ? { ...s, profileId: profile.id, profileName: profile.fullName } : s
         )
         return { ...sess, slots: updatedSlots }
       }
@@ -390,381 +374,540 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData }: 
     }
   }
 
+
+  const closePicker = () => {
+    setPickerTarget(null)
+    setSearchTerm("")
+  }
+
+  const missingCount = sessions.reduce((n, sess) => n + sess.slots.filter(sl => !sl.profileId).length, 0)
+  const blockedByExisting = hasExistingScale && !!onEditExisting
+  const dateObj = date ? new Date(date + 'T00:00:00') : null
+  const dateIsValid = !!dateObj && isValid(dateObj)
+  const dateLong = dateObj && dateIsValid ? format(dateObj, "EEEE, d 'de' MMMM", { locale: ptBR }) : ""
+  const dayShort = dateObj && dateIsValid ? format(dateObj, "d 'de' MMMM", { locale: ptBR }) : ""
+  const canSave = !isSaving && !!date && !blockedByExisting && !sessions.some(s => !s.time || s.slots.some(slot => !slot.profileId))
+
+  let footerSummary: React.ReactNode
+  if (!date) footerSummary = "Escolha o dia da escala para começar."
+  else if (blockedByExisting) footerSummary = "Escolha um dia sem escala para continuar."
+  else {
+    footerSummary = (
+      <>
+        {sessions.length === 1 ? "1 missa" : `${sessions.length} missas`}
+        {missingCount > 0 && (
+          <>
+            {" · "}
+            <strong className="font-bold text-[#A23F06]">
+              {missingCount === 1 ? "1 função sem leitor" : `${missingCount} funções sem leitor`}
+            </strong>
+            <br />
+            Escolha um leitor para cada função para salvar.
+          </>
+        )}
+      </>
+    )
+  }
+
+  const pickerSession = pickerTarget ? sessions.find(x => x.tempId === pickerTarget.sessTempId) : undefined
+  const pickerSlot = pickerSession?.slots.find(x => x.id === pickerTarget?.slotId)
+
+  const renderPickerItem = (p: Profile, kind: "pref" | "available" | "unavailable") => {
+    if (!pickerSession || !pickerSlot) return null
+    const isUnavailable = kind === "unavailable"
+    const isAlreadyScheduled = sessions.some(s => s.slots.some(sl => sl.profileId === p.id && sl.id !== pickerSlot.id))
+    const used = usageCounts[p.id] || 0
+    return (
+      <CommandItem
+        key={p.id}
+        value={p.fullName}
+        disabled={isUnavailable}
+        onSelect={() => {
+          if (isUnavailable) {
+            toast.warning(`${p.fullName} informou que não poderá participar nesta data.`, {
+              duration: 5000,
+              icon: <AlertCircle className="h-4 w-4 text-amber-600" />
+            })
+            return
+          }
+          if (isAlreadyScheduled) {
+            toast.warning(`${p.fullName} já está escalado(a) neste dia!`, {
+              duration: 5000,
+              icon: <AlertCircle className="h-4 w-4 text-amber-600" />
+            })
+          }
+          updateSlotProfile(pickerSession.tempId, pickerSlot.id, p)
+          closePicker()
+        }}
+        className="flex min-h-[60px] items-center justify-between gap-3 rounded-[14px] px-2.5 py-2"
+      >
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate text-[16px] font-bold text-black">{p.fullName}</span>
+          <span className={cn("text-xs", isUnavailable ? "font-bold text-[#A23F06]" : "text-[#6B5D50]")}>
+            {isUnavailable
+              ? "Informou indisponibilidade"
+              : used > 0
+                ? `${used}x neste mês`
+                : "Ainda sem escala neste mês"}
+          </span>
+        </span>
+        {isUnavailable ? (
+          <span className="shrink-0 rounded-full bg-[#FDEBDD] px-2.5 py-1 text-xs font-bold text-[#A23F06]">Indisponível</span>
+        ) : isAlreadyScheduled ? (
+          <span className="shrink-0 rounded-full bg-[#FFF3D1] px-2.5 py-1 text-xs font-bold text-[#6B3F00]">Já escalado</span>
+        ) : kind === "pref" ? (
+          <span className="shrink-0 rounded-full bg-[#E6F3EB] px-2.5 py-1 text-xs font-bold text-[#1E6B43]">Preferência</span>
+        ) : null}
+      </CommandItem>
+    )
+  }
+
   return (
-    <div className="flex flex-col h-full relative overflow-hidden bg-stone-50/50">
+    <div className="relative flex h-full flex-col overflow-hidden bg-[#FAF5E6]">
       {/* Área de Conteúdo com Scroll */}
-      <div className="flex-1 overflow-y-auto space-y-4 px-6 pt-1 pb-8">
-        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          
-          {/* Seletor de Dia */}
-          <div className="space-y-1">
-            <Label className="text-[10px] uppercase font-bold text-stone-400 ml-1">Dia da Escala</Label>
+      <div className="flex-1 space-y-6 overflow-y-auto px-4 pb-8 pt-6">
 
-            {/* Grade de Dias */}
-            {(() => {
-              const year = currentMonth.getFullYear()
-              const month = currentMonth.getMonth()
-              const daysInMonth = new Date(year, month + 1, 0).getDate()
-              const firstDayOfWeek = new Date(year, month, 1).getDay() // 0 = Domingo
-              const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
-              const weekDays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
+        {/* Passo 1: Dia da escala */}
+        <div className="space-y-3.5">
+          <StepTitle n={1}>Dia da escala</StepTitle>
 
-              return (
-                <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
-                  {/* Cabeçalho dos dias da semana */}
+          {(() => {
+            const year = currentMonth.getFullYear()
+            const month = currentMonth.getMonth()
+            const daysInMonth = new Date(year, month + 1, 0).getDate()
+            const firstDayOfWeek = new Date(year, month, 1).getDay() // 0 = Domingo
+            const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+            const weekDays = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB']
+
+            return (
+              <div className="space-y-2.5 rounded-[22px] border border-[#E9DFCB] bg-white p-3">
+                <div className="grid grid-cols-7 gap-1">
                   {weekDays.map((day, i) => (
-                    <div key={`header-${i}`} className="text-center text-[10px] font-bold text-stone-400 mb-1">
+                    <div key={`header-${i}`} className={cn("pb-1 text-center text-[11px] font-bold tracking-wide", i === 0 ? "text-[#322113]" : "text-[#6B5D50]")}>
                       {day}
                     </div>
                   ))}
-                  
-                  {/* Espaços em branco antes do primeiro dia */}
+
                   {Array.from({ length: firstDayOfWeek }).map((_, i) => (
-                    <div key={`empty-${i}`} className="h-9 w-full" />
+                    <div key={`empty-${i}`} className="h-12 w-full" />
                   ))}
 
-                  {/* Dias do mês */}
                   {days.map(day => {
                     const dayStr = String(day).padStart(2, '0')
                     const monthStr = String(month + 1).padStart(2, '0')
                     const fullDate = `${year}-${monthStr}-${dayStr}`
                     const isSelected = date === fullDate
-                    const isOccupied = occupiedDates.includes(fullDate) && !isSelected
+                    const isOccupied = occupiedDates.includes(fullDate)
+                    const isSunday = new Date(year, month, day).getDay() === 0
 
                     return (
                       <button
                         key={day}
                         type="button"
+                        aria-label={`${day} de ${format(new Date(year, month, day), "MMMM", { locale: ptBR })}${isOccupied ? ", já tem escala" : ""}`}
                         onClick={() => {
                           setDate(fullDate)
                           if (sessions.length === 0) setSessions([createEmptySession()])
                         }}
                         className={cn(
-                          "h-9 w-full rounded-xl text-[12px] font-bold transition-all active:scale-95 border flex flex-col items-center justify-center",
+                          "flex h-12 w-full flex-col items-center justify-center rounded-xl border text-[15px] leading-none transition-all active:scale-95",
                           isSelected
-                            ? "bg-stone-800 text-white border-stone-800 shadow-md"
+                            ? "border-[#322113] bg-[#322113] font-extrabold text-[#FFF8E8]"
                             : isOccupied
-                              ? "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100"
-                              : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50 hover:border-stone-400"
+                              ? "border-[#E8B21E] bg-[#FFF6D6] font-extrabold text-[#6B3F00]"
+                              : cn("border-[#E9DFCB] bg-white text-[#241A10] hover:bg-[#FAF5E6]", isSunday ? "font-extrabold" : "font-semibold")
                         )}
-                        title={isOccupied ? "Já há escala neste dia" : undefined}
                       >
-                        <span>{day}</span>
-                        {isOccupied && (
-                          <span className="text-[6px] font-black leading-none text-amber-500 mt-0.5">●</span>
-                        )}
+                        {day}
+                        {isOccupied && <span aria-hidden="true" className="mt-[3px] h-[5px] w-[5px] rounded-full bg-[#E8B21E]" />}
                       </button>
                     )
                   })}
                 </div>
-              )
-            })()}
+                <div className="flex items-center gap-2 px-1 text-xs text-[#6B5D50]">
+                  <span aria-hidden="true" className="inline-block h-3 w-3 rounded-[4px] border border-[#E8B21E] bg-[#FFF6D6]" />
+                  Dia que já tem escala
+                  <span aria-hidden="true" className="ml-2.5 inline-block h-3 w-3 rounded-[4px] bg-[#322113]" />
+                  Dia escolhido
+                </div>
+              </div>
+            )
+          })()}
 
-            {/* Data selecionada por extenso */}
-            {date && (
-              <p className="text-xs font-semibold text-stone-600 ml-1 mt-1.5 capitalize">
-                📅 {isValid(new Date(date + 'T00:00:00')) 
-                  ? format(new Date(date + 'T00:00:00'), "EEEE, dd 'de' MMMM", { locale: ptBR })
-                  : "Data inválida"}
-              </p>
-            )}
-          </div>
+          {dateLong && (
+            <p className="flex items-center gap-2 text-[15px] font-bold text-[#322113] first-letter:uppercase">
+              <CalendarDays className="h-[18px] w-[18px] shrink-0" />
+              {dateLong}
+            </p>
+          )}
+        </div>
 
-          <div className="h-px bg-stone-100 mt-1" />
-
-          {/* Aviso de Escala Existente */}
-          {hasExistingScale && (
-            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3 animate-in fade-in zoom-in duration-300">
-              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+        {/* Aviso de Escala Existente */}
+        {hasExistingScale && (
+          <div role="alert" className="space-y-3 rounded-[20px] border border-[#F2CDB0] bg-[#FDEBDD] p-4 animate-in fade-in zoom-in duration-300">
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#A23F06]">
+                <AlertCircle className="h-[18px] w-[18px]" />
+              </span>
               <div className="space-y-1">
-                <p className="text-xs font-bold text-amber-900 leading-tight">
-                  Já existe uma escala para este dia!
+                <p className="text-base font-extrabold leading-snug text-[#6B2A02]">
+                  Já existe escala em {dayShort}
                 </p>
-                <p className="text-[10px] text-amber-700 leading-snug">
-                  Se você deseja adicionar mais horários a este dia, cancele este formulário e edite o card que já aparece no mural.
+                <p className="text-sm leading-snug text-[#7A4A2A]">
+                  Para incluir outro horário nesse dia, edite a escala que já está no mural, assim nada é duplicado.
                 </p>
               </div>
             </div>
-          )}
+            {onEditExisting && (
+              <Button
+                type="button"
+                onClick={() => onEditExisting(date)}
+                className="h-12 w-full gap-2 rounded-[14px] bg-[#322113] text-[15px] font-extrabold text-[#FFF8E8] hover:bg-[#241709]"
+              >
+                <Pencil className="h-[18px] w-[18px]" />
+                Editar a escala do dia {dateObj && dateIsValid ? format(dateObj, "d") : ""}
+              </Button>
+            )}
+          </div>
+        )}
 
-          {/* Lista de Sessões e Botão de Adicionar outro Horário (Condicional à Data) */}
-          {date && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
-              {sessions.map((sess, sessIndex) => (
-                <div key={sess.tempId} className="space-y-3 p-4 rounded-2xl border border-stone-200 bg-white relative shadow-sm">
-                  
-                  {/* Botão excluir — absoluto no canto superior direito */}
-                  {sessions.length > 1 && (
-                    <button 
-                      type="button"
-                      className="absolute top-2 right-2 h-7 w-7 flex items-center justify-center text-red-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors focus:outline-none"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        removeSession(sess.tempId, sess.dbId)
-                      }}
-                      title="Excluir Horário"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 pointer-events-none" />
-                    </button>
-                  )}
+        {/* Passo 2: Missas do dia */}
+        {date && !blockedByExisting && (
+          <div className="space-y-3.5 animate-in fade-in slide-in-from-top-4 duration-500">
+            <StepTitle n={2}>Missas do dia</StepTitle>
 
-                  {/* Cabeçalho da Sessão + Seletor de Horário */}
-                  <div className="flex items-center justify-center mb-3">
+            {sessions.map((sess, sessIndex) => {
+              const sessMissing = sess.slots.filter(sl => !sl.profileId).length
+
+              if (sess.collapsed) {
+                return (
+                  <section key={sess.tempId} className="space-y-3 rounded-[22px] border border-[#E9DFCB] bg-white py-3.5 pl-4 pr-2 pb-4">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-[28px] font-extrabold tabular-nums tracking-tight">{sess.time}</span>
+                      {sessMissing === 0 && sess.slots.length > 0 ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#E6F3EB] px-2.5 py-0.5 text-xs font-bold text-[#1E6B43]">
+                          <Check className="h-3 w-3" strokeWidth={3} />
+                          Completa
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-[#FDEBDD] px-2.5 py-0.5 text-xs font-bold text-[#A23F06]">
+                          {sess.slots.length === 0 ? "Sem funções" : sessMissing === 1 ? "1 função sem leitor" : `${sessMissing} funções sem leitor`}
+                        </span>
+                      )}
+                      <span className="flex-1" />
+                      <button
+                        type="button"
+                        aria-label={`Editar missa das ${sess.time}`}
+                        onClick={() => updateSessionField(sess.tempId, 'collapsed', false)}
+                        className="flex h-11 w-11 items-center justify-center rounded-full border border-[#D9CDB8] bg-white text-[#322113] transition-colors hover:bg-[#FAF5E6]"
+                      >
+                        <Pencil className="h-[18px] w-[18px]" />
+                      </button>
+                    </div>
+                    {sess.description && <p className="pr-2 text-[15px] font-bold">{sess.description}</p>}
+                    {sess.slots.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pr-2">
+                        {sess.slots.map(slot => (
+                          <span
+                            key={slot.id}
+                            className={cn(
+                              "rounded-full border px-2.5 py-1 text-[13px]",
+                              slot.profileId ? "border-[#E9DFCB] bg-[#F4EEDD] text-[#241A10]" : "border-dashed border-[#C9B99C] text-[#A23F06]"
+                            )}
+                          >
+                            <strong className="font-extrabold text-[#322113]">{slot.roleLabel}</strong>
+                            {"  "}
+                            {slot.profileId ? slot.profileName : "sem leitor"}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )
+              }
+
+              return (
+                <section key={sess.tempId} className="space-y-4 rounded-[22px] border border-[#E9DFCB] bg-white p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold tracking-[0.1em] text-[#6B5D50]">MISSA {sessIndex + 1} · HORÁRIO</span>
+                    {sessions.length > 1 && (
+                      <button
+                        type="button"
+                        aria-label="Excluir esta missa"
+                        title="Excluir esta missa"
+                        className="flex h-11 w-11 items-center justify-center rounded-xl text-[#B5472A] transition-colors hover:bg-red-50"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          removeSession(sess.tempId, sess.dbId)
+                        }}
+                      >
+                        <Trash2 className="pointer-events-none h-[18px] w-[18px]" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="-mt-2 flex items-center justify-center">
                     <TimeRoller
                       value={sess.time || "07:00"}
-                      prefix="Missa das"
                       onChange={(val) => updateSessionField(sess.tempId, 'time', val)}
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <Label className="text-[10px] uppercase font-bold text-stone-400 ml-1">Descrição</Label>
-                    <div className="relative">
-                      <Type className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
-                      <Input 
-                        placeholder="" 
-                        value={sess.description}
-                        onChange={(e) => updateSessionField(sess.tempId, 'description', e.target.value)}
-                        className="pl-10 h-10 rounded-xl bg-stone-50/50 border-stone-600"
-                      />
+                  <div className="space-y-1.5">
+                    <label htmlFor={`desc-${sess.tempId}`} className="pl-0.5 text-xs font-bold text-[#6B5D50]">Celebração (opcional)</label>
+                    <Input
+                      id={`desc-${sess.tempId}`}
+                      placeholder="Ex.: 1º Domingo do Advento"
+                      value={sess.description}
+                      onChange={(e) => updateSessionField(sess.tempId, 'description', e.target.value)}
+                      className="h-12 rounded-[14px] border-[#E9DFCB] bg-[#FAF5E6] px-3.5 text-[15px] font-semibold placeholder:font-normal placeholder:text-[#6B5D50]"
+                    />
+                  </div>
+
+                  {/* Funções da missa */}
+                  <div className="space-y-3.5">
+                    {sess.slots.map((slot) => {
+                      const slotProfile = slot.profileId ? profiles.find(p => p.id === slot.profileId) : undefined
+                      const isPref = !!slotProfile && checkPreference(slotProfile, sess.time, date)
+                      const isAlready = !!slot.profileId && sessions.some(s => s.slots.some(sl => sl.profileId === slot.profileId && sl.id !== slot.id))
+                      const used = slot.profileId ? usageCounts[slot.profileId] || 0 : 0
+                      const schedules = slot.profileId ? getProfileSchedules(slot.profileId) : []
+                      const showMeta = !!slot.profileId && (isPref || isAlready || used > 0 || schedules.length > 0)
+
+                      return (
+                        <div key={slot.id} className="flex items-start gap-2.5">
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#E9DFCB] bg-[#F4EEDD] text-[15px] font-extrabold text-[#322113]">
+                            {slot.roleLabel}
+                          </span>
+
+                          <div className="flex min-w-0 flex-1 flex-col gap-1">
+                            <span className="pl-0.5 text-xs font-bold text-[#6B5D50]">{roleName(slot.roleLabel)}</span>
+                            <button
+                              type="button"
+                              onClick={() => setPickerTarget({ sessTempId: sess.tempId, slotId: slot.id })}
+                              className={cn(
+                                "flex h-11 w-full min-w-0 items-center gap-2 rounded-xl px-3 text-left text-[15px] font-bold transition-colors",
+                                slot.profileId
+                                  ? "border border-[#D9CDB8] bg-white text-black hover:bg-[#FAF5E6]"
+                                  : "border-[1.5px] border-dashed border-[#C9B99C] text-[#A23F06] hover:bg-[#FDEBDD]/50"
+                              )}
+                            >
+                              {slot.profileId ? (
+                                <>
+                                  <span className="flex-1 truncate">{slot.profileName}</span>
+                                  <ChevronDown className="h-4 w-4 shrink-0 text-[#6B5D50]" />
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="h-4 w-4 shrink-0" />
+                                  Escolher leitor
+                                </>
+                              )}
+                            </button>
+
+                            {showMeta && (
+                              <div className="flex min-h-6 flex-wrap items-center gap-2 pl-0.5">
+                                {isPref && !isAlready && <span className="rounded-full bg-[#E6F3EB] px-2.5 py-0.5 text-xs font-bold text-[#1E6B43]">Preferência</span>}
+                                {isAlready && <span className="rounded-full bg-[#FFF3D1] px-2.5 py-0.5 text-xs font-bold text-[#6B3F00]">Já escalado neste dia</span>}
+                                {used > 0 && <span className="text-xs text-[#6B5D50]">{used}x no mês</span>}
+                                {schedules.length > 0 && (
+                                  <Popover>
+                                    <PopoverTrigger render={
+                                      <button
+                                        type="button"
+                                        className="inline-flex h-8 items-center gap-1.5 px-0.5 text-xs font-bold text-[#322113] underline underline-offset-[3px]"
+                                      >
+                                        <Eye className="h-3.5 w-3.5" />
+                                        Ver escalas do mês
+                                      </button>
+                                    } />
+                                    <PopoverContent side="top" align="start" className="z-[70] w-auto rounded-xl border border-[#E9DFCB] bg-white p-2 shadow-xl">
+                                      <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-wider text-[#6B5D50]">
+                                        Escalas neste mês
+                                      </p>
+                                      <div className="space-y-1">
+                                        {schedules.map((sch, i) => (
+                                          <div
+                                            key={i}
+                                            className={cn(
+                                              "whitespace-nowrap rounded-md border px-2 py-1.5 text-xs font-medium",
+                                              sch.date === date
+                                                ? "border-[#E8B21E] bg-[#FFF6D6] text-[#6B3F00]"
+                                                : "border-[#F1EADC] bg-[#FAF5E6] text-[#241A10]"
+                                            )}
+                                          >
+                                            {format(new Date(sch.date + 'T00:00:00'), 'dd/MM')} - {sch.time} ({sch.role})
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            aria-label={`Remover ${roleName(slot.roleLabel)}`}
+                            className="mt-4 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[#B5472A] transition-colors hover:bg-red-50"
+                            onClick={() => removeSlot(sess.tempId, slot.id)}
+                          >
+                            <Trash2 className="h-[18px] w-[18px]" />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Adicionar função */}
+                  <div className="space-y-2 border-t border-[#F1EADC] pt-3">
+                    <span className="pl-0.5 text-xs font-bold text-[#6B5D50]">Adicionar função</span>
+                    <div className="flex flex-wrap gap-2">
+                      {([["C", "Comentarista"], ["L", "Leitor"], ["P", "Preces"]] as const).map(([type, label]) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => addSlot(sess.tempId, type)}
+                          className="inline-flex h-11 items-center gap-1.5 rounded-full border border-[#322113] bg-white px-3.5 text-[13px] font-bold text-[#322113] transition-colors hover:bg-[#FAF5E6]"
+                        >
+                          <Plus className="h-3.5 w-3.5" strokeWidth={2.4} />
+                          {label}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
-                  {/* Lista de Slots da Sessão */}
-                  <div className="space-y-1.5 pt-1">
-                    {sess.slots.map((slot) => (
-                      <div key={slot.id} className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 font-black text-[10px] border border-amber-200">
-                          {slot.roleLabel}
-                        </div>
-                        
-                        <div className="flex-1">
-                          <Popover open={slot.isOpen} onOpenChange={(open) => setSlotPopoverOpen(sess.tempId, slot.id, open)}>
-                            <PopoverTrigger render={
-                              <Button
-                                variant="outline"
-                                className={cn(
-                                  "w-full h-8 justify-between font-bold rounded-lg border-stone-600 bg-white px-2",
-                                  !slot.profileId && "text-stone-500 font-bold"
-                                )}
-                              >
-                                <div className="flex items-center truncate">
-                                  <User className="mr-2 h-3.5 w-3.5 text-stone-400 shrink-0" />
-                                  <span className="truncate text-[13px]">
-                                    {slot.profileId ? slot.profileName : "Selecionar..."}
-                                  </span>
-                                </div>
-                                <Search className="ml-2 h-3 w-3 opacity-50 shrink-0" />
-                              </Button>
-                            } />
-                            <PopoverContent className="w-[300px] p-0" align="start">
-                              <Command>
-                                <CommandInput 
-                                  placeholder="Pesquisar leitor..." 
-                                  value={searchTerm}
-                                  onValueChange={setSearchTerm}
-                                  autoFocus
-                                />
-                                <CommandList>
-                                  <CommandEmpty>Nenhum leitor encontrado.</CommandEmpty>
-                                  <CommandGroup>
-                                    {slot.profileId && <CommandItem value="liberar vaga" onSelect={() => {
-                                      setSessions(current => current.map(session => session.tempId === sess.tempId ? { ...session, slots: session.slots.map(item => item.id === slot.id ? { ...item, profileId: "", profileName: "", isOpen: false } : item) } : session))
-                                    }}>Liberar vaga</CommandItem>}
-                                    {(() => {
-                                      const sortedProfiles = [...profiles].sort((a, b) => {
-                                        const prefA = checkPreference(a, sess.time, date) ? 1 : 0
-                                        const prefB = checkPreference(b, sess.time, date) ? 1 : 0
-                                        if (prefA !== prefB) return prefB - prefA
+                  <Button
+                    type="button"
+                    onClick={() => updateSessionField(sess.tempId, 'collapsed', true)}
+                    className="h-[52px] w-full gap-2 rounded-2xl bg-[#322113] text-[15px] font-extrabold text-[#FFF8E8] hover:bg-[#241709]"
+                  >
+                    <Check className="h-[18px] w-[18px]" strokeWidth={2.6} />
+                    Concluir missa
+                  </Button>
+                </section>
+              )
+            })}
 
-                                        const unA = a.id && unavailableUserIds.includes(a.id) ? 1 : 0
-                                        const unB = b.id && unavailableUserIds.includes(b.id) ? 1 : 0
-                                        if (unA !== unB) return unA - unB
-
-                                        return a.fullName.localeCompare(b.fullName)
-                                      })
-
-                                      return sortedProfiles.map((p) => {
-                                        const isUnavailable = p.id ? unavailableUserIds.includes(p.id) : false
-                                        const isPreference = checkPreference(p, sess.time, date)
-                                        const isAlreadyScheduled = sessions.some(s => 
-                                          s.slots.some(sl => sl.profileId === p.id && sl.id !== slot.id)
-                                        )
-                                        
-                                        return (
-                                          <CommandItem
-                                            key={p.id}
-                                            value={p.fullName}
-                                            disabled={isUnavailable}
-                                            onSelect={() => {
-                                              if (isUnavailable) {
-                                                toast.warning(`${p.fullName} informou que não poderá participar nesta data.`, {
-                                                  duration: 5000,
-                                                  icon: <AlertCircle className="h-4 w-4 text-amber-600" />
-                                                })
-                                                return
-                                              }
-                                              if (isAlreadyScheduled) {
-                                                toast.warning(`${p.fullName} já está escalado(a) neste dia!`, {
-                                                  duration: 5000,
-                                                  icon: <AlertCircle className="h-4 w-4 text-amber-600" />
-                                                })
-                                              }
-                                              updateSlotProfile(sess.tempId, slot.id, p)
-                                              setSearchTerm("")
-                                            }}
-                                            className="flex items-center justify-between"
-                                          >
-                                            <span className={cn(
-                                              "font-medium transition-colors",
-                                              isUnavailable && "text-red-500 font-bold",
-                                              isAlreadyScheduled && !isUnavailable && "text-amber-600 font-bold",
-                                              isPreference && !isUnavailable && !isAlreadyScheduled && "text-green-600 font-bold"
-                                            )}>
-                                              {p.fullName}
-                                              {isUnavailable && " (Indisponível)"}
-                                              {isAlreadyScheduled && !isUnavailable && " (Já escalado)"}
-                                              {isPreference && !isUnavailable && !isAlreadyScheduled && " (Preferência)"}
-                                            </span>
-                                            <div className="flex items-center gap-2">
-                                              {usageCounts[p.id] > 0 && (
-                                                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-black rounded-md">
-                                                  {usageCounts[p.id]}x
-                                                </span>
-                                              )}
-                                            </div>
-                                          </CommandItem>
-                                        )
-                                      })
-                                    })()}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          {(() => {
-                            if (!slot.profileId) return null
-                            const schedules = getProfileSchedules(slot.profileId)
-                            if (schedules.length === 0) return null
-
-                            return (
-                              <Popover>
-                                <PopoverTrigger render={
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-8 w-8 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded-lg shrink-0"
-                                    title="Ver escalas do mês"
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                } />
-                                <PopoverContent side="top" align="start" className="w-auto p-2 rounded-xl border border-stone-200 shadow-xl bg-white z-50">
-                                  <p className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-2 px-1">
-                                    Escalas neste mês
-                                  </p>
-                                  <div className="space-y-1">
-                                    {schedules.map((sch, i) => {
-                                      const isCurrentDay = sch.date === date;
-                                      return (
-                                        <div 
-                                          key={i} 
-                                          className={cn(
-                                            "text-xs font-medium px-2 py-1.5 rounded-md border whitespace-nowrap",
-                                            isCurrentDay 
-                                              ? "bg-amber-100 text-amber-800 border-amber-200" 
-                                              : "text-stone-700 bg-stone-50 border-stone-100"
-                                          )}
-                                        >
-                                          {format(new Date(sch.date + 'T00:00:00'), 'dd/MM')} - {sch.time} ({sch.role})
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
-                            )
-                          })()}
-
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-stone-600 hover:text-red-500 hover:bg-red-50 rounded-lg"
-                            onClick={() => removeSlot(sess.tempId, slot.id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Botão de Adicionar Leitura (Dentro da Sessão) */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger render={
-                      <Button variant="outline" size="sm" className="h-7 px-3 font-black text-[9px] uppercase tracking-wider rounded-lg border-stone-500 text-stone-600 bg-white hover:bg-stone-50">
-                        <Plus className="mr-1 h-3 w-3" />
-                        Adicionar Leitura
-                      </Button>
-                    } />
-                    <DropdownMenuContent align="start" className="rounded-xl p-1.5">
-                      <DropdownMenuItem onClick={() => addSlot(sess.tempId, "C")} className="font-bold text-xs text-stone-700">Comentarista (C)</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => addSlot(sess.tempId, "L")} className="font-bold text-xs text-stone-700">Leitor (L)</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => addSlot(sess.tempId, "P")} className="font-bold text-xs text-stone-700">Preces (P)</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                </div>
-              ))}
-
-              {/* Botão de Adicionar outro Horário */}
-              <div className="pt-1">
-                <Button 
-                  variant="outline" 
-                  onClick={addSession}
-                  className="w-full h-10 border-dashed border-stone-500 text-stone-600 font-black rounded-xl hover:bg-stone-100 transition-all text-[10px] uppercase tracking-wider bg-white"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Adicionar outro Horário
-                </Button>
-              </div>
-            </div>
-          )}
-
-        </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addSession}
+              className="h-14 w-full gap-2 rounded-[18px] border-[1.5px] border-dashed border-[#C9B99C] bg-transparent text-[15px] font-bold text-[#322113] hover:bg-[#F4EEDD]"
+            >
+              <Plus className="h-[18px] w-[18px]" strokeWidth={2.4} />
+              Adicionar outro Horário
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Rodapé Fixo (Sticky) */}
-      <div className="shrink-0 bg-white border-t border-stone-200 p-4 pb-5 shadow-[0_-10px_40px_rgba(0,0,0,0.04)] z-50">
-        <div className="flex gap-3">
+      {/* Rodapé Fixo */}
+      <div className="z-50 shrink-0 space-y-2.5 border-t border-[#E9DFCB] bg-white px-4 pb-5 pt-3 shadow-[0_-10px_30px_rgba(50,33,19,0.06)]">
+        <p className="text-center text-[13px] leading-snug text-[#6B5D50]">{footerSummary}</p>
+        <div className="flex gap-2.5">
           <Button
             type="button"
             variant="outline"
             onClick={onClose}
             disabled={isSaving}
-            className="flex-1 border-stone-300 text-stone-500 bg-white hover:bg-stone-50 h-11 rounded-xl font-bold"
+            className="h-[52px] flex-1 rounded-2xl border-[#D9CDB8] bg-white text-[15px] font-bold text-[#322113] hover:bg-[#FAF5E6]"
           >
             Cancelar
           </Button>
-          <Button 
+          <Button
             type="button"
-            disabled={isSaving || !date || sessions.some(s => !s.time || s.slots.some(slot => !slot.profileId))}
-            variant="outline"
-            className="flex-1 bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100 h-11 rounded-xl font-bold disabled:opacity-50"
+            disabled={!canSave}
             onClick={handleSaveMass}
+            className="h-[52px] flex-[1.5] rounded-2xl bg-[#322113] text-[15px] font-extrabold text-[#FFF8E8] hover:bg-[#241709] disabled:bg-[#EFE8D6] disabled:text-[#6B5D50] disabled:opacity-100"
           >
             {isSaving ? (
-              <div className="h-4 w-4 animate-spin border-2 border-orange-600 border-t-transparent rounded-full" />
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#FFF8E8] border-t-transparent" />
             ) : (
               "Salvar Rascunho"
             )}
           </Button>
         </div>
       </div>
+
+      {/* Gaveta de escolha do leitor (dentro do sheet, sem portal) */}
+      {pickerTarget && pickerSession && pickerSlot && (
+        <div className="absolute inset-0 z-[60] flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={`Escolher ${roleName(pickerSlot.roleLabel)}`}>
+          <button type="button" aria-label="Fechar seleção de leitor" className="absolute inset-0 bg-[#241A10]/55" onClick={closePicker} />
+          <div className="relative flex max-h-[85%] flex-col rounded-t-[28px] bg-[#FBF7EE] shadow-2xl animate-in slide-in-from-bottom duration-200">
+            <span aria-hidden="true" className="mx-auto mt-3 h-[5px] w-10 shrink-0 rounded-full bg-[#D9CDB8]" />
+            <div className="shrink-0 space-y-1 px-5 pb-3 pt-4">
+              <h3 className="text-[22px] font-extrabold tracking-tight">Escolher {roleName(pickerSlot.roleLabel)}</h3>
+              <p className="text-sm text-[#4A3D31] first-letter:uppercase">
+                Missa das {pickerSession.time} · {dateLong.toLowerCase()}
+              </p>
+            </div>
+            <Command className="min-h-0 flex-1 bg-transparent">
+              <div className="shrink-0 px-4 pb-1.5">
+                <CommandInput
+                  placeholder="Buscar leitor"
+                  value={searchTerm}
+                  onValueChange={setSearchTerm}
+                />
+              </div>
+              <CommandList className="max-h-none flex-1 px-3 pb-6">
+                <CommandEmpty>Nenhum leitor encontrado.</CommandEmpty>
+                {pickerSlot.profileId && (
+                  <CommandGroup>
+                    <CommandItem
+                      value="liberar vaga"
+                      onSelect={() => {
+                        setSessions(current => current.map(session => session.tempId === pickerSession.tempId ? { ...session, slots: session.slots.map(item => item.id === pickerSlot.id ? { ...item, profileId: "", profileName: "" } : item) } : session))
+                        closePicker()
+                      }}
+                      className="min-h-12 rounded-[14px] px-2.5 font-bold text-[#A23F06]"
+                    >
+                      Liberar vaga
+                    </CommandItem>
+                  </CommandGroup>
+                )}
+                {(() => {
+                  const byName = (a: Profile, b: Profile) => a.fullName.localeCompare(b.fullName)
+                  const isUn = (p: Profile) => !!p.id && unavailableUserIds.includes(p.id)
+                  const preferred = profiles.filter(p => !isUn(p) && checkPreference(p, pickerSession.time, date)).sort(byName)
+                  const available = profiles.filter(p => !isUn(p) && !checkPreference(p, pickerSession.time, date)).sort(byName)
+                  const unavailable = profiles.filter(isUn).sort(byName)
+                  return (
+                    <>
+                      {preferred.length > 0 && (
+                        <CommandGroup heading="Preferem este horário">
+                          {preferred.map(p => renderPickerItem(p, "pref"))}
+                        </CommandGroup>
+                      )}
+                      {available.length > 0 && (
+                        <CommandGroup heading="Disponíveis">
+                          {available.map(p => renderPickerItem(p, "available"))}
+                        </CommandGroup>
+                      )}
+                      {unavailable.length > 0 && (
+                        <CommandGroup heading="Não podem neste dia">
+                          {unavailable.map(p => renderPickerItem(p, "unavailable"))}
+                        </CommandGroup>
+                      )}
+                    </>
+                  )
+                })()}
+              </CommandList>
+            </Command>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StepTitle({ n, children }: { n: number; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[#E8B21E] text-[13px] font-extrabold text-[#322113]">{n}</span>
+      <h2 className="text-lg font-extrabold text-black">{children}</h2>
     </div>
   )
 }
