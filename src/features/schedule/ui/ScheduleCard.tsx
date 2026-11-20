@@ -9,7 +9,7 @@ import { cn } from "@/shared/lib/utils"
 import { CalendarDays, Clock, RefreshCw, CheckCircle, Check, UserPlus, Pencil, Trash2, ChevronDown, ChevronUp, X, BookOpen, Loader2, BookSearch } from "lucide-react"
 import { isPast, isToday, startOfDay, format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { roleName as roleLabel } from "@/features/schedule/roles"
+import { roleLabel } from "@/shared/constants/roles"
 import { UserAvatar } from "@/shared/ui/UserAvatar"
 import {
   Sheet,

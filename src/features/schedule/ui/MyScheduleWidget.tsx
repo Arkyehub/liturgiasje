@@ -7,7 +7,7 @@ import { AlertCircle, CalendarDays, CheckCircle, ChevronDown, ChevronRight, Exte
 import { format, isAfter, startOfDay, parseISO, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/shared/lib/utils"
-import { roleName } from "@/features/schedule/roles"
+import { roleLabel as roleName } from "@/shared/constants/roles"
 
 interface MyScheduleWidgetProps {
   schedule: Mass[]
