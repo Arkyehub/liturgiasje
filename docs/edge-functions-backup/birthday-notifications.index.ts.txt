@@ -1,0 +1,93 @@
+// BACKUP (2026-11-20) da Edge Function `birthday-notifications` (Production), substituída pela rota
+// Next `/api/cron/birthdays` (job 5 `aniversarios-next`). Esta versão lia a tabela legada `users`
+// (datas divergentes) e notificava assinaturas de membros arquivados. A chave vinha de variável de
+// ambiente, não do código.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import webpush from 'https://esm.sh/web-push@3.6.6'
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY')!
+const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')!
+
+Deno.serve(async (req) => {
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+    const now = new Date()
+    const today = now.toISOString().slice(5, 10) // "MM-DD"
+
+    console.log(`Verificando aniversariantes para: ${today}`)
+
+    const { data: birthdayPeople, error: usersError } = await supabase
+      .from('users')
+      .select('full_name, birth_date')
+      .not('birth_date', 'is', null)
+
+    if (usersError) throw usersError
+
+    const luckyOnes = birthdayPeople?.filter(p => p.birth_date.slice(5, 10) === today) || []
+
+    if (luckyOnes.length === 0) {
+      return new Response(JSON.stringify({ message: 'Nenhum aniversariante hoje.' }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    }
+
+    const names = luckyOnes.map(p => p.full_name).join(', ')
+    const title = "🎉 Aniversariante do Dia!"
+    const body = luckyOnes.length === 1
+      ? `Hoje é o aniversário de ${names}! Vamos dar os parabéns no grupo? 🎂`
+      : `Hoje é o aniversário de ${names}! Parabéns a todos! 🎂`
+
+    const { data: subs, error: subsError } = await supabase
+      .from('push_subscriptions')
+      .select('subscription')
+
+    if (subsError) throw subsError
+
+    if (!subs || subs.length === 0) {
+      return new Response(JSON.stringify({ message: 'Nenhuma subscrição de push encontrada.' }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    }
+
+    webpush.setVapidDetails(
+      'mailto:contato@liturgiasje.com.br',
+      VAPID_PUBLIC_KEY,
+      VAPID_PRIVATE_KEY
+    )
+
+    console.log(`Enviando notificações para ${subs.length} dispositivos...`)
+
+    const pushResults = await Promise.all(
+      subs.map(s =>
+        webpush.sendNotification(
+          s.subscription,
+          JSON.stringify({ title, body, url: '/' })
+        ).catch(err => {
+          console.error('Falha ao enviar para uma subscrição:', err.statusCode)
+          return null
+        })
+      )
+    )
+
+    return new Response(JSON.stringify({
+      success: true,
+      aniversariantes: luckyOnes.map(p => p.full_name),
+      enviado_para: pushResults.filter(r => r !== null).length
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    })
+
+  } catch (error: any) {
+    console.error('Erro na Edge Function:', error)
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    })
+  }
+})

@@ -1,0 +1,41 @@
+// BACKUP (2026-11-20) da Edge Function `update-leaflet` (Production), desativada por falta de uso.
+// O app mostra o folheto direto do link permanente da Arquidiocese (/folheto); este arquivo no
+// bucket `leaflets` nunca foi lido pelo código. A chave vinha de variável de ambiente, não do código.
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const PDF_URL = "https://www.arqrio.com.br/app/painel/amissa/amissa.pdf";
+const BUCKET_NAME = "leaflets";
+const FILE_NAME = "folheto_atual.pdf";
+
+Deno.serve(async (req) => {
+  try {
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const response = await fetch(PDF_URL);
+    if (!response.ok) throw new Error("Falha ao baixar o PDF da Arquidiocese");
+
+    const arrayBuffer = await response.arrayBuffer();
+
+    const { error } = await supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .upload(FILE_NAME, arrayBuffer, {
+        contentType: 'application/pdf',
+        upsert: true
+      });
+
+    if (error) throw error;
+
+    return new Response(JSON.stringify({ message: "Folheto atualizado com sucesso!" }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { "Content-Type": "application/json" },
+      status: 500,
+    });
+  }
+});
