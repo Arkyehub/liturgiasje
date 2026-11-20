@@ -12,7 +12,10 @@ const session = (profile: unknown, error: unknown = null, user: unknown = { id: 
 })
 
 describe('admin analytics authorization', () => {
-  beforeEach(() => jest.resetAllMocks())
+  beforeEach(() => {
+    jest.resetAllMocks()
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-for-tests'
+  })
   it('rejects anonymous requests before creating a privileged client', async () => {
     ;(createClient as jest.Mock).mockResolvedValue(session(null, null, null))
     expect((await GET()).status).toBe(401)
@@ -66,5 +69,21 @@ describe('admin analytics authorization', () => {
     expect(body.summary.unconfirmedSlotsCount).toBe(1)
     expect(body.summary.totalSwapsExecuted).toBe(0)
     expect(body.unconfirmedSlots[0]).toMatchObject({ id: 's1', massDate: future })
+  })
+
+  it('does not fall back to the public key when the service key is missing', async () => {
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    ;(createClient as jest.Mock).mockResolvedValue(session({ role: 'admin', archived_at: null }))
+    const response = await GET()
+    expect(response.status).toBe(503)
+    expect(createServiceClient).not.toHaveBeenCalled()
+  })
+
+  it('hides internal error details from the client', async () => {
+    ;(createClient as jest.Mock).mockResolvedValue(session({ role: 'admin', archived_at: null }))
+    ;(createServiceClient as jest.Mock).mockImplementation(() => { throw new Error('connection to db.internal:5432 refused') })
+    const response = await GET()
+    expect(response.status).toBe(500)
+    expect(JSON.stringify(await response.json())).not.toContain('db.internal')
   })
 })

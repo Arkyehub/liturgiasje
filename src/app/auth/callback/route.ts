@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 // The client you created in Step 2
 import { createClient } from '@/shared/api/supabaseServer'
+import { safeNextPath } from '@/shared/lib/safeRedirect'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  // if "next" is in search params, use it as the redirection URL
-  const next = searchParams.get('next') ?? '/'
+  // "next" só pode ser um caminho interno (evita redirecionamento para outro site)
+  const next = safeNextPath(searchParams.get('next'))
 
   if (code) {
     const supabase = await createClient()

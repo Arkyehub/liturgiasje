@@ -1,11 +1,12 @@
 import { createAdminClient } from '@/shared/api/supabaseServer';
+import { hasValidCronSecret } from '@/shared/lib/safeCompare';
 import { NextResponse } from 'next/server';
 import { sendPushNotification } from '@/shared/lib/push';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  if (!process.env.CRON_SECRET || request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!hasValidCronSecret(request, process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
@@ -75,8 +76,8 @@ export async function GET(request: Request) {
       sentCount: results.filter(r => r.success).length
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Erro no cron de aniversários:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Erro ao executar o cron de aniversários' }, { status: 500 });
   }
 }

@@ -100,7 +100,7 @@ export function Header({
             }}
           >
             <img
-              src="/Logo-Liturgia-SJE.png"
+              src="/Logo-Liturgia-SJE-header.png"
               alt="Logo Liturgia SJE"
               className={`${centerLogo ? 'h-10 w-auto' : 'h-14 w-auto'} drop-shadow-sm group-hover:drop-shadow-md transition-all`}
             />

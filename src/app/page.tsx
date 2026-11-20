@@ -450,7 +450,7 @@ export default function Home() {
           <div 
             className="absolute inset-0 opacity-15"
             style={{
-              backgroundImage: "url('/bandeirinhas.png')",
+              backgroundImage: "url('/bandeirinhas.webp')",
               backgroundSize: "cover",
               backgroundPosition: "center",
               backgroundRepeat: "no-repeat",

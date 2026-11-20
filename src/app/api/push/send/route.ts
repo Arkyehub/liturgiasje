@@ -130,7 +130,7 @@ export async function POST(request: Request) {
       totalItems: results.length 
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Erro ao enviar notificação';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('Erro em push/send:', error);
+    return NextResponse.json({ error: 'Erro ao enviar notificação' }, { status: 500 });
   }
 }
