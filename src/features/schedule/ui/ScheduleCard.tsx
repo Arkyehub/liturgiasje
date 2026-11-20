@@ -85,7 +85,7 @@ export function ScheduleCard({
 
   // Cabeçalho: domingos ganham o chip marrom; dias de semana usam o chip claro
   const isSunday = rawDate.getDay() === 0
-  const weekdayShort = format(rawDate, "EEE", { locale: ptBR }).replace(".", "").toUpperCase()
+  const weekdayShort = format(rawDate, "EEEE", { locale: ptBR }).normalize("NFD").replace(/[\u0300-\u036f]/g, "").slice(0, 3).toUpperCase()
   const dayNumber = format(rawDate, "d")
   const weekdayLong = format(rawDate, "EEEE", { locale: ptBR })
   const headline = items.find(item => item.specialTitle)?.specialTitle
