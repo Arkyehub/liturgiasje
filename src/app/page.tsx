@@ -940,7 +940,7 @@ export default function Home() {
                       Adicionar Dia
                     </Button>
                   } />
-                  <SheetContent side="right" showCloseButton={false} className="w-full sm:max-w-lg border-l-stone-100 bg-[#FAF5E6] p-0 flex flex-col gap-0">
+                  <SheetContent side="right" showCloseButton={false} className="w-full data-[side=right]:w-full sm:max-w-lg data-[side=right]:sm:max-w-lg border-l-stone-100 bg-[#FAF5E6] p-0 flex flex-col gap-0">
                     <div className="flex shrink-0 items-start justify-between rounded-b-[28px] bg-[#322113] pb-5 pl-5 pr-4 pt-5">
                       <SheetHeader className="gap-1 p-0">
                         <span className="text-[11px] font-bold tracking-[0.12em] text-[#E8C76A]">

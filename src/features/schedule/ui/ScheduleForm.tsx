@@ -647,7 +647,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                     )}
                   </div>
 
-                  <div className="-mt-2 flex items-center justify-center">
+                  <div className="-mt-2 flex w-full items-center justify-center">
                     <TimeRoller
                       value={sess.time || "07:00"}
                       onChange={(val) => updateSessionField(sess.tempId, 'time', val)}
@@ -677,12 +677,12 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
 
                       return (
                         <div key={slot.id} className="flex items-start gap-2.5">
-                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#E9DFCB] bg-[#F4EEDD] text-[15px] font-extrabold text-[#322113]">
+                          <span className="mt-5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#E9DFCB] bg-[#F4EEDD] text-[15px] font-extrabold text-[#322113]">
                             {slot.roleLabel}
                           </span>
 
                           <div className="flex min-w-0 flex-1 flex-col gap-1">
-                            <span className="pl-0.5 text-xs font-bold text-[#6B5D50]">{roleName(slot.roleLabel)}</span>
+                            <span className="text-xs font-bold leading-4 text-[#6B5D50]">{roleName(slot.roleLabel)}</span>
                             <button
                               type="button"
                               onClick={() => setPickerTarget({ sessTempId: sess.tempId, slotId: slot.id })}
@@ -707,7 +707,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                             </button>
 
                             {showMeta && (
-                              <div className="flex min-h-6 flex-wrap items-center gap-2 pl-0.5">
+                              <div className="flex min-h-6 flex-wrap items-center gap-x-2 gap-y-0.5">
                                 {isPref && !isAlready && <span className="rounded-full bg-[#E6F3EB] px-2.5 py-0.5 text-xs font-bold text-[#1E6B43]">Preferência</span>}
                                 {isAlready && <span className="rounded-full bg-[#FFF3D1] px-2.5 py-0.5 text-xs font-bold text-[#6B3F00]">Já escalado neste dia</span>}
                                 {used > 0 && <span className="text-xs text-[#6B5D50]">{used}x no mês</span>}
@@ -716,10 +716,10 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                                     <PopoverTrigger render={
                                       <button
                                         type="button"
-                                        className="inline-flex h-8 items-center gap-1.5 px-0.5 text-xs font-bold text-[#322113] underline underline-offset-[3px]"
+                                        className="inline-flex h-7 items-center gap-1 text-xs font-bold text-[#322113] underline underline-offset-[3px]"
                                       >
                                         <Eye className="h-3.5 w-3.5" />
-                                        Ver escalas do mês
+                                        Ver escalas
                                       </button>
                                     } />
                                     <PopoverContent side="top" align="start" className="z-[70] w-auto rounded-xl border border-[#E9DFCB] bg-white p-2 shadow-xl">
@@ -751,7 +751,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                           <button
                             type="button"
                             aria-label={`Remover ${roleName(slot.roleLabel)}`}
-                            className="mt-4 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[#B5472A] transition-colors hover:bg-red-50"
+                            className="mt-5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[#B5472A] transition-colors hover:bg-red-50"
                             onClick={() => removeSlot(sess.tempId, slot.id)}
                           >
                             <Trash2 className="h-[18px] w-[18px]" />
