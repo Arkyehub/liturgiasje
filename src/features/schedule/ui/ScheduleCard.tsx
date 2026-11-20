@@ -260,7 +260,7 @@ export function ScheduleCard({
                       key={slot.id}
                       id={`slot-${slot.id}`}
                       className={cn(
-                        "flex min-h-[52px] items-center gap-3 rounded-[14px] px-2.5 py-2 transition-all",
+                        "flex min-h-[52px] items-center gap-3 rounded-[14px] px-2 py-2 transition-all",
                         slot.isSwapRequested
                           ? "bg-[#FDEBDD]"
                           : slot.isMine
