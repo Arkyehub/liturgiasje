@@ -87,7 +87,6 @@ describe("ScheduleForm Validation", () => {
     // Corrigindo um dos horários, libera
     fireEvent.change(timeInputs[1], { target: { value: "09:00" } })
     await waitFor(() => expect(screen.queryByText(/Já existe uma missa às/)).not.toBeInTheDocument())
-    expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled()
   })
 
   it("should prevent saving if time already exists in database", async () => {
@@ -200,5 +199,27 @@ describe("ScheduleForm Validation", () => {
 
     const timeInputs = screen.getAllByLabelText(/Horário/i) as HTMLInputElement[]
     expect(timeInputs.map(i => i.value)).toEqual(["07:00", "09:00"])
+  })
+
+  it("should not allow saving a mass without functions or with a function without reader", async () => {
+    const profiles = [{ id: "p-ok", fullName: "Disponivel Teste", role: "reader", createdAt: "", updatedAt: "" }]
+    ;(makeListProfiles as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue(profiles) })
+
+    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
+    fireEvent.click(screen.getByText("30"))
+
+    // Missa sem nenhuma função
+    expect(await screen.findByText(/Adicione ao menos uma função/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled()
+
+    // Função sem leitor
+    await userEvent.click(await screen.findByRole("button", { name: /^Leitor$/ }))
+    expect(await screen.findByText(/1 função sem leitor/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled()
+
+    // Com leitor escolhido, libera
+    await userEvent.click(await screen.findByText("Escolher leitor"))
+    await userEvent.click(await screen.findByText(/^Disponivel Teste/))
+    await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled())
   })
 })

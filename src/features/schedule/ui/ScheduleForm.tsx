@@ -351,6 +351,14 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
         toast.error("Preencha o horário de todas as missas")
         return
       }
+      if (sess.slots.length === 0) {
+        toast.error(`Adicione ao menos uma função na missa das ${sess.time}.`)
+        return
+      }
+      if (sess.slots.some(slot => !slot.profileId)) {
+        toast.error(`Escolha um leitor para todas as funções da missa das ${sess.time}.`)
+        return
+      }
       
     }
 
@@ -415,12 +423,14 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   const dateLong = dateObj && dateIsValid ? format(dateObj, "EEEE, d 'de' MMMM", { locale: ptBR }) : ""
   const dayShort = dateObj && dateIsValid ? format(dateObj, "d 'de' MMMM", { locale: ptBR }) : ""
   const hasAnyTimeConflict = sessions.some(hasTimeConflict)
-  const canSave = !isSaving && !!date && !blockedByExisting && !hasAnyTimeConflict && !sessions.some(s => !s.time || s.slots.some(slot => !slot.profileId))
+  const emptyMassCount = sessions.filter(s => s.slots.length === 0).length
+  const canSave = !isSaving && !!date && !blockedByExisting && !hasAnyTimeConflict && sessions.length > 0 && emptyMassCount === 0 && !sessions.some(s => !s.time || s.slots.some(slot => !slot.profileId))
 
   let footerSummary: React.ReactNode
   if (!date) footerSummary = "Escolha o dia da escala para começar."
   else if (blockedByExisting) footerSummary = "Escolha um dia sem escala para continuar."
   else if (hasAnyTimeConflict) footerSummary = <strong className="font-bold text-[#A23F06]">Corrija os horários repetidos para salvar.</strong>
+  else if (emptyMassCount > 0) footerSummary = <strong className="font-bold text-[#A23F06]">{emptyMassCount === 1 ? "Adicione ao menos uma função na missa para salvar." : "Adicione ao menos uma função em cada missa para salvar."}</strong>
   else {
     footerSummary = (
       <>
