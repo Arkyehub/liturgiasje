@@ -81,9 +81,28 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   const [occupiedDates, setOccupiedDates] = useState<string[]>([])
   const [allMonthMasses, setAllMonthMasses] = useState<any[]>([])
 
+  // Missas já gravadas no dia que NÃO estão no formulário (as do formulário valem pelo estado atual)
+  const otherDbMassTimes = (): string[] =>
+    existingMassesFromDb
+      .filter(m => !sessions.some(o => o.dbId === m.id) && !removedMasses.some(removed => removed.id === m.id))
+      .map(m => String(m.time).substring(0, 5))
+
+  const hasTimeConflict = (sess: Session): boolean => {
+    if (!sess.time) return false
+    return sessions.some(o => o.tempId !== sess.tempId && o.time === sess.time) || otherDbMassTimes().includes(sess.time)
+  }
+
+  // Sugere o próximo horário livre para não nascer uma missa repetida
+  const nextFreeTime = (): string => {
+    const used = new Set([...sessions.map(x => x.time), ...otherDbMassTimes()])
+    const preferred = ["07:00", "09:00", "11:00", "19:00"]
+    const candidates = [...preferred, ...Array.from({ length: 17 }, (_, i) => `${String(i + 6).padStart(2, "0")}:00`)]
+    return candidates.find(t => !used.has(t)) ?? "07:00"
+  }
+
   const createEmptySession = (): Session => ({
     tempId: Math.random().toString(36).substring(2, 9),
-    time: "07:00",
+    time: nextFreeTime(),
     description: "",
     slots: []
   })
@@ -358,11 +377,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
 
     // Validação de duplicidade contra o banco de dados
     for (const sess of sessions) {
-      const conflict = existingMassesFromDb.find(m => 
-        m.time.substring(0, 5) === sess.time && m.id !== sess.dbId && !removedMasses.some(removed => removed.id === m.id)
-      )
-      
-      if (conflict) {
+      if (otherDbMassTimes().includes(sess.time)) {
         toast.error(`Já existe uma missa cadastrada para o horário ${sess.time} neste dia.`)
         return
       }
@@ -399,11 +414,13 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   const dateIsValid = !!dateObj && isValid(dateObj)
   const dateLong = dateObj && dateIsValid ? format(dateObj, "EEEE, d 'de' MMMM", { locale: ptBR }) : ""
   const dayShort = dateObj && dateIsValid ? format(dateObj, "d 'de' MMMM", { locale: ptBR }) : ""
-  const canSave = !isSaving && !!date && !blockedByExisting && !sessions.some(s => !s.time || s.slots.some(slot => !slot.profileId))
+  const hasAnyTimeConflict = sessions.some(hasTimeConflict)
+  const canSave = !isSaving && !!date && !blockedByExisting && !hasAnyTimeConflict && !sessions.some(s => !s.time || s.slots.some(slot => !slot.profileId))
 
   let footerSummary: React.ReactNode
   if (!date) footerSummary = "Escolha o dia da escala para começar."
   else if (blockedByExisting) footerSummary = "Escolha um dia sem escala para continuar."
+  else if (hasAnyTimeConflict) footerSummary = <strong className="font-bold text-[#A23F06]">Corrija os horários repetidos para salvar.</strong>
   else {
     footerSummary = (
       <>
@@ -593,13 +610,16 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
 
             {sessions.map((sess, sessIndex) => {
               const sessMissing = sess.slots.filter(sl => !sl.profileId).length
+              const timeConflict = hasTimeConflict
 
               if (sess.collapsed) {
                 return (
                   <section key={sess.tempId} className="space-y-3 rounded-[22px] border border-[#E9DFCB] bg-white py-3.5 pl-4 pr-2 pb-4">
                     <div className="flex items-center gap-2.5">
                       <span className="text-[28px] font-extrabold tabular-nums tracking-tight">{sess.time}</span>
-                      {sessMissing === 0 && sess.slots.length > 0 ? (
+                      {timeConflict(sess) ? (
+                        <span className="inline-flex items-center rounded-full bg-[#FDEBDD] px-2.5 py-0.5 text-xs font-bold text-[#A23F06]">Horário repetido</span>
+                      ) : sessMissing === 0 && sess.slots.length > 0 ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-[#E6F3EB] px-2.5 py-0.5 text-xs font-bold text-[#1E6B43]">
                           <Check className="h-3 w-3" strokeWidth={3} />
                           Completa
@@ -642,7 +662,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
               }
 
               return (
-                <section key={sess.tempId} className="space-y-4 rounded-[22px] border border-[#E9DFCB] bg-white p-4">
+                <section key={sess.tempId} className={cn("space-y-4 rounded-[22px] border bg-white p-4", timeConflict(sess) ? "border-[#E0824A]" : "border-[#E9DFCB]")}>
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold tracking-[0.1em] text-[#6B5D50]">MISSA {sessIndex + 1} · HORÁRIO</span>
                     {sessions.length > 1 && (
@@ -668,6 +688,12 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                       onChange={(val) => updateSessionField(sess.tempId, 'time', val)}
                     />
                   </div>
+                  {timeConflict(sess) && (
+                    <p role="alert" className="-mt-1 flex items-start gap-2 rounded-xl bg-[#FDEBDD] px-3 py-2 text-[13px] font-semibold leading-snug text-[#A23F06]">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      Já existe uma missa às {sess.time} neste dia. Altere o horário.
+                    </p>
+                  )}
 
                   <div className="space-y-1.5">
                     <label htmlFor={`desc-${sess.tempId}`} className="pl-0.5 text-xs font-bold text-[#6B5D50]">Celebração (opcional)</label>
@@ -796,8 +822,9 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
 
                   <Button
                     type="button"
+                    disabled={timeConflict(sess)}
                     onClick={() => updateSessionField(sess.tempId, 'collapsed', true)}
-                    className="h-[52px] w-full gap-2 rounded-2xl bg-[#322113] text-[15px] font-extrabold text-[#FFF8E8] hover:bg-[#241709]"
+                    className="h-[52px] w-full gap-2 rounded-2xl bg-[#322113] text-[15px] font-extrabold text-[#FFF8E8] hover:bg-[#241709] disabled:bg-[#EFE8D6] disabled:text-[#6B5D50] disabled:opacity-100"
                   >
                     <Check className="h-[18px] w-[18px]" strokeWidth={2.6} />
                     Concluir missa
