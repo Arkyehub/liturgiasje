@@ -182,11 +182,11 @@ export function AnnouncementCard({
   const shouldShowGlow = isLoggedIn && !isRead;
 
   return (
-    <Card id={`ann-${id}`} className={`overflow-hidden p-0 gap-0 transition-all duration-500 ${!isPublished && isAdmin
+    <Card id={`ann-${id}`} className={`overflow-hidden rounded-[20px] p-0 gap-0 transition-all duration-500 ${!isPublished && isAdmin
         ? "border-2 border-orange-500 ring-2 ring-orange-100 bg-white"
         : shouldShowGlow
-          ? `${isExpanded ? "border-red-200 bg-white shadow-sm" : "border-red-400 bg-white shadow-md animate-alert-glow ring-2 ring-red-100 ring-offset-1"}`
-          : isRead ? "border-green-500 bg-white shadow-sm hover:bg-white/90" : "border-stone-200 bg-white shadow-sm"
+          ? `${isExpanded ? "border-amber-200 bg-white shadow-sm" : "border-amber-300 bg-white shadow-[0_4px_14px_rgba(50,33,19,0.08)]"}`
+          : isRead ? "border-[#E9DFCB] bg-[#F4EEDD] shadow-none" : "border-[#E9DFCB] bg-white shadow-sm"
       }`}>
       {/* Barra de Ações Administrativas (Admin Only) */}
       {isAdmin && (
@@ -322,24 +322,29 @@ export function AnnouncementCard({
           disabled={!isLoggedIn}
         >
           <AccordionTrigger
-            className={`px-3 py-2 hover:no-underline ${!isLoggedIn ? 'cursor-default pointer-events-none' : ''}`}
+            className={`px-4 py-3 hover:no-underline ${!isLoggedIn ? 'cursor-default pointer-events-none' : ''}`}
             hideChevron={!isLoggedIn}
           >
             <div className="flex items-center gap-2 text-left w-full pr-2">
               <div className={cn(
-                "rounded-full p-2 shrink-0 transition-all duration-500",
+                "rounded-xl p-2.5 shrink-0 transition-all duration-500",
                 isRead 
-                  ? "bg-green-100 text-green-700" 
-                  : "bg-red-100 text-red-600 animate-pulse ring-4 ring-red-50/50"
+                  ? "bg-[#EADFCB] text-[#6B5D50]"
+                  : "bg-[#FDF1D6] text-[#7A4F00]"
               )}>
                 {type === 'Troca' ? <RefreshCw className="h-4 w-4" /> : <Megaphone className="h-4 w-4" />}
               </div>
               <div className="flex flex-col flex-1 min-w-0">
-                <span className="text-sm font-semibold text-stone-800 line-clamp-1">{title}</span>
+                <span className="text-[15px] font-bold text-stone-800 line-clamp-1">{title}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">
                     {type}
                   </span>
+                  {shouldShowGlow && (
+                    <span className="rounded-full bg-[#322113] px-2 py-0.5 text-[10px] font-extrabold tracking-wider text-[#FFF8E8]">
+                      NOVO
+                    </span>
+                  )}
                   {isRead && (
                     <span className="flex items-center gap-1 text-[10px] text-green-600 font-medium">
                       <CheckCircle2 className="h-3 w-3" /> Visualizado
@@ -349,7 +354,7 @@ export function AnnouncementCard({
               </div>
             </div>
           </AccordionTrigger>
-          <AccordionContent className="px-3 pb-3 pt-0">
+          <AccordionContent className="px-4 pb-4 pt-0">
             <div className="space-y-4 pt-1.5">
               <p className="text-sm leading-relaxed text-stone-600 whitespace-pre-wrap">
                 {content}
@@ -519,7 +524,7 @@ export function AnnouncementCard({
                   onClick={() => onRead?.(id)}
                   variant="outline"
                   size="sm"
-                  className="w-full h-9 text-xs font-bold border-green-200 text-green-700 bg-green-50/50 hover:bg-green-100/80 hover:text-green-800 rounded-lg transition-all active:scale-95"
+                  className="w-full h-11 text-sm font-bold border-[#322113] text-[#322113] bg-transparent hover:bg-[#322113]/5 rounded-full transition-all active:scale-95"
                 >
                   <CheckCircle2 className="mr-2 h-4 w-4" />
                   Confirmar Leitura
@@ -531,7 +536,7 @@ export function AnnouncementCard({
                   onClick={() => onAcceptSwap?.(relatedScheduleSlotId, id)}
                   variant="outline"
                   size="sm"
-                  className="w-full h-9 text-xs font-bold border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 hover:text-amber-800 rounded-lg transition-all active:scale-95 shadow-sm"
+                  className="w-full h-11 text-sm font-extrabold border-transparent text-[#241A10] bg-[#E8B21E] hover:bg-[#d8a516] hover:text-[#241A10] rounded-full transition-all active:scale-95 shadow-sm"
                 >
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Aceitar Troca

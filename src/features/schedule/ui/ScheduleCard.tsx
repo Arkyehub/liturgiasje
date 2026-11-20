@@ -6,8 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card"
 import { Badge } from "@/shared/ui/badge"
 import { Switch } from "@/shared/ui/switch"
 import { cn } from "@/shared/lib/utils"
-import { CalendarDays, Clock, RefreshCw, CheckCircle, UserPlus, Pencil, Trash2, ChevronDown, ChevronUp, X, BookOpen, Loader2, BookSearch } from "lucide-react"
-import { isPast, isToday, startOfDay } from "date-fns"
+import { CalendarDays, Clock, RefreshCw, CheckCircle, Check, UserPlus, Pencil, Trash2, ChevronDown, ChevronUp, X, BookOpen, Loader2, BookSearch } from "lucide-react"
+import { isPast, isToday, startOfDay, format } from "date-fns"
+import { ptBR } from "date-fns/locale"
+import { roleName as roleLabel } from "@/features/schedule/roles"
 import { UserAvatar } from "@/shared/ui/UserAvatar"
 import {
   Sheet,
@@ -81,6 +83,15 @@ export function ScheduleCard({
 
   const allMassIds = items.map(item => item.id);
 
+  // Cabeçalho: domingos ganham o chip marrom; dias de semana usam o chip claro
+  const isSunday = rawDate.getDay() === 0
+  const weekdayShort = format(rawDate, "EEEE", { locale: ptBR }).normalize("NFD").replace(/[\u0300-\u036f]/g, "").slice(0, 3).toUpperCase()
+  const dayNumber = format(rawDate, "d")
+  const weekdayLong = format(rawDate, "EEEE", { locale: ptBR })
+  const headline = items.find(item => item.specialTitle)?.specialTitle
+    || weekdayLong.charAt(0).toUpperCase() + weekdayLong.slice(1)
+  const massesSummary = `${items.length === 1 ? "1 missa" : `${items.length} missas`} · ${items.map(item => item.time).join(" · ")}`
+
   const handleOpenLiturgy = async () => {
     setIsLiturgyOpen(true)
     if (liturgyData) return
@@ -114,7 +125,7 @@ export function ScheduleCard({
   }, [items, rawDate])
 
   const adminBar = isAdmin && (
-    <div className="flex items-center justify-between gap-2 border-b border-stone-100 bg-stone-50/50 px-3 py-1">
+    <div className="flex items-center justify-between gap-2 rounded-t-[20px] border-b border-stone-100 bg-stone-50/50 px-3 py-1">
       <div className="flex items-center gap-3">
         {!isPublished ? (
           <Badge variant="outline" className="text-[9px] font-black bg-orange-50 text-orange-600 border-orange-200 py-0 px-2 h-5">
@@ -154,167 +165,199 @@ export function ScheduleCard({
     </div>
   );
 
+  const checkBadge = (
+    <span role="img" aria-label="Confirmado" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#E6F2EA]">
+      <Check className="h-4 w-4 text-[#1E6B43]" strokeWidth={3} />
+    </span>
+  )
+
   return (
     <Card className={cn(
-      "!overflow-visible border-stone-200 bg-white shadow-sm p-0 gap-0 transition-all",
+      "!overflow-visible rounded-[20px] border-[#E9DFCB] bg-white shadow-[0_4px_14px_rgba(50,33,19,0.07)] p-0 gap-0 transition-all",
       !isPublished && isAdmin && "border-2 border-orange-500 ring-2 ring-orange-100",
-      isDatePast && !isExpanded && "opacity-80"
+      isDatePast && !isExpanded && "opacity-90"
     )}>
       {adminBar}
-      <CardHeader
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
         className={cn(
-          "bg-stone-50/50 p-4 pb-3 border-b border-stone-100 cursor-pointer hover:bg-stone-100/50 transition-colors select-none",
-          isDatePast && !isExpanded && "border-b-0 pb-4"
+          "flex cursor-pointer select-none items-center gap-3 bg-[#FAF5E6] px-4 py-3 transition-colors hover:bg-[#F4EEDD]",
+          !isAdmin && "rounded-t-[20px]",
+          isExpanded ? "border-b border-[#F1EADC]" : "rounded-b-[20px]"
         )}
         onClick={() => setIsExpanded(!isExpanded)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            setIsExpanded(!isExpanded)
+          }
+        }}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-black">
-            {isDatePast ? (
-              <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
-            ) : (
-              <CalendarDays className="h-4 w-4 shrink-0" />
-            )}
-            <span className={cn(
-              "text-sm font-bold uppercase tracking-tight",
-              isDatePast && "text-stone-500 line-through decoration-stone-300"
-            )}>
-              {date}
-            </span>
-            {isDatePast && !isExpanded && (
-              <Badge variant="outline" className="text-[8px] font-bold bg-green-50 text-green-700 border-green-100 py-0 px-1.5 h-4 ml-1">
-                CONCLUÍDO
-              </Badge>
-            )}
-          </div>
+        {/* Chip da data: marrom nos domingos, claro nos demais dias */}
+        <span
+          className={cn(
+            "flex h-[52px] w-12 shrink-0 flex-col items-center justify-center rounded-[14px] leading-none",
+            isSunday ? "bg-[#322113] text-[#FFF8E8]" : "border border-[#E9DFCB] bg-white text-[#241A10]",
+            isDatePast && "opacity-70"
+          )}
+        >
+          <span className={cn("text-[11px] font-bold tracking-wide", isSunday ? "text-[#E8C76A]" : "text-[#6B5D50]")}>
+            {weekdayShort}
+          </span>
+          <span className="mt-1 text-xl font-extrabold">{dayNumber}</span>
+        </span>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleOpenLiturgy()
-              }}
-              className="p-1 hover:bg-stone-200/60 rounded-lg transition-all flex items-center justify-center text-black"
-              title="Ver Liturgia Diária"
-            >
-              <BookSearch className="h-5 w-5" />
-            </button>
-            <div className="text-black">
-              {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </div>
-          </div>
-        </div>
-      </CardHeader>
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className={cn("truncate text-[15px] font-extrabold tracking-tight text-black", isDatePast && "text-stone-600")}>
+            {headline}
+          </span>
+          <span className="truncate text-xs text-[#6B5D50]">{massesSummary}</span>
+        </span>
+
+        {isDatePast && !isExpanded && (
+          <Badge variant="outline" className="h-5 shrink-0 border-green-100 bg-green-50 px-2 py-0 text-[10px] font-bold text-green-700">
+            CONCLUÍDO
+          </Badge>
+        )}
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleOpenLiturgy()
+          }}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-black transition-colors hover:bg-stone-200/60"
+          title="Ver Liturgia Diária"
+          aria-label="Ver Liturgia Diária"
+        >
+          <BookSearch className="h-[22px] w-[22px]" />
+        </button>
+        <span className="shrink-0 text-black" aria-hidden="true">
+          {isExpanded ? <ChevronUp className="h-[18px] w-[18px]" /> : <ChevronDown className="h-[18px] w-[18px]" />}
+        </span>
+      </div>
 
       {isExpanded && (
         <CardContent className="p-0 animate-in fade-in slide-in-from-top-1 duration-200">
           {items.map((item, itemIndex) => (
-            <div key={item.id} className={cn("flex flex-col", itemIndex > 0 && "border-t-4 border-stone-200")}>
+            <div key={item.id} className={cn("flex flex-col", itemIndex > 0 && "border-t border-[#F1EADC] pt-1")}>
               {/* Sub-header do Horário */}
-              <div className="flex items-center bg-stone-50/30 px-4 py-2 border-b border-stone-50 gap-3">
-                <div className="flex items-center gap-2 text-black">
-                  <Clock className="h-3.5 w-3.5" />
-                  <span className="text-xs font-black tracking-tight">
-                    {item.time} {item.specialTitle && <span className="text-black ml-1"> — {item.specialTitle}</span>}
-                  </span>
-                </div>
+              <div className="flex items-center gap-2 px-4 pb-1.5 pt-3 text-[13px] font-extrabold tracking-tight text-black">
+                <Clock className="h-4 w-4 shrink-0" />
+                <span>
+                  {item.time}
+                  {item.specialTitle && <span> — {item.specialTitle}</span>}
+                </span>
               </div>
 
-              <div className="divide-y divide-stone-100">
-                {item.slots.map((slot) => (
-                  <div
-                    key={slot.id}
-                    id={`slot-${slot.id}`}
-                    className={cn(
-                      "mx-1 flex items-center justify-between py-1.5 px-3 rounded-xl border border-stone-100/10 transition-all",
-                      slot.isSwapRequested ? "bg-red-50/70 border-l-4 border-l-red-200" :
-                        slot.isConfirmed && slot.isMine ? "bg-green-50" : "bg-stone-50/40"
-                    )}
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-3">
-                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-black border transition-all ${isDatePast && slot.isSwapRequested
-                            ? "bg-red-100 text-red-700 border-red-200"
-                            : slot.isSwapRequested
-                              ? "bg-red-100 text-red-700 border-red-200 animate-pulse"
-                              : slot.isConfirmed
-                                ? "bg-green-100 text-green-700 border-green-600"
-                                : "bg-stone-50 text-black border-stone-950"
-                          }`}>
-                          {isDatePast && slot.isSwapRequested ? <X className="h-3.5 w-3.5" /> : slot.isSwapRequested ? <RefreshCw className="h-3.5 w-3.5" /> : slot.role}
-                        </div>
-
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className={cn("text-[13px] font-bold leading-tight truncate", slot.readerArchived ? "text-red-700" : "text-black")}>
-                            {slot.readerName || "---"}{slot.readerArchived && " · membro inativo"}
-                          </span>
-                          {!!slot.previousAssignments?.length && (
-                            <span className="text-[10px] text-red-700">Anteriormente: {slot.previousAssignments.map(p => `${p.fullName}${p.archived ? " · membro inativo" : ""}`).join(", ")}</span>
-                          )}
-                          {slot.readerName && slot.readerName !== "---" && slot.isConfirmed && (
-                            <UserAvatar 
-                              name={slot.readerName}
-                              src={slot.avatarUrl}
-                              isClaimed={slot.isClaimed}
-                              className="h-6 w-6 shrink-0 ml-1"
-                            />
-                          )}
-                          {slot.originalReaderName && slot.readerName !== slot.originalReaderName && (
-                            <span className={cn("text-[9px] font-medium italic shrink-0", slot.originalReaderArchived ? "text-red-700" : "text-stone-400")}>
-                              (subst. {slot.originalReaderName}{slot.originalReaderArchived && " · membro inativo"})
-                            </span>
-                          )}
-                        </div>
+              <div className="flex flex-col gap-1 px-2 pb-2.5">
+                {item.slots.map((slot) => {
+                  const showPending = isPublished && !isDatePast && !slot.isConfirmed && !slot.isMine && !slot.isSwapRequested
+                  return (
+                    <div
+                      key={slot.id}
+                      id={`slot-${slot.id}`}
+                      className={cn(
+                        "flex min-h-[52px] items-center gap-3 rounded-[14px] px-2 py-2 transition-all",
+                        slot.isSwapRequested
+                          ? "bg-[#FDEBDD]"
+                          : slot.isMine
+                            ? "bg-[#FFF6D6] ring-1 ring-[#E8B21E]/80"
+                            : "bg-[#FAF5E6]/60"
+                      )}
+                    >
+                      <div className={cn(
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border text-xs font-extrabold transition-all",
+                        slot.isSwapRequested
+                          ? "border-[#F2B791] bg-white text-[#A23F06]"
+                          : slot.isConfirmed
+                            ? "border-[#8CC3A1] bg-[#E6F2EA] text-[#1E6B43]"
+                            : slot.isMine
+                              ? "border-[#E8B21E] bg-[#E8B21E] text-[#241A10]"
+                              : "border-[#D9CDB8] bg-[#F5F0E4] text-black"
+                      )}>
+                        {isDatePast && slot.isSwapRequested ? <X className="h-4 w-4" /> : slot.isSwapRequested ? <RefreshCw className="h-4 w-4" /> : slot.role}
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Botão Confirmar/Trocar/Assumir (Apenas se NÃO for passado) */}
+                      <div className="flex min-w-0 flex-1 flex-col gap-px">
+                        <span className={cn("truncate text-sm font-bold leading-tight", slot.readerArchived ? "text-red-700" : "text-black")}>
+                          {slot.readerName || "---"}{slot.readerArchived && " · membro inativo"}
+                        </span>
+                        <span className="truncate text-xs text-[#6B5D50]">
+                          {slot.roleName || roleLabel(slot.role)}
+                          {slot.isMine && !slot.isSwapRequested && " · você"}
+                          {slot.isSwapRequested && <span className="font-bold text-[#A23F06]"> · troca aberta</span>}
+                        </span>
+                        {!!slot.previousAssignments?.length && (
+                          <span className="text-[10px] text-red-700">Anteriormente: {slot.previousAssignments.map(p => `${p.fullName}${p.archived ? " · membro inativo" : ""}`).join(", ")}</span>
+                        )}
+                        {slot.originalReaderName && slot.readerName !== slot.originalReaderName && (
+                          <span className={cn("text-[10px] font-medium italic", slot.originalReaderArchived ? "text-red-700" : "text-[#6B5D50]")}>
+                            substituiu {slot.originalReaderName}{slot.originalReaderArchived && " · membro inativo"}
+                          </span>
+                        )}
+                      </div>
 
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {slot.readerName && slot.readerName !== "---" && slot.isConfirmed && !slot.isMine && (
+                          <UserAvatar
+                            name={slot.readerName}
+                            src={slot.avatarUrl}
+                            isClaimed={slot.isClaimed}
+                            className="h-7 w-7 shrink-0"
+                          />
+                        )}
+
+                        {slot.isConfirmed && !slot.isSwapRequested && checkBadge}
+
+                        {showPending && (
+                          <span className="text-xs font-bold text-[#6B5D50]">Pendente</span>
+                        )}
+
+                        {/* Confirmar/Trocar/Assumir (Apenas se NÃO for passado) */}
                         {isPublished && !isDatePast && slot.isMine && !slot.isSwapRequested && (
-                          <div className="flex items-center gap-1.5">
+                          <>
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 px-2 text-[10px] font-bold text-stone-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg"
+                              className="h-10 rounded-xl px-2.5 text-xs font-bold text-[#6B5D50] hover:bg-amber-100 hover:text-stone-900"
                               onClick={() => onRequestSwap?.(slot.id)}
                             >
-                              TROCAR
+                              Trocar
                             </Button>
-                            {slot.isConfirmed ? (
-                              <div className="flex items-center justify-center w-8 h-8 bg-green-100 text-green-700 rounded-full border border-green-200 animate-in fade-in zoom-in-95 duration-300 shadow-sm">
-                                <CheckCircle className="h-5 w-5" />
-                              </div>
-                            ) : (
+                            {!slot.isConfirmed && (
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 px-3 text-[10px] font-bold bg-green-700 text-white hover:bg-green-800 rounded-lg shadow-sm"
+                                className="h-10 rounded-xl bg-[#1E6B43] px-3.5 text-xs font-extrabold text-white shadow-sm hover:bg-[#17553a] hover:text-white"
                                 onClick={() => onConfirm?.(slot.id)}
                               >
-                                CONFIRMAR
+                                Confirmar
                               </Button>
                             )}
-                          </div>
+                          </>
                         )}
 
                         {isPublished && !isDatePast && slot.isSwapRequested && !slot.isMine && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 px-3 text-[10px] font-bold bg-green-700 text-white hover:bg-green-800 shadow-sm rounded-full transition-all active:scale-95"
+                            className="h-10 rounded-full bg-[#1E6B43] px-3.5 text-xs font-extrabold text-white shadow-sm transition-all hover:bg-[#17553a] hover:text-white active:scale-95"
                             onClick={() => onTakeSwap?.(slot.id)}
                           >
-                            <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-                            Assumir Troca
+                            <UserPlus className="mr-1.5 h-4 w-4" />
+                            Assumir
                           </Button>
                         )}
 
                         {isPublished && slot.isMine && slot.isSwapRequested && (
-                          <div className="flex items-center gap-1.5">
+                          <>
                             {isDatePast && (
                               <Badge
                                 variant="outline"
-                                className="text-[9px] font-black bg-red-50 text-red-700 border-red-200"
+                                className="border-red-200 bg-red-50 text-[10px] font-black text-red-700"
                               >
                                 Troca Não Realizada
                               </Badge>
@@ -323,18 +366,18 @@ export function ScheduleCard({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 px-2 text-[10px] font-bold text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                                className="h-10 rounded-xl px-2.5 text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700"
                                 onClick={() => onCancelSwap?.(slot.id)}
                               >
-                                CANCELAR TROCA
+                                Cancelar troca
                               </Button>
                             )}
-                          </div>
+                          </>
                         )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ))}
