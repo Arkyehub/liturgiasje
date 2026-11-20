@@ -4,11 +4,14 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { AnnouncementCard } from "@/features/announcements/ui/AnnouncementCard"
 import { ScheduleCard } from "@/features/schedule/ui/ScheduleCard"
+import { PastDaysGroup } from "@/features/schedule/ui/PastDaysGroup"
+import { roleName as roleLabel } from "@/features/schedule/roles"
+import { SectionTitle } from "@/shared/ui/SectionTitle"
 import { MyScheduleWidget } from "@/features/schedule/ui/MyScheduleWidget"
 import { BirthdayCard } from "@/shared/ui/BirthdayCard"
 import { Button } from "@/shared/ui/button"
 import { ChevronLeft, ChevronRight, Loader2, Plus, RefreshCw, Plane, CheckCircle, FileText, Share2 } from "lucide-react"
-import { addMonths, format, subMonths, isToday, parseISO, isValid } from "date-fns"
+import { addMonths, format, subMonths, isToday, parseISO, isValid, startOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { roleLabel } from "@/shared/constants/roles"
 import Link from "next/link"
@@ -119,7 +122,7 @@ export default function Home() {
   const processedHashRef = useRef<string | null>(null)
   
   const [isUnconfirmedAlertOpen, setIsUnconfirmedAlertOpen] = useState(false)
-  const [shareSwapDialogData, setShareSwapDialogData] = useState<any | null>(null)
+  const [shareSwapOnRequest, setShareSwapOnRequest] = useState(true)
 
   // Lista de escalas do usuário logado que não foram confirmadas
   const myUnconfirmedSlots = useMemo(() => {
@@ -341,7 +344,7 @@ export default function Home() {
     const massDate = new Date(swap.mass.date + 'T00:00:00');
     const dia = format(massDate, "dd/MM (EEEE)", { locale: ptBR });
     const horario = swap.mass.time.substring(0, 5);
-    const papel = swap.role;
+    const papel = roleLabel(swap.role);
     const shareLink = `${window.location.origin}/#slot-${swap.id}`;
     
     const text = `Infelizmente não vou poder ler ${dia} às ${horario} - ${papel}. Alguém poderia trocar comigo?\n\nVeja no aplicativo: ${shareLink}`;
@@ -349,7 +352,8 @@ export default function Home() {
     const encodedText = encodeURIComponent(text);
     const whatsappUrl = `https://wa.me/?text=${encodedText}`;
     
-    window.open(whatsappUrl, '_blank');
+    const opened = window.open(whatsappUrl, '_blank');
+    return !!opened;
   }, [])
 
   // Lógica de Scroll para Recado via Hash (#ann-ID) ou Slot (#slot-ID)
@@ -494,12 +498,8 @@ export default function Home() {
           {/* Seção Nova: Solicitações de Troca */}
           {sortedSwaps.length > 0 && (
             <section className="space-y-3">
-              <div className="flex items-center justify-center px-1">
-                <h2 className="text-xl font-black tracking-tight text-amber-600 text-center">
-                  Solicitações de Troca
-                </h2>
-              </div>
-              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x">
+              <SectionTitle className="text-[#A23F06]">Solicitações de Troca</SectionTitle>
+              <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-none snap-x">
                 {sortedSwaps.map((swap) => {
                   const massDate = new Date(swap.mass.date + 'T00:00:00');
                   const roleName = roleLabel(swap.role, true);
@@ -536,7 +536,7 @@ export default function Home() {
                           setTimeout(() => el?.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2'), 2000);
                         }
                       }}
-                      className="flex-none w-[220px] bg-white border border-stone-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-amber-200 transition-all active:scale-95 snap-start text-left cursor-pointer flex flex-col justify-between"
+                      className="flex-none w-[236px] bg-[#FDEBDD] border border-[#F2B791] rounded-[20px] p-4 shadow-[0_4px_14px_rgba(162,63,6,0.10)] hover:shadow-md transition-all active:scale-95 snap-start text-left cursor-pointer flex flex-col justify-between"
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => {
@@ -550,7 +550,7 @@ export default function Home() {
                         {/* Primeira linha: Símbolo da troca e Dia por extenso com compartilhar à direita */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5 text-black min-w-0">
-                            <RefreshCw className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                            <RefreshCw className="h-3.5 w-3.5 text-[#A23F06] shrink-0" />
                             <span className="text-[13px] font-black tracking-tight capitalize truncate">
                               {isValid(massDate) ? format(massDate, "EEEE dd/MM", { locale: ptBR }) : '--/--'}
                             </span>
@@ -559,7 +559,7 @@ export default function Home() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all shrink-0 ml-1"
+                              className="h-9 w-9 rounded-full bg-white text-emerald-700 hover:bg-emerald-50 transition-all shrink-0 ml-1"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleShareSwap(swap);
@@ -575,7 +575,7 @@ export default function Home() {
                         </p>
                       </div>
 
-                      <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-center justify-between">
+                      <div className="mt-3 pt-2.5 border-t border-[#F2B791]/60 flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
                           <UserAvatar 
                             name={requesterName}
@@ -597,11 +597,7 @@ export default function Home() {
 
           {/* Sessão 1: Mural de Recados */}
           <section className="space-y-4">
-            <div className="flex items-center justify-center px-1">
-              <h2 className="text-xl font-black tracking-tight text-stone-800 text-center">
-                Mural de Recados
-              </h2>
-            </div>
+            <SectionTitle>Mural de Recados</SectionTitle>
             
             <div className="space-y-2">
               {isLoadingAnnouncements ? (
@@ -794,46 +790,47 @@ export default function Home() {
 
           {/* Sessão Interativa: Seletor de Mês */}
           <section className="flex flex-col items-center gap-4 py-2">
-            <div className="flex items-center justify-center w-full relative h-8">
-              {profile?.role === "admin" && (
-                <div className="absolute left-0">
+            <div className="grid w-full grid-cols-[44px_1fr_44px] items-center">
+              <div className="flex justify-start">
+                {profile?.role === "admin" && (
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-9 w-9 rounded-full bg-white text-emerald-600 border-2 border-emerald-600 shadow-sm hover:bg-emerald-50 transition-all active:scale-95"
+                    className="h-11 w-11 rounded-full bg-white text-emerald-700 border-2 border-emerald-600 shadow-sm hover:bg-emerald-50 transition-all active:scale-95"
                     onClick={handleShareSchedule}
                     title="Compartilhar no WhatsApp"
+                    aria-label="Compartilhar escala no WhatsApp"
                   >
                     <Share2 className="h-5 w-5" strokeWidth={2.5} />
                   </Button>
-                </div>
-              )}
+                )}
+              </div>
 
-              <h2 className="text-xl font-black tracking-tight text-stone-800">
-                Escala de Leitores
-              </h2>
+              <SectionTitle>Escala de Leitores</SectionTitle>
 
-              {user && (
-                <div className="absolute right-0">
+              <div className="flex justify-end">
+                {user && (
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-9 w-9 rounded-full bg-white text-red-600 border-2 border-red-600 shadow-sm hover:bg-red-50 hover:text-red-700 transition-all active:scale-95"
+                    className="h-11 w-11 rounded-full bg-white text-[#A23F06] border-2 border-[#A23F06] shadow-sm hover:bg-[#FDEBDD] hover:text-[#A23F06] transition-all active:scale-95"
                     onClick={() => setIsUnavailableDrawerOpen(true)}
                     title="Meus Dias Indisponíveis"
+                    aria-label="Meus dias indisponíveis"
                   >
                     <Plane className="h-5 w-5" strokeWidth={2.5} />
                   </Button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
 
-            <div className="flex items-center justify-between w-full bg-white rounded-full border border-stone-400 px-2 py-1.5 shadow-sm transition-colors hover:border-stone-600">
+            <div className="flex items-center justify-between w-full bg-white rounded-full border border-[#E9DFCB] px-1.5 py-1 shadow-sm">
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-8 w-8 rounded-full text-stone-400 hover:text-stone-800"
+                className="h-11 w-11 rounded-full text-stone-500 hover:text-stone-900"
+                aria-label="Mês anterior"
                 onClick={handlePrevMonth}
               >
                 <ChevronLeft className="h-5 w-5" />
@@ -846,7 +843,8 @@ export default function Home() {
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-8 w-8 rounded-full text-stone-400 hover:text-stone-800"
+                className="h-11 w-11 rounded-full text-stone-500 hover:text-stone-900"
+                aria-label="Próximo mês"
                 onClick={handleNextMonth}
               >
                 <ChevronRight className="h-5 w-5" />
@@ -930,7 +928,7 @@ export default function Home() {
                     'P': 4
                   }
 
-                  return sortedDays.map((day: any) => (
+                  const renderDay = (day: any) => (
                     <ScheduleCard 
                       key={day.date} 
                        date={isValid(new Date(day.date + 'T00:00:00'))
@@ -991,21 +989,28 @@ export default function Home() {
                         }
                       }}
                       onRequestSwap={(slotId) => {
-                        // Encontrar detalhes da missa para o aviso
                         let targetMass: any = null;
-                        const targetDay: any = null;
-                        
+                        let targetSlot: any = null;
+
                         schedule.forEach(mass => {
-                          if (mass.slots.some((s: any) => s.id === slotId)) {
+                          const found = mass.slots.find((sl: any) => sl.id === slotId);
+                          if (found) {
                             targetMass = mass;
+                            targetSlot = found;
                           }
                         });
 
-                        if (targetMass) {
+                        if (targetMass && targetSlot) {
+                          const d = new Date(targetMass.date + 'T00:00:00');
                           setSwapTargetSlot({
                             id: slotId,
-                            massDate: format(new Date(targetMass.date + 'T00:00:00'), "dd/MM"),
+                            role: targetSlot.role,
+                            roleName: roleLabel(targetSlot.role),
+                            massDate: format(d, "dd/MM"),
+                            dateLabel: format(d, "EEE, dd/MM", { locale: ptBR }).replace(".", ""),
+                            rawMassDate: targetMass.date,
                             massTime: targetMass.time.substring(0, 5),
+                            rawMassTime: targetMass.time,
                             description: targetMass.specialDescription || "Missa"
                           });
                         }
@@ -1046,7 +1051,38 @@ export default function Home() {
                         }
                       }}
                     />
-                  ))
+                  )
+
+                  const todayStart = startOfDay(new Date())
+                  const isPastDay = (day: any) => {
+                    const d = new Date(day.date + 'T00:00:00')
+                    return isValid(d) && d < todayStart
+                  }
+                  const pastDays = sortedDays.filter(isPastDay)
+                  const upcomingDays = sortedDays.filter((d: any) => !isPastDay(d))
+
+                  let pastRange = ""
+                  if (pastDays.length > 0) {
+                    const first = new Date((pastDays[0] as any).date + 'T00:00:00')
+                    const last = new Date((pastDays[pastDays.length - 1] as any).date + 'T00:00:00')
+                    pastRange = pastDays.length === 1
+                      ? format(first, "d MMM", { locale: ptBR }).replace(".", "")
+                      : `${format(first, "d", { locale: ptBR })} a ${format(last, "d MMM", { locale: ptBR }).replace(".", "")}`
+                  }
+
+                  return (
+                    <>
+                      {pastDays.length > 0 && (
+                        <PastDaysGroup
+                          massesCount={pastDays.reduce((n: number, d: any) => n + d.items.length, 0)}
+                          rangeLabel={pastRange}
+                        >
+                          {pastDays.map(renderDay)}
+                        </PastDaysGroup>
+                      )}
+                      {upcomingDays.map(renderDay)}
+                    </>
+                  )
                 })()
               )}
             </div>
@@ -1095,53 +1131,84 @@ export default function Home() {
             </DrawerContent>
           </Drawer>
 
-          {/* Drawer de Confirmação de Troca */}
+          {/* Drawer de Pedido de Troca (um passo) */}
           <Drawer open={!!swapTargetSlot} onOpenChange={(open) => !open && !isRequestingSwap && setSwapTargetSlot(null)}>
             <DrawerContent>
-              <div className="mx-auto w-full max-w-sm">
-                <DrawerHeader className="text-center">
-                  <DrawerTitle className="text-stone-800">Solicitar Troca?</DrawerTitle>
+              <div className="mx-auto w-full max-w-sm px-4">
+                <DrawerHeader className="px-0 text-center">
+                  <DrawerTitle className="text-xl font-black text-stone-900">Pedir troca</DrawerTitle>
                   <DrawerDescription>
-                    Um aviso será enviado ao Mural de Recados para que outro leitor possa assumir sua escala no dia {swapTargetSlot?.massDate} às {swapTargetSlot?.massTime}.
+                    Seu pedido aparece para todos os leitores. Você continua escalado até alguém assumir.
                   </DrawerDescription>
                 </DrawerHeader>
-                <DrawerFooter className="flex flex-col gap-2 pb-8">
+
+                <dl className="grid grid-cols-2 gap-2 rounded-2xl border border-[#E9DFCB] bg-[#FAF5E6] p-3 text-left">
+                  <div>
+                    <dt className="text-[11px] font-bold uppercase tracking-wide text-[#6B5D50]">Data</dt>
+                    <dd className="text-sm font-extrabold capitalize text-black">{swapTargetSlot?.dateLabel}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-bold uppercase tracking-wide text-[#6B5D50]">Horário</dt>
+                    <dd className="text-sm font-extrabold text-black">{swapTargetSlot?.massTime}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-bold uppercase tracking-wide text-[#6B5D50]">Função</dt>
+                    <dd className="text-sm font-extrabold text-black">{swapTargetSlot?.roleName}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-bold uppercase tracking-wide text-[#6B5D50]">Celebração</dt>
+                    <dd className="truncate text-sm font-extrabold text-black">{swapTargetSlot?.description}</dd>
+                  </div>
+                </dl>
+
+                <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-2xl p-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-5 w-5 shrink-0 accent-[#1E6B43]"
+                    checked={shareSwapOnRequest}
+                    onChange={(e) => setShareSwapOnRequest(e.target.checked)}
+                    disabled={isRequestingSwap}
+                  />
+                  <span className="flex flex-col">
+                    <span className="text-sm font-bold text-black">Avisar também no grupo do WhatsApp</span>
+                    <span className="text-xs text-[#6B5D50]">Abre o WhatsApp com a mensagem pronta e o link para assumir.</span>
+                  </span>
+                </label>
+
+                {shareSwapOnRequest && swapTargetSlot && (
+                  <div className="mt-1 rounded-2xl rounded-tl-sm bg-[#DCF8C6] px-3 py-2 text-left text-xs leading-snug text-black">
+                    Infelizmente não vou poder ler {swapTargetSlot.dateLabel} às {swapTargetSlot.massTime} - {swapTargetSlot.roleName}. Alguém poderia trocar comigo?
+                  </div>
+                )}
+
+                <DrawerFooter className="flex flex-col gap-2 px-0 pb-8">
                   <Button 
                     variant="default"
-                    className="w-full font-bold h-12 rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
+                    className="w-full font-bold h-12 rounded-xl bg-[#322113] hover:bg-[#241709] text-white"
                     disabled={isRequestingSwap}
                     onClick={async () => {
                       if (!swapTargetSlot || !user) return
+                      const target = swapTargetSlot
                       setIsRequestingSwap(true)
                       try {
-                        await requestSwap(swapTargetSlot.id)
-                        
+                        await requestSwap(target.id)
                         toast.success("Solicitação de troca publicada!")
                         triggerRefresh()
-
-                        // Procurar informações para abrir o compartilhamento do whatsapp de imediato
-                        let targetMass: any = null
-                        let targetSlot: any = null
-                        schedule.forEach(mass => {
-                          const found = mass.slots.find((s: any) => s.id === swapTargetSlot.id)
-                           if (found) {
-                             targetMass = mass
-                             targetSlot = found
-                           }
-                        })
-
-                        if (targetMass && targetSlot) {
-                          setShareSwapDialogData({
-                            id: swapTargetSlot.id,
-                            role: targetSlot.role,
-                            mass: {
-                              date: targetMass.date,
-                              time: targetMass.time
-                            }
-                          })
-                        }
-                        
                         setSwapTargetSlot(null)
+
+                        if (shareSwapOnRequest) {
+                          const swapData = {
+                            id: target.id,
+                            role: target.roleName,
+                            mass: { date: target.rawMassDate, time: target.rawMassTime }
+                          }
+                          if (!handleShareSwap(swapData)) {
+                            // Popup bloqueado após o await: oferece o envio com um toque
+                            toast("Quer avisar no WhatsApp?", {
+                              action: { label: "Abrir WhatsApp", onClick: () => { handleShareSwap(swapData) } }
+                            })
+                          }
+                        }
                       } catch (error) {
                         toast.error("Erro ao processar solicitação.")
                       } finally {
@@ -1149,7 +1216,7 @@ export default function Home() {
                       }
                     }}
                   >
-                    {isRequestingSwap ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar Solicitação"}
+                    {isRequestingSwap ? <Loader2 className="h-4 w-4 animate-spin" /> : "Publicar pedido"}
                   </Button>
                   <DrawerClose asChild>
                     <Button variant="ghost" className="w-full text-stone-500 font-medium h-12" disabled={isRequestingSwap}>
@@ -1247,7 +1314,7 @@ export default function Home() {
 
           {/* Versão do App */}
           <div className="mt-12 mb-8 flex justify-center">
-            <span className="text-[10px] font-bold text-stone-300 uppercase tracking-widest">
+            <span className="text-[10px] font-bold text-[#8A7A66] uppercase tracking-widest">
               Versão {APP_VERSION}
             </span>
           </div>
@@ -1313,39 +1380,6 @@ export default function Home() {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog de Compartilhamento no WhatsApp */}
-        <Dialog open={!!shareSwapDialogData} onOpenChange={(open) => !open && setShareSwapDialogData(null)}>
-          <DialogContent className="flex flex-col items-center justify-center p-6 max-w-[320px] sm:max-w-sm border-stone-200">
-            <DialogTitle className="text-stone-800 text-center font-heading text-lg font-bold">Compartilhar no WhatsApp?</DialogTitle>
-            <div className="text-center text-stone-600 text-sm my-2">
-              Gostaria de enviar essa solicitação de troca para o grupo de WhatsApp da Liturgia?
-            </div>
-            <div className="flex flex-col gap-2 w-full mt-4">
-              <Button
-                variant="default"
-                className="w-full font-bold h-12 rounded-xl bg-green-700 hover:bg-green-800 text-white flex items-center justify-center gap-2"
-                onClick={() => {
-                  if (shareSwapDialogData) {
-                    handleShareSwap(shareSwapDialogData)
-                    setShareSwapDialogData(null)
-                  }
-                }}
-              >
-                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.262 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.45L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.623-1.023-5.086-2.884-6.948C16.572 2.014 14.12 1.01 11.66 1.01c-5.44 0-9.866 4.372-9.87 9.802 0 1.714.47 3.387 1.357 4.847l-.994 3.63 3.771-.977zm11.515-5.388c-.28-.14-1.65-.81-1.902-.9-.253-.09-.438-.14-.623.14-.184.28-.713.9-.874 1.09-.16.19-.32.21-.6.07-.28-.14-1.182-.43-2.25-1.385-.83-.74-1.39-1.653-1.55-1.93-.16-.28-.017-.43.12-.57.125-.13.28-.32.42-.48.14-.16.19-.28.28-.46.09-.19.045-.35-.02-.49-.067-.14-.624-1.5-.853-2.06-.224-.546-.474-.472-.65-.48-.17-.008-.363-.01-.557-.01-.19 0-.505.07-.77.36-.264.29-1.007.98-1.007 2.4 0 1.414 1.03 2.784 1.17 2.97.14.19 2.025 3.09 4.908 4.33.685.29 1.22.47 1.637.6.687.22 1.31.19 1.802.118.55-.08 1.65-.67 1.88-1.29.23-.62.23-1.15.16-1.29-.07-.14-.25-.23-.53-.37z"/>
-                </svg>
-                Compartilhar no WhatsApp
-              </Button>
-              <Button
-                variant="ghost"
-                className="w-full text-stone-500 font-medium h-12"
-                onClick={() => setShareSwapDialogData(null)}
-              >
-                Agora Não
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
       </main>
 
       {/* Botões Flutuantes (Fora do scroll para garantir fixação) */}
@@ -1376,7 +1410,7 @@ export default function Home() {
         className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#322113] text-white shadow-lg shadow-[#322113]/40 transition-all hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-500"
         title="Folheto da Missa"
       >
-        <FileText className="h-6 w-6" />
+        <FileText className="h-6 w-6 text-[#E8B21E]" />
       </Link>
     </div>
   )

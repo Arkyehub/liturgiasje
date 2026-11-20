@@ -3,12 +3,11 @@
 import { useMemo, useState } from "react"
 import { Mass } from "@/domain/models/Schedule"
 import { Card } from "@/shared/ui/card"
-import { AlertCircle, CalendarDays, CheckCircle, ChevronDown, ChevronRight, ChevronUp, ExternalLink } from "lucide-react"
+import { AlertCircle, CalendarDays, CheckCircle, ChevronDown, ChevronRight, ExternalLink } from "lucide-react"
 import { format, isAfter, startOfDay, parseISO, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/shared/lib/utils"
-import { UserAvatar } from "@/shared/ui/UserAvatar"
-import Image from "next/image"
+import { roleName } from "@/features/schedule/roles"
 
 interface MyScheduleWidgetProps {
   schedule: Mass[]
@@ -24,7 +23,6 @@ export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, on
   // 1. Filtrar todas as escalas do usuário no mês
   const mySlots = useMemo(() => {
     const slots: any[] = []
-    
     schedule.forEach(mass => {
       mass.slots.forEach(slot => {
         const isMine = slot.profileId === profileId
@@ -65,16 +63,6 @@ export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, on
   const activeSlot = isAlertMode ? firstUnconfirmed : nextReading
   const isSwapActive = !!activeSlot?.isSwapRequested
 
-  // 3. Função para scroll suave até o item
-
-  const currentMonthName = useMemo(() => {
-    if (mySlots.length > 0) {
-      const date = parseISO(mySlots[0].massDate)
-      return isValid(date) ? format(date, "MMMM", { locale: ptBR }) : ""
-    }
-    return format(new Date(), "MMMM", { locale: ptBR })
-  }, [mySlots])
-
   // 4. Filtrar para mostrar apenas a próxima e as subsequentes (ignorar passadas)
   const futureSlots = useMemo(() => {
     if (!nextReading) return []
@@ -86,8 +74,8 @@ export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, on
 
   if (mySlots.length === 0) {
     return (
-      <Card className="p-3 bg-white border-emerald-100 border-dashed rounded-none">
-        <div className="flex items-center justify-center gap-2 text-emerald-700/60 py-1">
+      <Card className="rounded-none border-x-0 border-t-0 border-dashed border-[#E9DFCB] bg-white p-3 shadow-none ring-0">
+        <div className="flex items-center justify-center gap-2 py-1 text-[#6B5D50]">
           <CalendarDays className="h-4 w-4" />
           <span className="text-sm font-medium italic">Você não tem leituras futuras.</span>
         </div>
@@ -97,8 +85,8 @@ export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, on
 
   if (!nextReading) {
     return (
-      <Card className="p-3 bg-white border-green-200 border-dashed">
-        <div className="flex items-center justify-center gap-2 text-green-700 py-1">
+      <Card className="rounded-none border-x-0 border-t-0 border-dashed border-green-200 bg-white p-3 shadow-none ring-0">
+        <div className="flex items-center justify-center gap-2 py-1 text-green-700">
           <CheckCircle className="h-5 w-5" />
           <span className="text-sm font-bold uppercase tracking-tight">Suas leituras deste mês foram concluídas!</span>
         </div>
@@ -106,131 +94,92 @@ export function MyScheduleWidget({ schedule, profileId, userName, userAvatar, on
     )
   }
 
-  const roleNameMap: Record<string, string> = {
-    'C': 'Comentarista',
-    '1L': '1ª Leitura',
-    '2L': '2ª Leitura',
-    'P': 'Preces',
-    'L': 'Leitura Única'
+  const tone = isAlertMode
+    ? { bar: "bg-[#322113]", press: "active:bg-[#241810]", divider: "border-white/15", icon: "bg-[#E8B21E] text-[#322113]", label: "text-[#E8C76A]", accent: "text-[#E8C76A]" }
+    : isSwapActive
+      ? { bar: "bg-[#7c2d12]", press: "active:bg-[#661f0b]", divider: "border-white/15", icon: "bg-orange-300 text-[#7c2d12]", label: "text-orange-200", accent: "text-orange-200" }
+      : { bar: "bg-[#064e3b]", press: "active:bg-[#054031]", divider: "border-white/15", icon: "bg-emerald-300 text-[#064e3b]", label: "text-emerald-200", accent: "text-emerald-200" }
+
+  const label = isAlertMode ? "Confirmar escala" : isSwapActive ? "Troca solicitada" : "Próxima leitura"
+
+  const renderWhen = (slot: any) => {
+    const date = parseISO(slot.massDate)
+    return (
+      <>
+        <span className="capitalize">{isValid(date) ? format(date, "EEE dd/MM", { locale: ptBR }) : "--/--"}</span>
+        {" "}às {slot.massTime.substring(0, 5)} · {roleName(slot.role)}
+      </>
+    )
   }
 
   return (
     <div className="w-full">
       {/* Barra Principal - Próxima Leitura ou Alerta de Confirmação */}
-      <div className={cn(
-        "relative overflow-hidden text-white border-b transition-colors duration-500",
-        isAlertMode 
-          ? "bg-red-600 border-red-900/50" 
-          : isSwapActive
-            ? "bg-[#9a3412] border-orange-950/50"
-            : "bg-[#064e3b] border-emerald-900/50"
-      )}>
-        <div className="flex items-center">
-          <button 
+      <div className={cn("relative overflow-hidden text-white transition-colors duration-500", tone.bar)}>
+        <div className="flex items-stretch">
+          <button
             onClick={() => {
               if (!isAlertMode && otherReadings.length > 0) {
-                setIsExpanded(!isExpanded);
+                setIsExpanded(!isExpanded)
               } else {
-                onNavigateToSlot(activeSlot.id, activeSlot.massDate);
+                onNavigateToSlot(activeSlot.id, activeSlot.massDate)
               }
             }}
-            className={cn(
-              "flex-1 flex items-center justify-between p-3 transition-all min-w-0",
-              isAlertMode 
-                ? "active:bg-red-700" 
-                : isSwapActive
-                  ? "active:bg-[#7c2d12]"
-                  : "active:bg-[#054031]"
-            )}
+            aria-expanded={!isAlertMode && otherReadings.length > 0 ? isExpanded : undefined}
+            className={cn("flex min-h-14 min-w-0 flex-1 items-center gap-3 py-2 pl-4 pr-3 text-left transition-colors", tone.press)}
           >
-            <div className="flex items-center gap-2 min-w-0">
-              {isAlertMode ? (
-                <AlertCircle className="h-4 w-4 text-white animate-pulse shrink-0" />
-              ) : (
-                <CalendarDays className={cn("h-4 w-4 shrink-0", isSwapActive ? "text-orange-300" : "text-emerald-400")} />
-              )}
-              <p className="text-[12px] font-black tracking-tight truncate uppercase">
-                {isAlertMode ? (
-                  <span className="flex items-center gap-1.5">
-                    <span className="opacity-100">Confirmar Escala:</span>
-                    {isValid(parseISO(activeSlot.massDate)) ? format(parseISO(activeSlot.massDate), "dd/MM") : "--/--"} às {activeSlot.massTime.substring(0, 5)} - {activeSlot.role}
-                  </span>
-                ) : (
-                  <>
-                    <span className="opacity-70 mr-1.5">{isSwapActive ? "Troca Solicitada:" : "Próxima Leitura:"}</span>
-                    {isValid(parseISO(activeSlot.massDate)) ? format(parseISO(activeSlot.massDate), "dd/MM") : "--/--"} às {activeSlot.massTime.substring(0, 5)} - {activeSlot.role}
-                  </>
-                )}
-              </p>
-            </div>
-            
+            <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full", tone.icon)}>
+              {isAlertMode ? <AlertCircle className="h-[18px] w-[18px]" /> : <CalendarDays className="h-[18px] w-[18px]" />}
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className={cn("text-[11px] font-extrabold uppercase tracking-widest", tone.label)}>{label}</span>
+              <span className="truncate text-sm font-bold">{renderWhen(activeSlot)}</span>
+            </span>
             {!isAlertMode && otherReadings.length > 0 && (
-              <div className={cn(
-                "p-1 transition-transform duration-300 ml-2",
-                isExpanded && "rotate-180"
-              )}>
-                <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-              </div>
+              <ChevronDown className={cn("h-[18px] w-[18px] shrink-0 transition-transform duration-300", tone.accent, isExpanded && "rotate-180")} />
             )}
-
-            {isAlertMode && (
-              <div className="ml-2">
-                <ChevronRight className="h-3.5 w-3.5 opacity-60" />
-              </div>
-            )}
+            {isAlertMode && <ChevronRight className={cn("h-[18px] w-[18px] shrink-0", tone.accent)} />}
           </button>
 
           {/* Botão de Scroll Direto */}
-          <button 
+          <button
             onClick={(e) => {
-              e.stopPropagation();
-              onNavigateToSlot(activeSlot.id, activeSlot.massDate);
+              e.stopPropagation()
+              onNavigateToSlot(activeSlot.id, activeSlot.massDate)
             }}
-            className={cn(
-              "p-3 transition-colors border-l",
-              isAlertMode 
-                ? "hover:bg-red-700 border-red-700/50" 
-                : isSwapActive
-                  ? "hover:bg-[#7c2d12] border-orange-900/50"
-                  : "hover:bg-emerald-800 border-emerald-800/50"
-            )}
+            className={cn("flex w-[52px] shrink-0 items-center justify-center border-l transition-colors", tone.divider, tone.press)}
             title="Ver na escala"
+            aria-label="Ver na escala"
           >
-            <ExternalLink className={cn("h-4 w-4", isAlertMode ? "text-white" : isSwapActive ? "text-orange-300" : "text-emerald-400")} />
+            <ExternalLink className="h-[18px] w-[18px]" />
           </button>
         </div>
       </div>
 
       {/* Lista Expandida - Outras Leituras */}
       {isExpanded && otherReadings.length > 0 && (
-        <div className="grid divide-y divide-emerald-100 animate-in slide-in-from-top-2 duration-300">
-          {otherReadings.map((slot, index) => {
-            const sDate = parseISO(slot.massDate)
-            return (
-              <div key={slot.id} className="flex items-center bg-[#f0fdf4]">
-                <button
-                  onClick={() => onNavigateToSlot(slot.id, slot.massDate)}
-                  className="flex-1 flex items-center justify-between p-3 text-[#064e3b] hover:bg-emerald-50 active:bg-emerald-100 transition-all text-left min-w-0"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[10px] font-black uppercase opacity-60 shrink-0">{index + 2}ª -</span>
-                    <p className="text-[11px] font-black tracking-tight truncate uppercase">
-                      {isValid(sDate) ? format(sDate, "dd/MM") : "--/--"} às {slot.massTime.substring(0, 5)} - {slot.role}
-                    </p>
-                  </div>
-                </button>
-                
-                {/* Botão de Scroll Direto (Alinhado com o de cima) */}
-                <button 
-                  onClick={() => onNavigateToSlot(slot.id, slot.massDate)}
-                  className="p-3 hover:bg-emerald-100 border-l border-emerald-100 transition-colors"
-                  title="Ver na escala"
-                >
-                  <ExternalLink className="h-4 w-4 text-emerald-800 opacity-30" />
-                </button>
-              </div>
-            )
-          })}
+        <div className="grid divide-y divide-[#E9DFCB] border-b border-[#E9DFCB] bg-[#F4EEDD] animate-in slide-in-from-top-2 duration-300">
+          {otherReadings.map((slot, index) => (
+            <div key={slot.id} className="flex items-stretch">
+              <button
+                onClick={() => onNavigateToSlot(slot.id, slot.massDate)}
+                className="flex min-h-12 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-left text-[#322113] transition-colors active:bg-[#EADFCB]"
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#EADFCB] text-[11px] font-extrabold">
+                  {index + 2}
+                </span>
+                <span className="truncate text-[13px] font-bold">{renderWhen(slot)}</span>
+              </button>
+              <button
+                onClick={() => onNavigateToSlot(slot.id, slot.massDate)}
+                className="flex w-[52px] shrink-0 items-center justify-center border-l border-[#E9DFCB] text-[#322113]/60 transition-colors active:bg-[#EADFCB]"
+                title="Ver na escala"
+                aria-label="Ver na escala"
+              >
+                <ExternalLink className="h-[18px] w-[18px]" />
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>
