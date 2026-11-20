@@ -719,16 +719,12 @@ export default function Home() {
           )}
 
           {/* Sessão 1: Mural de Recados (oculto quando não há recados; admin mantém o botão de adicionar) */}
-          {(isLoadingAnnouncements || announcements.length > 0 || profile?.role === "admin") && (
+          {(announcements.length > 0 || profile?.role === "admin") && (
           <section className="space-y-4">
-            {(isLoadingAnnouncements || announcements.length > 0) && <SectionTitle>Mural de Recados</SectionTitle>}
+            {announcements.length > 0 && <SectionTitle>Mural de Recados</SectionTitle>}
             
             <div className="space-y-2">
-              {isLoadingAnnouncements ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-stone-300" />
-                </div>
-              ) : announcements.length === 0 ? null : (
+              {announcements.length === 0 ? null : (
                 <>
                   {unreadAnnouncements.map(renderAnnouncement)}
                   {readAnnouncements.length >= 2 ? (
