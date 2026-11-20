@@ -522,9 +522,9 @@ export default function Home() {
   const readAnnouncements = announcements.filter(isReadByMe)
 
   const renderAnnouncement = (ann: any) => (
-                  <AnnouncementCard 
-      key={ann.id} 
-      {...ann} 
+                  <AnnouncementCard
+      key={ann.id}
+      {...ann}
       createdAt={ann.createdAt}
       authorId={ann.createdBy}
       currentUserId={profile?.id}
@@ -561,14 +561,14 @@ export default function Home() {
           toast.error("Faça login para aceitar trocas.")
           return
         }
-        
+
         // Buscar detalhes da troca na lista global de swaps
         const swap = swaps.find(s => s.id === slotId);
-        
+
         if (swap && swap.mass) {
           setTakeSwapTarget({
             slotId,
-            date: isValid(new Date(swap.mass.date + 'T00:00:00')) 
+            date: isValid(new Date(swap.mass.date + 'T00:00:00'))
               ? format(new Date(swap.mass.date + 'T00:00:00'), "dd/MM/yyyy")
               : "--/--/----",
             time: swap.mass.time.substring(0, 5),
