@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { AnnouncementCard } from "@/features/announcements/ui/AnnouncementCard"
 import { ScheduleCard } from "@/features/schedule/ui/ScheduleCard"
 import { ReadAnnouncementsGroup } from "@/features/announcements/ui/ReadAnnouncementsGroup"
+import { MassSummaryGrid } from "@/features/schedule/ui/MassSummaryGrid"
 import { PastDaysGroup } from "@/features/schedule/ui/PastDaysGroup"
 import { SectionTitle } from "@/shared/ui/SectionTitle"
 import { MyScheduleWidget } from "@/features/schedule/ui/MyScheduleWidget"
@@ -124,6 +125,7 @@ export default function Home() {
   const [isUnconfirmedAlertOpen, setIsUnconfirmedAlertOpen] = useState(false)
   const [shareSwapOnRequest, setShareSwapOnRequest] = useState(true)
   const [isReadGroupOpen, setIsReadGroupOpen] = useState(false)
+  const [isConfirmingPending, setIsConfirmingPending] = useState(false)
 
   // Lista de escalas do usuário logado que não foram confirmadas
   const myUnconfirmedSlots = useMemo(() => {
@@ -506,13 +508,34 @@ export default function Home() {
       }
     })
     if (targetMass && targetSlot) {
-      const d = new Date(targetMass.date + 'T00:00:00')
-      setTakeSwapTarget({
-        slotId,
-        date: isValid(d) ? format(d, "dd/MM/yyyy") : "--/--/----",
-        time: targetMass.time.substring(0, 5),
-        roleName: roleLabel(targetSlot.role)
-      })
+      setTakeSwapTarget(buildTakeSwapTarget(slotId, targetMass.date, targetMass.time, targetSlot.role, targetMass.specialDescription))
+    }
+  }
+
+  const buildTakeSwapTarget = (slotId: string, date: string, time: string, role: string, description?: string) => {
+    const d = new Date(date + 'T00:00:00')
+    return {
+      slotId,
+      dateLabel: isValid(d) ? `${format(d, "EEEE", { locale: ptBR }).slice(0, 3)}, ${format(d, "dd/MM")}` : "--/--",
+      time: time.substring(0, 5),
+      roleName: roleLabel(role),
+      description: description || "Missa",
+    }
+  }
+
+  const handleConfirmPending = async (slotIds: string[]) => {
+    if (!profile || slotIds.length === 0) return
+    setIsConfirmingPending(true)
+    try {
+      for (const id of slotIds) {
+        await confirmSlot(id, profile.id)
+      }
+      toast.success(slotIds.length === 1 ? "Presença confirmada!" : "Presenças confirmadas!")
+    } catch {
+      toast.error("Erro ao confirmar. Tente novamente.")
+    } finally {
+      await triggerRefresh()
+      setIsConfirmingPending(false)
     }
   }
 
@@ -566,14 +589,7 @@ export default function Home() {
         const swap = swaps.find(s => s.id === slotId);
 
         if (swap && swap.mass) {
-          setTakeSwapTarget({
-            slotId,
-            date: isValid(new Date(swap.mass.date + 'T00:00:00'))
-              ? format(new Date(swap.mass.date + 'T00:00:00'), "dd/MM/yyyy")
-              : "--/--/----",
-            time: swap.mass.time.substring(0, 5),
-            roleName: roleLabel(swap.role)
-          });
+          setTakeSwapTarget(buildTakeSwapTarget(slotId, swap.mass.date, swap.mass.time, swap.role, swap.mass.specialDescription));
         }
       }}
     />
@@ -1138,24 +1154,12 @@ export default function Home() {
                   </DrawerDescription>
                 </DrawerHeader>
 
-                <dl className="grid grid-cols-2 gap-2 rounded-2xl border border-[#E9DFCB] bg-[#FAF5E6] p-3 text-left">
-                  <div>
-                    <dt className="text-[11px] font-bold uppercase tracking-wide text-[#6B5D50]">Data</dt>
-                    <dd className="text-sm font-extrabold capitalize text-black">{swapTargetSlot?.dateLabel}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[11px] font-bold uppercase tracking-wide text-[#6B5D50]">Horário</dt>
-                    <dd className="text-sm font-extrabold text-black">{swapTargetSlot?.massTime}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[11px] font-bold uppercase tracking-wide text-[#6B5D50]">Função</dt>
-                    <dd className="text-sm font-extrabold text-black">{swapTargetSlot?.roleName}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[11px] font-bold uppercase tracking-wide text-[#6B5D50]">Celebração</dt>
-                    <dd className="truncate text-sm font-extrabold text-black">{swapTargetSlot?.description}</dd>
-                  </div>
-                </dl>
+                <MassSummaryGrid
+                  dateLabel={swapTargetSlot?.dateLabel}
+                  time={swapTargetSlot?.massTime}
+                  role={swapTargetSlot?.roleName}
+                  celebration={swapTargetSlot?.description}
+                />
 
                 <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-2xl p-2">
                   <input
@@ -1224,53 +1228,45 @@ export default function Home() {
             </DrawerContent>
           </Drawer>
 
-          {/* Drawer de Confirmação para ASSUMIR Troca */}
+          {/* Drawer para ASSUMIR uma troca (mesmo padrão do "Pedir troca") */}
           <Drawer open={!!takeSwapTarget} onOpenChange={(open) => !open && !isAcceptingSwap && setTakeSwapTarget(null)}>
             <DrawerContent>
-              <div className="mx-auto w-full max-w-sm">
-                <DrawerHeader className="text-center">
-                  <DrawerTitle className="text-stone-800">Assumir esta Escala?</DrawerTitle>
-                  <DrawerDescription className="text-stone-600 font-normal" asChild>
-                    <div>
-                      Ao confirmar, você assumirá o compromisso de realizar a leitura abaixo:
-                      <div className="mt-4 p-4 bg-stone-50 rounded-2xl border border-stone-100 flex flex-col gap-1 text-left">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] uppercase font-black text-stone-400">Data</span>
-                          <span className="text-sm font-bold text-stone-800">{takeSwapTarget?.date}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] uppercase font-black text-stone-400">Horário</span>
-                          <span className="text-sm font-bold text-stone-800">{takeSwapTarget?.time}</span>
-                        </div>
-                        <div className="flex justify-between items-center mt-1 pt-1 border-t border-stone-100">
-                          <span className="text-[10px] uppercase font-black text-stone-400">Função</span>
-                          <span className="text-sm font-black text-green-700">{takeSwapTarget?.roleName}</span>
-                        </div>
-                      </div>
-                    </div>
+              <div className="mx-auto w-full max-w-sm px-4">
+                <DrawerHeader className="px-0 text-center">
+                  <DrawerTitle className="text-xl font-black text-stone-900">Assumir escala</DrawerTitle>
+                  <DrawerDescription>
+                    Ao confirmar, a leitura passa a ser sua e sua presença já fica confirmada.
                   </DrawerDescription>
                 </DrawerHeader>
-                <DrawerFooter className="flex flex-col gap-2 pb-8">
+
+                <MassSummaryGrid
+                  dateLabel={takeSwapTarget?.dateLabel}
+                  time={takeSwapTarget?.time}
+                  role={takeSwapTarget?.roleName}
+                  celebration={takeSwapTarget?.description}
+                />
+
+                <DrawerFooter className="flex flex-col gap-2 px-0 pb-8">
                   <Button 
                     variant="default"
-                    className="w-full font-bold h-12 rounded-xl bg-green-700 hover:bg-green-800 text-white shadow-lg shadow-green-100"
+                    className="w-full font-bold h-12 rounded-xl bg-[#322113] hover:bg-[#241709] text-white"
                     disabled={isAcceptingSwap}
-                      onClick={async () => {
-                        if (!takeSwapTarget || !profile) return
-                        setIsAcceptingSwap(true)
-                          try {
-                            await acceptSwap(takeSwapTarget.slotId, profile.id)
-                            toast.success("Você assumiu a escala! Presença confirmada.")
-                            triggerRefresh()
-                            setTakeSwapTarget(null)
-                          } catch (error) {
+                    onClick={async () => {
+                      if (!takeSwapTarget || !profile) return
+                      setIsAcceptingSwap(true)
+                      try {
+                        await acceptSwap(takeSwapTarget.slotId, profile.id)
+                        toast.success("Você assumiu a escala! Presença confirmada.")
+                        triggerRefresh()
+                        setTakeSwapTarget(null)
+                      } catch (error) {
                         toast.error("Erro ao assumir troca.")
                       } finally {
                         setIsAcceptingSwap(false)
                       }
                     }}
                   >
-                    {isAcceptingSwap ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar e Assumir"}
+                    {isAcceptingSwap ? <Loader2 className="h-4 w-4 animate-spin" /> : "Assumir escala"}
                   </Button>
                   <DrawerClose asChild>
                     <Button variant="ghost" className="w-full text-stone-500 font-medium h-12" disabled={isAcceptingSwap}>
@@ -1317,64 +1313,87 @@ export default function Home() {
  
         </div>
 
-        {/* Dialog de Escalas Não Confirmadas */}
-        <Dialog open={isUnconfirmedAlertOpen} onOpenChange={setIsUnconfirmedAlertOpen}>
-          <DialogContent className="w-[calc(100%-2rem)] max-w-sm p-6 rounded-[28px] border border-stone-100 bg-white shadow-xl">
-            <DialogHeader className="flex flex-col items-center text-center space-y-3">
-              <div className="bg-red-50 p-3 rounded-full text-red-500 animate-pulse">
-                <AlertTriangle className="h-6 w-6" />
-              </div>
-              <div className="space-y-1">
-                <DialogTitle className="text-base font-black text-stone-800 tracking-tight">
-                  Escalas Não Confirmadas!
-                </DialogTitle>
-                <DialogDescription className="text-xs text-stone-500 leading-relaxed px-2">
-                  Você tem {myUnconfirmedSlots.length} {myUnconfirmedSlots.length === 1 ? 'escala pendente' : 'escalas pendentes'} de confirmação. Por favor, confirme sua presença para a equipe.
-                </DialogDescription>
-              </div>
-            </DialogHeader>
+        {/* Drawer de confirmação de presença (escalas pendentes), mesmo padrão do "Pedir troca" */}
+        <Drawer open={isUnconfirmedAlertOpen} onOpenChange={(open) => !isConfirmingPending && setIsUnconfirmedAlertOpen(open)}>
+          <DrawerContent>
+            <div className="mx-auto w-full max-w-sm px-4">
+              <DrawerHeader className="px-0 text-center">
+                <DrawerTitle className="text-xl font-black text-stone-900">Confirme sua presença</DrawerTitle>
+                <DrawerDescription>
+                  {myUnconfirmedSlots.length === 1
+                    ? "Você tem 1 escala aguardando confirmação. A equipe conta com você."
+                    : `Você tem ${myUnconfirmedSlots.length} escalas aguardando confirmação. A equipe conta com você.`}
+                </DrawerDescription>
+              </DrawerHeader>
 
-            <div className="my-3 space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
-              {myUnconfirmedSlots.map((slot) => {
-                const slotDate = parseISO(slot.massDate)
-                const roleName = roleLabel(slot.role, true);
+              <ul className="max-h-[40vh] space-y-2 overflow-y-auto">
+                {myUnconfirmedSlots.map((slot) => {
+                  const slotDate = new Date(slot.massDate + 'T00:00:00')
+                  const valid = isValid(slotDate)
+                  const isSunday = valid && slotDate.getDay() === 0
+                  const weekday = valid ? format(slotDate, "EEEE", { locale: ptBR }).normalize("NFD").replace(/[\u0300-\u036f]/g, "").slice(0, 3).toUpperCase() : "--"
+                  return (
+                    <li key={slot.id} className="flex items-center gap-3 rounded-2xl border border-[#E9DFCB] bg-[#FAF5E6] p-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleNavigateToSlot(slot.id, slot.massDate)
+                          setIsUnconfirmedAlertOpen(false)
+                        }}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        aria-label="Ver esta leitura na escala"
+                      >
+                        <span className={cn(
+                          "flex h-[50px] w-11 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl leading-none",
+                          isSunday ? "bg-[#322113] text-[#FFF8E8]" : "border border-[#E9DFCB] bg-white text-[#241A10]"
+                        )}>
+                          <span className={cn("text-[10px] font-bold tracking-wide", isSunday ? "text-[#E8C76A]" : "text-[#6B5D50]")}>{weekday}</span>
+                          <span className="text-lg font-extrabold leading-none">{valid ? format(slotDate, "d") : "--"}</span>
+                        </span>
+                        <span className="flex min-w-0 flex-col gap-0.5">
+                          <span className="text-[15px] font-extrabold leading-tight text-black">
+                            {roleLabel(slot.role, true)} · {slot.massTime.substring(0, 5)}
+                          </span>
+                          {slot.specialDescription && (
+                            <span className="truncate text-xs text-[#6B5D50]">{slot.specialDescription}</span>
+                          )}
+                        </span>
+                      </button>
+                      {myUnconfirmedSlots.length > 1 && (
+                        <button
+                          type="button"
+                          disabled={isConfirmingPending}
+                          onClick={() => handleConfirmPending([slot.id])}
+                          className="h-10 shrink-0 rounded-xl bg-[#E8B21E] px-3.5 text-sm font-extrabold text-[#241A10] shadow-sm transition-all active:scale-95 disabled:opacity-60"
+                        >
+                          Confirmar
+                        </button>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
 
-                return (
-                  <button
-                    key={slot.id}
-                    onClick={() => {
-                      handleNavigateToSlot(slot.id, slot.massDate)
-                      setIsUnconfirmedAlertOpen(false)
-                    }}
-                    className="w-full flex flex-col p-3.5 rounded-2xl border border-stone-100 bg-stone-50/40 hover:bg-stone-50/80 transition-all text-left space-y-1.5"
-                  >
-                    <div className="flex justify-between items-center text-[10px] font-black text-red-600 tracking-wider">
-                      <span className="uppercase">{roleName}</span>
-                      <span>
-                        {isValid(slotDate) ? format(slotDate, "dd/MM") : "--/--"} às {slot.massTime.substring(0, 5)}
-                      </span>
-                    </div>
-                    {slot.specialDescription && (
-                      <p className="text-[11px] text-stone-500 font-bold truncate">
-                        {slot.specialDescription}
-                      </p>
-                    )}
-                  </button>
-                )
-              })}
+              <DrawerFooter className="flex flex-col gap-2 px-0 pb-8">
+                <Button
+                  variant="default"
+                  className="w-full font-bold h-12 rounded-xl bg-[#322113] hover:bg-[#241709] text-white"
+                  disabled={isConfirmingPending || myUnconfirmedSlots.length === 0}
+                  onClick={() => handleConfirmPending(myUnconfirmedSlots.map((sl) => sl.id))}
+                >
+                  {isConfirmingPending
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : myUnconfirmedSlots.length > 1 ? `Confirmar todas (${myUnconfirmedSlots.length})` : "Confirmar presença"}
+                </Button>
+                <DrawerClose asChild>
+                  <Button variant="ghost" className="w-full text-stone-500 font-medium h-12" disabled={isConfirmingPending}>
+                    Decidir depois
+                  </Button>
+                </DrawerClose>
+              </DrawerFooter>
             </div>
-
-            <div className="flex flex-col gap-2 mt-2">
-              <Button
-                variant="ghost"
-                onClick={() => setIsUnconfirmedAlertOpen(false)}
-                className="w-full text-stone-500 font-black h-12 rounded-2xl hover:bg-stone-50 text-xs transition-colors"
-              >
-                Decidir depois
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+          </DrawerContent>
+        </Drawer>
 
       </main>
 
