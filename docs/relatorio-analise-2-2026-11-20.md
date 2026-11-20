@@ -104,7 +104,7 @@ No Preview as policies `using (true)` deixam qualquer pessoa com a chave `anon` 
 
 ### 11. Baixa
 - `public/sw.js`: o clique na notificação abre `new URL(url, origin)`; uma URL absoluta externa abre o outro site. Hoje a mensagem é controlada pelo servidor; vale restringir à mesma origem.
-- `target="_blank"` sem `rel="noopener noreferrer"` em 3 pontos (`admin/analise` ×2, `AnnouncementCard`).
+- ~~`target="_blank"` sem `rel`~~ **Retirado (falso positivo):** os 3 pontos já têm `rel="noreferrer"`, que o navegador trata como `noopener` também.
 - Acessibilidade (do console do teste): `DialogContent` sem `Description` (o `UserAvatar`) e "aria-hidden em elemento com foco".
 - Cron: `CRON_SECRET` comparado com `!==` (comparação de tempo não constante; risco desprezível).
 - Qualidade: 72 `any`, 73 `console.*` (15 `console.log`), 7 `catch` que engolem erro, 31 ocorrências de TODO/FIXME/HACK (algumas podem ser falso positivo). Lint: 98 erros, 86 avisos (estável).
