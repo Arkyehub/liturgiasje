@@ -80,7 +80,11 @@ export function ScheduleCard({
   const weekdayLong = format(rawDate, "EEEE", { locale: ptBR })
   const headline = items.find(item => item.specialTitle)?.specialTitle
     || weekdayLong.charAt(0).toUpperCase() + weekdayLong.slice(1)
-  const massesSummary = `${items.length === 1 ? "1 missa" : `${items.length} missas`} · ${items.map(item => item.time).join(" · ")}`
+  const shortTime = (t: string) => {
+    const [h, m] = t.split(":")
+    return m && m !== "00" ? `${h}h${m}` : `${h}h`
+  }
+  const massesSummary = `${items.length === 1 ? "1 missa" : `${items.length} missas`} · ${items.map(item => shortTime(item.time)).join(" · ")}`
 
   const handleOpenLiturgy = () => setIsLiturgyOpen(true)
 
@@ -174,7 +178,7 @@ export function ScheduleCard({
         {/* Chip da data: marrom nos domingos, claro nos demais dias */}
         <span
           className={cn(
-            "flex h-[52px] w-12 shrink-0 flex-col items-center justify-center rounded-[14px] leading-none",
+            "flex h-[50px] w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-[14px] leading-none",
             isSunday ? "bg-[#322113] text-[#FFF8E8]" : "border border-[#E9DFCB] bg-white text-[#241A10]",
             isDatePast && "opacity-70"
           )}
@@ -182,14 +186,14 @@ export function ScheduleCard({
           <span className={cn("text-[11px] font-bold tracking-wide", isSunday ? "text-[#E8C76A]" : "text-[#6B5D50]")}>
             {weekdayShort}
           </span>
-          <span className="mt-1 text-xl font-extrabold">{dayNumber}</span>
+          <span className="text-xl font-extrabold leading-none">{dayNumber}</span>
         </span>
 
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className={cn("truncate text-[15px] font-extrabold tracking-tight text-black", isDatePast && "text-stone-600")}>
             {headline}
           </span>
-          <span className="truncate text-xs text-[#6B5D50]">{massesSummary}</span>
+          <span className="text-xs leading-snug text-[#6B5D50]">{massesSummary}</span>
         </span>
 
         {isDatePast && !isExpanded && (
@@ -244,18 +248,29 @@ export function ScheduleCard({
                             : "bg-[#FAF5E6]/60"
                       )}
                     >
-                      <div className={cn(
-                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border text-xs font-extrabold transition-all",
-                        slot.isSwapRequested
-                          ? "border-[#F2B791] bg-white text-[#A23F06]"
-                          : slot.isConfirmed
-                            ? "border-[#8CC3A1] bg-[#E6F2EA] text-[#1E6B43]"
-                            : slot.isMine
-                              ? "border-[#E8B21E] bg-[#E8B21E] text-[#241A10]"
-                              : "border-[#D9CDB8] bg-[#F5F0E4] text-black"
-                      )}>
-                        {isDatePast && slot.isSwapRequested ? <X className="h-4 w-4" /> : slot.isSwapRequested ? <RefreshCw className="h-4 w-4" /> : slot.role}
-                      </div>
+                      {slot.readerName && slot.readerName !== "---" ? (
+                        <span className={cn(
+                          "shrink-0 rounded-full p-0.5 ring-2 transition-all",
+                          slot.isSwapRequested
+                            ? "ring-[#E0824A]"
+                            : slot.isConfirmed
+                              ? "ring-[#2E8B57]"
+                              : slot.isMine
+                                ? "ring-[#E8B21E]"
+                                : "ring-transparent"
+                        )}>
+                          <UserAvatar
+                            name={slot.readerName}
+                            src={slot.avatarUrl}
+                            isClaimed={slot.isClaimed}
+                            className="h-10 w-10"
+                          />
+                        </span>
+                      ) : (
+                        <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full border border-dashed border-[#D9CDB8] bg-[#F5F0E4] text-xs font-extrabold text-[#6B5D50]">
+                          {slot.role}
+                        </span>
+                      )}
 
                       <div className="flex min-w-0 flex-1 flex-col gap-px">
                         <span className={cn("truncate text-sm font-bold leading-tight", slot.readerArchived ? "text-red-700" : "text-black")}>
@@ -277,15 +292,6 @@ export function ScheduleCard({
                       </div>
 
                       <div className="flex shrink-0 items-center gap-1.5">
-                        {slot.readerName && slot.readerName !== "---" && slot.isConfirmed && !slot.isMine && (
-                          <UserAvatar
-                            name={slot.readerName}
-                            src={slot.avatarUrl}
-                            isClaimed={slot.isClaimed}
-                            className="h-7 w-7 shrink-0"
-                          />
-                        )}
-
                         {slot.isConfirmed && !slot.isSwapRequested && checkBadge}
 
                         {showPending && (
