@@ -17,3 +17,7 @@ Recuperação: `migration_archive_profiles_rollback.sql` remove tudo o que a mig
 ## Saúde do banco (proposta v1.43, não aplicada)
 
 `migration_v143_db_health.sql` (índices em chaves estrangeiras, revogação de `handle_new_user()` e policies com `(select auth.uid())`) e o rollback `migration_v143_db_health_rollback.sql` foram validados aplicando sobre `fixture-preview-policies.sql` + `migration_archive_profiles.sql`, repetindo a migration (idempotência), rodando `preview-archived-actor.sql`, `unarchive.sql`, `write-boundary.sql`, `slot-actions.sql`, `edit-revision.sql`, `create-delete.sql`, `batch-success.sql`, `privileges.sql` e `new-rpc-security.sql`, e comparando as policies antes e depois do rollback. `ops/2026-11-cron-auth-fix.sql` é um roteiro para o Production (segredo via Vault), sem valores.
+
+## Limpeza da tabela legada `users` (proposta v1.44, não aplicada)
+
+`tests/database/legacy-users-cleanup.sql` recria a estrutura legada do Production (FKs `user_id` para `public.users`, trigger `on_auth_user_created`, view `users_public`, policies), prova os problemas atuais (exclusão de conta no Auth bloqueada pela FK sem cascata), aplica `migration_v144_legacy_users_cleanup.sql`, confere o resultado (FKs para `auth.users`, trigger removido, tabela arquivada sem acesso pela API, cascata funcionando, reaplicação sem erro) e aplica o rollback conferindo a restauração. Rodar a partir da raiz, em banco novo com `fixture.sql` e o schema base: `psql -X -v ON_ERROR_STOP=1 -d <banco> -f tests/database/legacy-users-cleanup.sql`.
