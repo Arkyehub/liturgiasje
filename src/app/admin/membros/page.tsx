@@ -65,15 +65,16 @@ export default function AdminMembersPage() {
     }
   }, [user?.id, profile?.role, loading])
 
-  const loadProfiles = async () => {
+  // `silent`: atualiza a lista sem trocar a tela por um spinner (usado ao reativar e ao voltar para "Ativos").
+  const loadProfiles = async (silent = false) => {
     try {
-      setIsLoading(true)
+      if (!silent) setIsLoading(true)
       const data = await makeListProfiles().execute()
       setProfiles(data)
     } catch (error) {
       toast.error("Erro ao carregar perfis.")
     } finally {
-      setIsLoading(false)
+      if (!silent) setIsLoading(false)
     }
   }
 
@@ -97,6 +98,8 @@ export default function AdminMembersPage() {
       setIsReactivating(true)
       await makeUnarchiveProfile().execute(id)
       setArchivedProfiles(current => current.filter(p => p.id !== id))
+      // O membro volta para a lista de ativos: recarrega, senão ele some das duas listas até a página ser recarregada.
+      void loadProfiles(true)
       toast.success("Membro reativado. Ele já pode entrar novamente.")
     } catch (error) {
       toast.error("Erro ao reativar membro.")
@@ -172,7 +175,7 @@ export default function AdminMembersPage() {
             </div>
 
             <div className="flex gap-2">
-              <Button variant={showArchived ? "outline" : "default"} size="sm" className="rounded-xl" onClick={() => setShowArchived(false)}>Ativos</Button>
+              <Button variant={showArchived ? "outline" : "default"} size="sm" className="rounded-xl" onClick={() => { setShowArchived(false); void loadProfiles(true) }}>Ativos</Button>
               <Button variant={showArchived ? "default" : "outline"} size="sm" className="rounded-xl" onClick={() => setShowArchived(true)}>Inativos</Button>
             </div>
 
