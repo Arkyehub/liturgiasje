@@ -23,17 +23,17 @@ function StepColumn({
   onDown: () => void
 }) {
   const btn =
-    "flex h-11 w-11 items-center justify-center rounded-full border border-[#D9CDB8] bg-white text-[#322113] transition-all hover:bg-[#FAF5E6] active:scale-90"
+    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#D9CDB8] bg-white text-[#322113] transition-all hover:bg-[#FAF5E6] active:scale-90"
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex min-w-0 items-center gap-1">
       <button type="button" aria-label={`Diminuir ${label}`} onClick={onDown} className={btn}>
-        <Minus className="h-[18px] w-[18px]" strokeWidth={2.2} />
+        <Minus className="h-4 w-4" strokeWidth={2.2} />
       </button>
-      <span className="w-10 select-none text-center text-[30px] font-extrabold tabular-nums leading-none tracking-tight">
+      <span className="w-9 select-none text-center text-[28px] font-extrabold tabular-nums leading-none tracking-tight">
         {value}
       </span>
       <button type="button" aria-label={`Aumentar ${label}`} onClick={onUp} className={btn}>
-        <Plus className="h-[18px] w-[18px]" strokeWidth={2.2} />
+        <Plus className="h-4 w-4" strokeWidth={2.2} />
       </button>
     </div>
   )
@@ -48,7 +48,7 @@ export function TimeRoller({ value, onChange, prefix }: TimeRollerProps) {
   const mIdx = MINUTES.indexOf(m)
 
   return (
-    <div className="inline-flex items-center gap-2">
+    <div className="inline-flex max-w-full items-center justify-center gap-1.5">
       {prefix && <span className="pr-1 text-sm font-black text-stone-700">{prefix}</span>}
       <StepColumn
         value={h}
@@ -56,7 +56,7 @@ export function TimeRoller({ value, onChange, prefix }: TimeRollerProps) {
         onUp={() => onChange(`${HOURS[(hIdx + 1) % 24]}:${m}`)}
         onDown={() => onChange(`${HOURS[(hIdx - 1 + 24) % 24]}:${m}`)}
       />
-      <span aria-hidden="true" className="mb-1 select-none text-[28px] font-extrabold text-[#B8A98E]">:</span>
+      <span aria-hidden="true" className="mb-1 select-none text-[26px] font-extrabold text-[#B8A98E]">:</span>
       <StepColumn
         value={m}
         label="minutos"
