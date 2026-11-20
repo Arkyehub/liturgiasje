@@ -471,7 +471,7 @@ export default function Home() {
         </div>
       </div>
 
-      <main className="flex-1 overflow-hidden flex flex-col">
+      <main className="relative z-10 flex-1 overflow-hidden flex flex-col">
         {/* Tarja de Próxima Escala (Colada ao Header) */}
         {user && profile && (
           <div className="shrink-0 animate-in fade-in slide-in-from-top-4 duration-500 z-40">
