@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation"
 import { AnnouncementCard } from "@/features/announcements/ui/AnnouncementCard"
 import { ScheduleCard } from "@/features/schedule/ui/ScheduleCard"
 import { PastDaysGroup } from "@/features/schedule/ui/PastDaysGroup"
-import { roleName as roleLabel } from "@/features/schedule/roles"
 import { SectionTitle } from "@/shared/ui/SectionTitle"
 import { MyScheduleWidget } from "@/features/schedule/ui/MyScheduleWidget"
 import { BirthdayCard } from "@/shared/ui/BirthdayCard"
 import { Button } from "@/shared/ui/button"
-import { ChevronLeft, ChevronRight, Loader2, Plus, RefreshCw, Plane, CheckCircle, FileText, Share2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, Plus, Plane, CheckCircle, FileText, Share2 } from "lucide-react"
 import { addMonths, format, subMonths, isToday, parseISO, isValid, startOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { roleLabel } from "@/shared/constants/roles"
 import Link from "next/link"
 
 import { useAuth } from "@/shared/hooks/useAuth"
@@ -60,6 +60,10 @@ import { AlertTriangle } from "lucide-react"
 
 export default function Home() {
   const { user, profile, isActive, loading, signInWithGoogle, signOut } = useAuth()
+  // Valores primitivos para dependências de efeitos: o objeto `profile` não deve disparar recargas.
+  const profileId = profile?.id ?? null
+  const isAdminRole = profile?.role === "admin"
+  const lastFocusReloadAt = useRef(0)
   const router = useRouter()
   const [currentDate, setCurrentDate] = useState(new Date())
   const pendingScrollSlotId = useRef<string | null>(null)
@@ -395,27 +399,30 @@ export default function Home() {
 
 
   useEffect(() => {
-    if (user?.id && isActive && profile) {
-      loadAnnouncements(profile.id)
-      loadSchedule(currentDate, profile?.role === "admin")
-      loadUpcomingSchedule(profile.id)
+    if (user?.id && isActive && profileId) {
+      loadAnnouncements(profileId)
+      loadSchedule(currentDate, isAdminRole)
+      loadUpcomingSchedule(profileId)
       loadSwaps()
       loadBirthdays()
     }
-  }, [user?.id, profile, isActive, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate])
+  }, [user?.id, profileId, isAdminRole, isActive, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate])
 
   // Recarregar dados ao focar na janela (volta ao PWA ou aba)
   useEffect(() => {
     const handleFocus = () => {
-      if (user?.id && isActive && profile) {
-        loadAnnouncements(profile.id, true)
-        loadSchedule(currentDate, profile?.role === "admin", true)
+      // No máximo uma atualização por minuto ao voltar para a aba
+      if (Date.now() - lastFocusReloadAt.current < 60_000) return
+      if (user?.id && isActive && profileId) {
+        lastFocusReloadAt.current = Date.now()
+        loadAnnouncements(profileId, true)
+        loadSchedule(currentDate, isAdminRole, true)
         loadSwaps()
       }
     }
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
-  }, [user?.id, isActive, profile, currentDate, loadAnnouncements, loadSchedule, loadSwaps])
+  }, [user?.id, isActive, profileId, isAdminRole, currentDate, loadAnnouncements, loadSchedule, loadSwaps])
 
   // Garantir que a página comece no topo absoluto ao carregar
   useEffect(() => {
@@ -437,6 +444,75 @@ export default function Home() {
     )
   }
 
+  const handleConfirmSlot = async (slotId: string) => {
+    if (!profile) return
+    try {
+      await confirmSlot(slotId, profile.id)
+      toast.success("Presença confirmada!")
+      triggerRefresh()
+    } catch {
+      toast.error("Erro ao confirmar.")
+    }
+  }
+
+  const handleOpenSwapRequest = (slotId: string) => {
+    let targetMass: any = null
+    let targetSlot: any = null
+    schedule.forEach(mass => {
+      const found = mass.slots.find((sl: any) => sl.id === slotId)
+      if (found) {
+        targetMass = mass
+        targetSlot = found
+      }
+    })
+    if (targetMass && targetSlot) {
+      const d = new Date(targetMass.date + 'T00:00:00')
+      setSwapTargetSlot({
+        id: slotId,
+        role: targetSlot.role,
+        roleName: roleLabel(targetSlot.role),
+        massDate: format(d, "dd/MM"),
+        dateLabel: `${format(d, "EEEE", { locale: ptBR }).slice(0, 3)}, ${format(d, "dd/MM")}`,
+        rawMassDate: targetMass.date,
+        massTime: targetMass.time.substring(0, 5),
+        rawMassTime: targetMass.time,
+        description: targetMass.specialDescription || "Missa"
+      })
+    }
+  }
+
+  const handleCancelSwapSlot = async (slotId: string) => {
+    try {
+      await cancelSwap(slotId)
+      toast.success("Pedido de troca cancelado!")
+      triggerRefresh()
+    } catch {
+      toast.error("Erro ao cancelar troca.")
+    }
+  }
+
+  const handleTakeSwapSlot = (slotId: string) => {
+    if (!user) return
+    let targetMass: any = null
+    let targetSlot: any = null
+    schedule.forEach(mass => {
+      const found = mass.slots.find((sl: any) => sl.id === slotId)
+      if (found) {
+        targetMass = mass
+        targetSlot = found
+      }
+    })
+    if (targetMass && targetSlot) {
+      const d = new Date(targetMass.date + 'T00:00:00')
+      setTakeSwapTarget({
+        slotId,
+        date: isValid(d) ? format(d, "dd/MM/yyyy") : "--/--/----",
+        time: targetMass.time.substring(0, 5),
+        roleName: roleLabel(targetSlot.role)
+      })
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col relative">
       {/* Camada de Background Isolada (Festa Junina em Junho + Fundo da Página) */}
@@ -446,7 +522,7 @@ export default function Home() {
           <div 
             className="absolute inset-0 opacity-15"
             style={{
-              backgroundImage: "url('/bandeirinhas.png')",
+              backgroundImage: "url('/bandeirinhas.webp')",
               backgroundSize: "cover",
               backgroundPosition: "center",
               backgroundRepeat: "no-repeat",
@@ -473,123 +549,90 @@ export default function Home() {
 
       <main className="relative z-10 flex-1 overflow-hidden flex flex-col">
         {/* Tarja de Próxima Escala (Colada ao Header) */}
-        {user && profile && (
-          <div className="shrink-0 animate-in fade-in slide-in-from-top-4 duration-500 z-40">
-            <MyScheduleWidget 
-              schedule={upcomingSchedule} 
-              profileId={profile.id}
-              userName={profile?.fullName}
-              userAvatar={profile?.avatarUrl}
-              onNavigateToSlot={handleNavigateToSlot}
-            />
-          </div>
-        )}
-        
         <div className="flex-1 overflow-y-auto px-4 py-6 space-y-8 pb-20">
+          {user && profile && (
+            <div className="-mx-4 -mt-6 animate-in fade-in slide-in-from-top-4 duration-500">
+              <MyScheduleWidget
+                schedule={upcomingSchedule}
+                profileId={profile.id}
+                userName={profile?.fullName}
+                userAvatar={profile?.avatarUrl}
+                onNavigateToSlot={handleNavigateToSlot}
+                onConfirm={handleConfirmSlot}
+                onRequestSwap={handleOpenSwapRequest}
+                onCancelSwap={handleCancelSwapSlot}
+              />
+            </div>
+          )}
           
-          {/* Seção Nova: Solicitações de Troca */}
+          {/* Precisam de você: pedidos de troca abertos */}
           {sortedSwaps.length > 0 && (
             <section className="space-y-3">
-              <SectionTitle className="text-[#A23F06]">Solicitações de Troca</SectionTitle>
-              <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-none snap-x">
+              <div className="flex items-baseline justify-between gap-3 px-1">
+                <h2 className="text-xl font-black tracking-tight text-stone-800">Precisam de você</h2>
+                <span className="text-sm text-[#6B5D50]">
+                  {sortedSwaps.length === 1 ? "1 troca aberta" : `${sortedSwaps.length} trocas abertas`}
+                </span>
+              </div>
+              <ul className="space-y-3">
                 {sortedSwaps.map((swap) => {
-                  const massDate = new Date(swap.mass.date + 'T00:00:00');
-                  const roleName = (({
-                    'C': 'Comentarista',
-                    '1L': 'Primeira Leitura',
-                    '2L': 'Segunda Leitura',
-                    'P': 'Preces',
-                    'L': 'Leitura Única'
-                  } as Record<string, string>)[swap.role]) || swap.role;
-
-                  const requesterName = swap.profile?.fullName || "---";
-                  const requesterAvatar = swap.profile?.avatarUrl;
+                  const massDate = new Date(swap.mass.date + 'T00:00:00')
+                  const isMine = swap.profileId === profile?.id
+                  const requesterName = swap.profile?.fullName || "---"
+                  const weekday = isValid(massDate) ? format(massDate, "EEEE", { locale: ptBR }) : ""
+                  const when = isValid(massDate)
+                    ? `${weekday.charAt(0).toUpperCase()}${weekday.slice(1, 3)}, ${format(massDate, "dd/MM")}`
+                    : "--/--"
 
                   return (
-                    <div
+                    <li
                       key={swap.id}
-                      onClick={() => {
-                        const mDate = new Date(swap.mass.date + 'T00:00:00');
-                        if (!swap.mass || !isValid(mDate)) return;
-                        
-                        // Navegar para o mês da troca se necessário
-                        const swapMonth = mDate.getMonth();
-                        const currentMonth = (isValid(currentDate) ? currentDate : new Date()).getMonth();
-                        const swapYear = mDate.getFullYear();
-                        const currentYear = (isValid(currentDate) ? currentDate : new Date()).getFullYear();
-
-                        if (swapMonth !== currentMonth || swapYear !== currentYear) {
-                          setCurrentDate(new Date(swapYear, swapMonth, 1));
-                          // Dá um tempo para o React renderizar o novo mês antes de scrolar
-                          setTimeout(() => {
-                            const el = document.getElementById(`slot-${swap.id}`);
-                            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            el?.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2');
-                            setTimeout(() => el?.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2'), 2000);
-                          }, 500);
-                        } else {
-                          const el = document.getElementById(`slot-${swap.id}`);
-                          el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          el?.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2');
-                          setTimeout(() => el?.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2'), 2000);
-                        }
-                      }}
-                      className="flex-none w-[236px] bg-[#FDEBDD] border border-[#F2B791] rounded-[20px] p-4 shadow-[0_4px_14px_rgba(162,63,6,0.10)] hover:shadow-md transition-all active:scale-95 snap-start text-left cursor-pointer flex flex-col justify-between"
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          (e.currentTarget as HTMLElement).click();
-                        }
-                      }}
+                      className="flex items-center gap-3 rounded-[20px] border border-[#E9DFCB] bg-white p-3 shadow-[0_2px_10px_rgba(50,33,19,0.05)]"
                     >
-                      <div className="space-y-1">
-                        {/* Primeira linha: Símbolo da troca e Dia por extenso com compartilhar à direita */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 text-black min-w-0">
-                            <RefreshCw className="h-3.5 w-3.5 text-[#A23F06] shrink-0" />
-                            <span className="text-[13px] font-black tracking-tight capitalize truncate">
-                              {isValid(massDate) ? format(massDate, "EEEE dd/MM", { locale: ptBR }) : '--/--'}
-                            </span>
-                          </div>
-                          {(swap.profileId === profile?.id) && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-9 w-9 rounded-full bg-white text-emerald-700 hover:bg-emerald-50 transition-all shrink-0 ml-1"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleShareSwap(swap);
-                              }}
-                            >
-                              <Share2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                        {/* Segunda linha: Horário - Papel por extenso */}
-                        <p className="text-[11px] font-bold text-black leading-snug">
-                          {swap.mass?.time?.substring(0, 5) || '--:--'} - {roleName}
-                        </p>
-                      </div>
-
-                      <div className="mt-3 pt-2.5 border-t border-[#F2B791]/60 flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <UserAvatar 
-                            name={requesterName}
-                            src={requesterAvatar}
-                            isClaimed={!!swap.profile?.authUserId}
-                            className="h-8 w-8 shrink-0"
-                          />
-                          <span className="text-xs font-bold text-black truncate" title={requesterName}>
-                            {requesterName}
+                      <button
+                        type="button"
+                        onClick={() => handleNavigateToSlot(swap.id, swap.mass.date)}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        aria-label="Ver este pedido na escala"
+                      >
+                        <UserAvatar
+                          name={requesterName}
+                          src={swap.profile?.avatarUrl}
+                          isClaimed={!!swap.profile?.authUserId}
+                          className="h-11 w-11 shrink-0"
+                        />
+                        <span className="flex min-w-0 flex-col gap-0.5">
+                          <span className="text-[15px] font-extrabold leading-tight text-black">
+                            {when} · {swap.mass?.time?.substring(0, 5) || "--:--"}
                           </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
+                          <span className="text-[13px] leading-snug text-[#6B5D50]">
+                            {roleLabel(swap.role, true)} · {isMine ? "seu pedido" : `pedido de ${requesterName}`}
+                          </span>
+                        </span>
+                      </button>
+                      {isMine ? (
+                        <button
+                          type="button"
+                          onClick={() => handleShareSwap(swap)}
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#E6F2EA] text-emerald-700 transition-colors active:bg-emerald-100"
+                          title="Avisar no WhatsApp"
+                          aria-label="Avisar no WhatsApp"
+                        >
+                          <Share2 className="h-5 w-5" />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleTakeSwapSlot(swap.id)}
+                          className="h-11 shrink-0 rounded-xl bg-[#E8B21E] px-4 text-[15px] font-extrabold text-[#241A10] shadow-sm transition-all active:scale-95"
+                        >
+                          Assumir
+                        </button>
+                      )}
+                    </li>
+                  )
                 })}
-              </div>
+              </ul>
             </section>
           )}
 
@@ -656,13 +699,7 @@ export default function Home() {
                             ? format(new Date(swap.mass.date + 'T00:00:00'), "dd/MM/yyyy")
                             : "--/--/----",
                           time: swap.mass.time.substring(0, 5),
-                          roleName: (({
-                            'C': 'Comentarista',
-                            '1L': '1ª Leitura',
-                            '2L': '2ª Leitura',
-                            'P': 'Preces',
-                            'L': 'Leitura Única'
-                          } as Record<string, string>)[swap.role]) || swap.role
+                          roleName: roleLabel(swap.role)
                         });
                       }
                     }}
@@ -982,84 +1019,10 @@ export default function Home() {
                           toast.error("Erro ao alterar status.")
                         }
                       }}
-                      onConfirm={async (slotId) => {
-                        if (!profile) return
-                        try {
-                          await confirmSlot(slotId, profile.id)
-                          toast.success("Presença confirmada!")
-                          triggerRefresh()
-                        } catch (error) {
-                          toast.error("Erro ao confirmar.")
-                        }
-                      }}
-                      onRequestSwap={(slotId) => {
-                        let targetMass: any = null;
-                        let targetSlot: any = null;
-
-                        schedule.forEach(mass => {
-                          const found = mass.slots.find((sl: any) => sl.id === slotId);
-                          if (found) {
-                            targetMass = mass;
-                            targetSlot = found;
-                          }
-                        });
-
-                        if (targetMass && targetSlot) {
-                          const d = new Date(targetMass.date + 'T00:00:00');
-                          setSwapTargetSlot({
-                            id: slotId,
-                            role: targetSlot.role,
-                            roleName: roleLabel(targetSlot.role),
-                            massDate: format(d, "dd/MM"),
-                            dateLabel: `${format(d, "EEEE", { locale: ptBR }).slice(0, 3)}, ${format(d, "dd/MM")}`,
-                            rawMassDate: targetMass.date,
-                            massTime: targetMass.time.substring(0, 5),
-                            rawMassTime: targetMass.time,
-                            description: targetMass.specialDescription || "Missa"
-                          });
-                        }
-                      }}
-                      onCancelSwap={async (slotId) => {
-                        try {
-                          await cancelSwap(slotId)
-                          toast.success("Pedido de troca cancelado!")
-                          triggerRefresh()
-                        } catch (error) {
-                          toast.error("Erro ao cancelar troca.")
-                        }
-                      }}
-                      onTakeSwap={async (slotId) => {
-                        if (!user) return;
-                        
-                        // Encontrar detalhes para o Drawer de confirmação
-                        let targetMass: any = null;
-                        let targetSlot: any = null;
-                        
-                        schedule.forEach(mass => {
-                          const found = mass.slots.find((s: any) => s.id === slotId);
-                          if (found) {
-                            targetMass = mass;
-                            targetSlot = found;
-                          }
-                        });
-
-                        if (targetMass && targetSlot) {
-                          setTakeSwapTarget({
-                            slotId,
-                            date: isValid(new Date(targetMass.date + 'T00:00:00'))
-                              ? format(new Date(targetMass.date + 'T00:00:00'), "dd/MM/yyyy")
-                              : "--/--/----",
-                            time: targetMass.time.substring(0, 5),
-                            roleName: (({
-                              'C': 'Comentarista',
-                              '1L': '1ª Leitura',
-                              '2L': '2ª Leitura',
-                              'P': 'Preces',
-                              'L': 'Leitura Única'
-                            } as Record<string, string>)[targetSlot.role]) || targetSlot.role
-                          });
-                        }
-                      }}
+                      onConfirm={handleConfirmSlot}
+                      onRequestSwap={handleOpenSwapRequest}
+                      onCancelSwap={handleCancelSwapSlot}
+                      onTakeSwap={handleTakeSwapSlot}
                     />
                   )
 
@@ -1351,13 +1314,7 @@ export default function Home() {
             <div className="my-3 space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
               {myUnconfirmedSlots.map((slot) => {
                 const slotDate = parseISO(slot.massDate)
-                const roleName = (({
-                  'C': 'Comentarista',
-                  '1L': 'Primeira Leitura',
-                  '2L': 'Segunda Leitura',
-                  'P': 'Preces',
-                  'L': 'Leitura Única'
-                } as Record<string, string>)[slot.role]) || slot.role;
+                const roleName = roleLabel(slot.role, true);
 
                 return (
                   <button
