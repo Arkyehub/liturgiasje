@@ -1,10 +1,25 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const NON_SESSION_DESTINATIONS = new Set(['serviceworker', 'sharedworker', 'worker', 'script', 'style', 'image', 'font', 'manifest', 'audio', 'video', 'track'])
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   })
+
+  // Pré-carregamentos do Next (<Link> visíveis na tela) não precisam renovar a sessão e eram uma
+  // das maiores fontes de chamadas ao Auth do Supabase.
+  if (request.headers.get('next-router-prefetch') || request.headers.get('purpose') === 'prefetch') {
+    return supabaseResponse
+  }
+
+  // Defesa extra além do matcher: pedidos de arquivos (service worker, manifest, scripts, imagens...) nunca
+  // devem renovar o token no servidor. Só navegações e chamadas de dados.
+  const fetchDest = request.headers.get('sec-fetch-dest')
+  if (fetchDest && NON_SESSION_DESTINATIONS.has(fetchDest)) {
+    return supabaseResponse
+  }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY

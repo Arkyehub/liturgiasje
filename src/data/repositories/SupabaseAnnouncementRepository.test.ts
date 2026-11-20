@@ -9,7 +9,8 @@ jest.mock("@/shared/api/supabase", () => ({
       from: jest.fn()
     },
     auth: {
-      getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } })
+      getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }),
+      getSession: jest.fn().mockResolvedValue({ data: { session: { user: { id: 'user-1' } } } })
     }
   }
 }))
@@ -83,5 +84,20 @@ describe("SupabaseAnnouncementRepository", () => {
     await repository.delete(annId)
 
     expect(mockRemove).toHaveBeenCalledWith(['announcements/pdfs/test.pdf'])
+  })
+
+  it("lists announcements using the local session, without a network auth call", async () => {
+    const listQuery: Record<string, unknown> = {
+      select: jest.fn().mockReturnThis(), order: jest.fn().mockReturnThis(), limit: jest.fn().mockReturnThis(),
+      then: (resolve: (value: unknown) => void) => resolve({ data: [], error: null }),
+    }
+    listQuery.neq = jest.fn().mockReturnValue(listQuery)
+    const profileQuery = { select: jest.fn().mockReturnThis(), eq: jest.fn().mockReturnThis(), single: jest.fn().mockResolvedValue({ data: { role: 'admin' }, error: null }) }
+    ;(supabase.from as jest.Mock).mockImplementation((table) => (table === 'profiles' ? profileQuery : listQuery))
+
+    await expect(repository.list('profile-1')).resolves.toEqual([])
+
+    expect(supabase.auth.getSession).toHaveBeenCalled()
+    expect(supabase.auth.getUser).not.toHaveBeenCalled()
   })
 })

@@ -3,10 +3,10 @@ import { createClient } from "@supabase/supabase-js"
 import { createClient as createSessionClient } from "@/shared/api/supabaseServer"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export async function GET() {
   try {
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     const session = await createSessionClient()
     const { data: { user }, error: authError } = await session.auth.getUser()
     if (authError || !user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
@@ -14,6 +14,11 @@ export async function GET() {
       .select("role, archived_at").eq("auth_user_id", user.id).maybeSingle()
     if (profileError || !profile || profile.role !== "admin" || profile.archived_at !== null) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
+    }
+    // Sem a chave de serviço o painel não pode funcionar; não cai silenciosamente para a chave pública (anon)
+    if (!supabaseServiceKey) {
+      console.error("[API Analytics] SUPABASE_SERVICE_ROLE_KEY não configurada")
+      return NextResponse.json({ error: "Serviço indisponível" }, { status: 503 })
     }
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
@@ -184,6 +189,6 @@ export async function GET() {
     })
   } catch (error: any) {
     console.error("[API Analytics Error]:", error)
-    return NextResponse.json({ error: error.message || "Erro ao carregar métricas de análise" }, { status: 500 })
+    return NextResponse.json({ error: "Erro ao carregar métricas de análise" }, { status: 500 })
   }
 }

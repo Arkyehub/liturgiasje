@@ -9,7 +9,7 @@ Receber uma tarefa de desenvolvimento autoriza investigar, implementar, corrigir
 2. **Implementar:** faça a menor mudança correta; preserve comportamentos existentes, dados e trabalho não relacionado. Corrija problemas encontrados no próprio escopo.
 3. **Validar por risco:** testes direcionados primeiro; TypeScript e build quando pertinentes; integração, Auth/RLS e concorrência para alterações críticas. Compare resultados com o baseline, sem bloquear por falhas legadas não relacionadas.
 4. **Entregar em feature:** confira diff e segredos, faça commit e push normal (nunca force) para a branch `feature/*`. Permita o deployment automático de Preview. Se o remoto tiver avançado, integre com segurança antes do push.
-5. **Homologar:** se a tarefa incluir promoção para a branch `preview`, execute-a depois dos testes e valide os fluxos reais; em caso de falha, corrija e repita. Um deployment da feature pode ser testado sem merge.
+5. **Homologar:** **correções** podem ser publicadas na branch `preview` sem pedir aprovação (autorização permanente, ver `AGENTS.md`), depois dos testes e com o CI verde; valide os fluxos reais e, em caso de falha, corrija e repita. Funcionalidades novas e mudanças visuais seguem com PR e prints para aprovação antes do `preview`, salvo instrução em contrário. Um deployment da feature pode ser testado sem merge.
 6. **Production:** somente após **"Enviar para produção"**, com release e smoke test. Mudanças no Supabase Production exigem aprovação específica separada.
 
 ## Matriz objetiva
@@ -18,7 +18,8 @@ Receber uma tarefa de desenvolvimento autoriza investigar, implementar, corrigir
 | Leitura de código, pesquisa, auditoria, testes locais | Executar |
 | Implementação, refatoração no escopo, commit/push em feature | Executar |
 | Vercel Preview automático ao fazer push em feature | Permitir |
-| Merge/deploy em `preview` | Executar quando a tarefa abranger homologação em Preview |
+| Publicar **correção** em `preview` (push normal/fast-forward, CI verde) | Executar sem pedir aprovação (autorização permanente) |
+| Publicar **funcionalidade nova** ou mudança visual em `preview` | PR com prints e aprovação do usuário, salvo instrução em contrário |
 | DDL/migration, restauração ou alteração destrutiva no Supabase Preview | Autorizar a homologação uma vez; executar plano validado |
 | Merge/push em `main`, Vercel Production | Exigir **"Enviar para produção"** |
 | Escrita/migration/restore no Supabase Production | Exigir autorização específica e recuperação planejada |

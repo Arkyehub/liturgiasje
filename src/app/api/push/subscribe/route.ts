@@ -1,5 +1,6 @@
 import { createClient } from '@/shared/api/supabaseServer';
 import { NextResponse } from 'next/server';
+import { isValidPushSubscription } from '@/shared/lib/pushEndpoint';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +26,8 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!parsedSubscription || !parsedSubscription.endpoint) {
+    // Só aceita assinaturas de serviços de push conhecidos (o servidor envia notificações para este endereço)
+    if (!isValidPushSubscription(parsedSubscription)) {
       return NextResponse.json({ error: 'Invalid subscription details' }, { status: 400 });
     }
 
@@ -54,12 +56,13 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error('Error saving subscription:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Não foi possível salvar a assinatura' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    console.error('Erro em push/subscribe (POST):', error);
+    return NextResponse.json({ error: 'Não foi possível salvar a assinatura' }, { status: 500 });
   }
 }
 
@@ -79,11 +82,13 @@ export async function DELETE(request: Request) {
       .match({ user_id: user.id, subscription });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('Erro ao remover assinatura:', error);
+      return NextResponse.json({ error: 'Não foi possível remover a assinatura' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    console.error('Erro em push/subscribe (DELETE):', error);
+    return NextResponse.json({ error: 'Não foi possível remover a assinatura' }, { status: 500 });
   }
 }

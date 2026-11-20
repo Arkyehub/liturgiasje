@@ -4,9 +4,32 @@ import { sendPushNotification } from '@/shared/lib/push';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Membros que não são administradores só podem disparar notificações de troca, e com texto montado
+ * AQUI no servidor (nunca o texto enviado pelo cliente). Isso impede mensagens arbitrárias para todos.
+ */
+type MemberTemplate = { body: (senderName: string) => string; targets: 'broadcast' | 'single' }
+const MEMBER_TEMPLATES: Record<string, MemberTemplate> = {
+  'Solicitação de Troca': { body: () => 'Alguém solicitou uma troca de escala. Confira no mural!', targets: 'broadcast' },
+  'Troca Confirmada! ✅': { body: (name) => `${name || 'Alguém'} aceitou sua troca de escala.`, targets: 'single' },
+};
+
+// Limite por remetente (por instância do servidor): complementa, não substitui, o controle de acesso acima.
+const MEMBER_LIMIT = { max: 5, windowMs: 10 * 60 * 1000 };
+const memberSends = new Map<string, number[]>();
+function memberRateLimited(senderId: string, now = Date.now()) {
+  const recent = (memberSends.get(senderId) ?? []).filter((t) => now - t < MEMBER_LIMIT.windowMs);
+  if (recent.length >= MEMBER_LIMIT.max) {
+    memberSends.set(senderId, recent);
+    return true;
+  }
+  memberSends.set(senderId, [...recent, now]);
+  return false;
+}
+
 export async function POST(request: Request) {
   try {
-    const { title, body, url, targetUserIds } = await request.json();
+    const payload = await request.json();
     
     const supabase = await createClient();
     const { data: { user: sender }, error: authError } = await supabase.auth.getUser();
@@ -20,7 +43,7 @@ export async function POST(request: Request) {
     // Usuários comuns podem apenas avisar sobre solicitações de troca.
     const { data: senderProfile, error: profileError } = await supabase
       .from('profiles')
-      .select('role, archived_at')
+      .select('role, archived_at, full_name')
       .eq('auth_user_id', sender.id)
       .single();
 
@@ -29,13 +52,29 @@ export async function POST(request: Request) {
     }
 
     const isAdmin = senderProfile?.role === 'admin';
-    const isSwapNotification = 
-      title.toLowerCase().includes('troca') || 
-      body?.toLowerCase().includes('troca');
+    const { title } = payload;
+    let { body, url } = payload;
+    const targetUserIds: string[] | undefined = payload.targetUserIds;
 
-    if (!isAdmin && !isSwapNotification) {
-      console.warn('Unauthorized push attempt by:', sender.id, { title, body });
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+    if (!isAdmin) {
+      const template = MEMBER_TEMPLATES[title as string];
+      if (!template) {
+        console.warn('Unauthorized push attempt by:', sender.id);
+        return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+      }
+      const targets = Array.isArray(targetUserIds) ? targetUserIds : [];
+      const validTargets =
+        template.targets === 'broadcast'
+          ? targets.length === 0
+          : targets.length === 1 && typeof targets[0] === 'string' && targets[0] !== sender.id;
+      if (!validTargets) {
+        return NextResponse.json({ error: 'Invalid recipients' }, { status: 400 });
+      }
+      if (memberRateLimited(sender.id)) {
+        return NextResponse.json({ error: 'Too many notifications' }, { status: 429 });
+      }
+      body = template.body(senderProfile.full_name);
+      url = '/';
     }
 
     // Usar o cliente administrador para ler as subscrições, pois usuários não-admins
@@ -48,7 +87,7 @@ export async function POST(request: Request) {
       .neq('user_id', sender.id);
     
     if (targetUserIds && targetUserIds.length > 0) {
-      console.log('[PUSH] Filtrando por usuários:', targetUserIds);
+      console.log('[PUSH] Filtrando por usuários:', targetUserIds.length);
       query = query.in('user_id', targetUserIds);
     } else {
       console.log('[PUSH] Envio global solicitado');
@@ -90,7 +129,8 @@ export async function POST(request: Request) {
       sentCount: successCount, 
       totalItems: results.length 
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    console.error('Erro em push/send:', error);
+    return NextResponse.json({ error: 'Erro ao enviar notificação' }, { status: 500 });
   }
 }

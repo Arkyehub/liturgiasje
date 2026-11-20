@@ -7,6 +7,15 @@ export const createImage = (url: string): Promise<HTMLImageElement> =>
     image.src = url
   })
 
+/** Maior lado do avatar enviado ao servidor (o avatar aparece em até ~200 px; 512 cobre telas 2x com folga). */
+export const MAX_CROPPED_SIDE = 512
+
+/** Reduz proporcionalmente para caber em `max` pixels no maior lado; nunca amplia. */
+export function scaleToMax(width: number, height: number, max: number) {
+  const ratio = Math.min(1, max / Math.max(width, height, 1))
+  return { width: Math.max(1, Math.round(width * ratio)), height: Math.max(1, Math.round(height * ratio)) }
+}
+
 export async function getCroppedImg(
   imageSrc: string,
   pixelCrop: { x: number; y: number; width: number; height: number }
@@ -19,9 +28,10 @@ export async function getCroppedImg(
     return null
   }
 
-  // Definir tamanho do canvas igual ao recorte
-  canvas.width = pixelCrop.width
-  canvas.height = pixelCrop.height
+  // Tamanho do canvas: o recorte, reduzido para no máximo MAX_CROPPED_SIDE (fotos de celular têm milhares de pixels)
+  const target = scaleToMax(pixelCrop.width, pixelCrop.height, MAX_CROPPED_SIDE)
+  canvas.width = target.width
+  canvas.height = target.height
 
   // Desenhar a imagem recortada
   ctx.drawImage(
@@ -32,8 +42,8 @@ export async function getCroppedImg(
     pixelCrop.height,
     0,
     0,
-    pixelCrop.width,
-    pixelCrop.height
+    target.width,
+    target.height
   )
 
   // Tentar compressão inicial

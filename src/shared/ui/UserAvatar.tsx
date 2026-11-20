@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar"
 import { getAvatarColor, getInitials } from "@/shared/lib/avatar-utils"
 import { cn } from "@/shared/lib/utils"
 import { UserCircle } from "lucide-react"
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/shared/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/shared/ui/dialog"
 
 interface UserAvatarProps {
   name: string
@@ -41,6 +41,7 @@ export function UserAvatar({ name, src, isClaimed, className, size = "default" }
       
       <DialogContent className="flex flex-col items-center justify-center p-6 max-w-[320px] sm:max-w-sm border-stone-200">
         <DialogTitle className="sr-only">Foto de {name}</DialogTitle>
+        <DialogDescription className="sr-only">Foto ampliada de {name}</DialogDescription>
         <div className="relative flex flex-col items-center gap-4 py-2">
           <Avatar className={cn("h-48 w-48 border-2 shadow-md", isClaimed ? border : "border-stone-100")}>
             {src && (

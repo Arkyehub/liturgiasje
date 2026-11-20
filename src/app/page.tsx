@@ -10,6 +10,7 @@ import { Button } from "@/shared/ui/button"
 import { ChevronLeft, ChevronRight, Loader2, Plus, RefreshCw, Plane, CheckCircle, FileText, Share2 } from "lucide-react"
 import { addMonths, format, subMonths, isToday, parseISO, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { roleLabel } from "@/shared/constants/roles"
 import Link from "next/link"
 
 import { useAuth } from "@/shared/hooks/useAuth"
@@ -57,6 +58,10 @@ import { AlertTriangle } from "lucide-react"
 
 export default function Home() {
   const { user, profile, isActive, loading, signInWithGoogle, signOut } = useAuth()
+  // Valores primitivos para dependências de efeitos: o objeto `profile` não deve disparar recargas.
+  const profileId = profile?.id ?? null
+  const isAdminRole = profile?.role === "admin"
+  const lastFocusReloadAt = useRef(0)
   const router = useRouter()
   const [currentDate, setCurrentDate] = useState(new Date())
   const pendingScrollSlotId = useRef<string | null>(null)
@@ -391,27 +396,30 @@ export default function Home() {
 
 
   useEffect(() => {
-    if (user?.id && isActive && profile) {
-      loadAnnouncements(profile.id)
-      loadSchedule(currentDate, profile?.role === "admin")
-      loadUpcomingSchedule(profile.id)
+    if (user?.id && isActive && profileId) {
+      loadAnnouncements(profileId)
+      loadSchedule(currentDate, isAdminRole)
+      loadUpcomingSchedule(profileId)
       loadSwaps()
       loadBirthdays()
     }
-  }, [user?.id, profile, isActive, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate])
+  }, [user?.id, profileId, isAdminRole, isActive, loadAnnouncements, loadSchedule, loadUpcomingSchedule, loadSwaps, loadBirthdays, currentDate])
 
   // Recarregar dados ao focar na janela (volta ao PWA ou aba)
   useEffect(() => {
     const handleFocus = () => {
-      if (user?.id && isActive && profile) {
-        loadAnnouncements(profile.id, true)
-        loadSchedule(currentDate, profile?.role === "admin", true)
+      // No máximo uma atualização por minuto ao voltar para a aba
+      if (Date.now() - lastFocusReloadAt.current < 60_000) return
+      if (user?.id && isActive && profileId) {
+        lastFocusReloadAt.current = Date.now()
+        loadAnnouncements(profileId, true)
+        loadSchedule(currentDate, isAdminRole, true)
         loadSwaps()
       }
     }
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
-  }, [user?.id, isActive, profile, currentDate, loadAnnouncements, loadSchedule, loadSwaps])
+  }, [user?.id, isActive, profileId, isAdminRole, currentDate, loadAnnouncements, loadSchedule, loadSwaps])
 
   // Garantir que a página comece no topo absoluto ao carregar
   useEffect(() => {
@@ -442,7 +450,7 @@ export default function Home() {
           <div 
             className="absolute inset-0 opacity-15"
             style={{
-              backgroundImage: "url('/bandeirinhas.png')",
+              backgroundImage: "url('/bandeirinhas.webp')",
               backgroundSize: "cover",
               backgroundPosition: "center",
               backgroundRepeat: "no-repeat",
@@ -494,13 +502,7 @@ export default function Home() {
               <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x">
                 {sortedSwaps.map((swap) => {
                   const massDate = new Date(swap.mass.date + 'T00:00:00');
-                  const roleName = (({
-                    'C': 'Comentarista',
-                    '1L': 'Primeira Leitura',
-                    '2L': 'Segunda Leitura',
-                    'P': 'Preces',
-                    'L': 'Leitura Única'
-                  } as Record<string, string>)[swap.role]) || swap.role;
+                  const roleName = roleLabel(swap.role, true);
 
                   const requesterName = swap.profile?.fullName || "---";
                   const requesterAvatar = swap.profile?.avatarUrl;
@@ -660,13 +662,7 @@ export default function Home() {
                             ? format(new Date(swap.mass.date + 'T00:00:00'), "dd/MM/yyyy")
                             : "--/--/----",
                           time: swap.mass.time.substring(0, 5),
-                          roleName: (({
-                            'C': 'Comentarista',
-                            '1L': '1ª Leitura',
-                            '2L': '2ª Leitura',
-                            'P': 'Preces',
-                            'L': 'Leitura Única'
-                          } as Record<string, string>)[swap.role]) || swap.role
+                          roleName: roleLabel(swap.role)
                         });
                       }
                     }}
@@ -951,13 +947,7 @@ export default function Home() {
                         ).map((s: any) => ({
                           id: s.id,
                           role: s.role,
-                          roleName: (({
-                            'C': 'Comentarista',
-                            '1L': '1ª Leitura',
-                            '2L': '2ª Leitura',
-                            'P': 'Preces',
-                            'L': 'Leitura Única'
-                          } as Record<string, string>)[s.role]) || s.role,
+                          roleName: roleLabel(s.role),
                           readerName: s.readerName,
                           readerArchived: !!s.profile?.archivedAt,
                           previousAssignments: s.previousAssignments,
@@ -1051,13 +1041,7 @@ export default function Home() {
                               ? format(new Date(targetMass.date + 'T00:00:00'), "dd/MM/yyyy")
                               : "--/--/----",
                             time: targetMass.time.substring(0, 5),
-                            roleName: (({
-                              'C': 'Comentarista',
-                              '1L': '1ª Leitura',
-                              '2L': '2ª Leitura',
-                              'P': 'Preces',
-                              'L': 'Leitura Única'
-                            } as Record<string, string>)[targetSlot.role]) || targetSlot.role
+                            roleName: roleLabel(targetSlot.role)
                           });
                         }
                       }}
@@ -1290,13 +1274,7 @@ export default function Home() {
             <div className="my-3 space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
               {myUnconfirmedSlots.map((slot) => {
                 const slotDate = parseISO(slot.massDate)
-                const roleName = (({
-                  'C': 'Comentarista',
-                  '1L': 'Primeira Leitura',
-                  '2L': 'Segunda Leitura',
-                  'P': 'Preces',
-                  'L': 'Leitura Única'
-                } as Record<string, string>)[slot.role]) || slot.role;
+                const roleName = roleLabel(slot.role, true);
 
                 return (
                   <button
