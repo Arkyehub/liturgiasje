@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { AnnouncementCard } from "@/features/announcements/ui/AnnouncementCard"
 import { ScheduleCard } from "@/features/schedule/ui/ScheduleCard"
+import { ReadAnnouncementsGroup } from "@/features/announcements/ui/ReadAnnouncementsGroup"
 import { PastDaysGroup } from "@/features/schedule/ui/PastDaysGroup"
 import { SectionTitle } from "@/shared/ui/SectionTitle"
 import { MyScheduleWidget } from "@/features/schedule/ui/MyScheduleWidget"
@@ -122,6 +123,7 @@ export default function Home() {
   
   const [isUnconfirmedAlertOpen, setIsUnconfirmedAlertOpen] = useState(false)
   const [shareSwapOnRequest, setShareSwapOnRequest] = useState(true)
+  const [isReadGroupOpen, setIsReadGroupOpen] = useState(false)
 
   // Lista de escalas do usuário logado que não foram confirmadas
   const myUnconfirmedSlots = useMemo(() => {
@@ -367,6 +369,7 @@ export default function Home() {
 
       if (hash.startsWith('#ann-')) {
         const id = hash.replace('#ann-', '')
+        if (announcements.some(a => a.id === id && a.isRead)) setIsReadGroupOpen(true)
         const timer = setTimeout(() => {
           const el = document.getElementById(`ann-${id}`)
           if (el) {
@@ -513,6 +516,69 @@ export default function Home() {
     }
   }
 
+  // Recados já lidos (só vale para quem está logado) ficam agrupados; os não lidos ganham destaque
+  const isReadByMe = (ann: any) => !!user && !!ann.isRead
+  const unreadAnnouncements = announcements.filter((a: any) => !isReadByMe(a))
+  const readAnnouncements = announcements.filter(isReadByMe)
+
+  const renderAnnouncement = (ann: any) => (
+                  <AnnouncementCard 
+      key={ann.id} 
+      {...ann} 
+      createdAt={ann.createdAt}
+      authorId={ann.createdBy}
+      currentUserId={profile?.id}
+      isAdmin={profile?.role === "admin"}
+      isLoggedIn={!!user}
+      onRead={async (id) => {
+        if (!profile) {
+          toast.error("Faça login para marcar como lido.")
+          return
+        }
+        try {
+          await markAsRead(id, profile.id)
+          await loadAnnouncements(profile.id, true)
+        } catch (error) {
+          console.error(error)
+        }
+      }}
+      onUpdate={async (id, data) => {
+        try {
+          await updateAnnouncement(id, data)
+          toast.success("Aviso atualizado!")
+          if (profile) await loadAnnouncements(profile.id, true)
+        } catch (error) {
+          toast.error("Erro ao atualizar aviso.")
+        }
+      }}
+      onDelete={(id) => setAnnouncementToDelete(id)}
+      onEdit={(ann) => {
+        setAnnouncementToEdit(ann)
+        setIsFormOpen(true)
+      }}
+      onAcceptSwap={async (slotId) => {
+        if (!user) {
+          toast.error("Faça login para aceitar trocas.")
+          return
+        }
+        
+        // Buscar detalhes da troca na lista global de swaps
+        const swap = swaps.find(s => s.id === slotId);
+        
+        if (swap && swap.mass) {
+          setTakeSwapTarget({
+            slotId,
+            date: isValid(new Date(swap.mass.date + 'T00:00:00')) 
+              ? format(new Date(swap.mass.date + 'T00:00:00'), "dd/MM/yyyy")
+              : "--/--/----",
+            time: swap.mass.time.substring(0, 5),
+            roleName: roleLabel(swap.role)
+          });
+        }
+      }}
+    />
+  )
+
   return (
     <div className="flex min-h-screen flex-col relative">
       {/* Camada de Background Isolada (Festa Junina em Junho + Fundo da Página) */}
@@ -636,75 +702,31 @@ export default function Home() {
             </section>
           )}
 
-          {/* Sessão 1: Mural de Recados */}
+          {/* Sessão 1: Mural de Recados (oculto quando não há recados; admin mantém o botão de adicionar) */}
+          {(isLoadingAnnouncements || announcements.length > 0 || profile?.role === "admin") && (
           <section className="space-y-4">
-            <SectionTitle>Mural de Recados</SectionTitle>
+            {(isLoadingAnnouncements || announcements.length > 0) && <SectionTitle>Mural de Recados</SectionTitle>}
             
             <div className="space-y-2">
               {isLoadingAnnouncements ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-stone-300" />
                 </div>
-              ) : announcements.length === 0 ? (
-                <p className="text-center text-xs text-stone-400 py-6">Nenhum aviso no momento.</p>
-              ) : (
-                announcements.map((ann) => (
-                  <AnnouncementCard 
-                    key={ann.id} 
-                    {...ann} 
-                    createdAt={ann.createdAt}
-                    authorId={ann.createdBy}
-                    currentUserId={profile?.id}
-                    isAdmin={profile?.role === "admin"}
-                    isLoggedIn={!!user}
-                    onRead={async (id) => {
-                      if (!profile) {
-                        toast.error("Faça login para marcar como lido.")
-                        return
-                      }
-                      try {
-                        await markAsRead(id, profile.id)
-                        await loadAnnouncements(profile.id, true)
-                      } catch (error) {
-                        console.error(error)
-                      }
-                    }}
-                    onUpdate={async (id, data) => {
-                      try {
-                        await updateAnnouncement(id, data)
-                        toast.success("Aviso atualizado!")
-                        if (profile) await loadAnnouncements(profile.id, true)
-                      } catch (error) {
-                        toast.error("Erro ao atualizar aviso.")
-                      }
-                    }}
-                    onDelete={(id) => setAnnouncementToDelete(id)}
-                    onEdit={(ann) => {
-                      setAnnouncementToEdit(ann)
-                      setIsFormOpen(true)
-                    }}
-                    onAcceptSwap={async (slotId) => {
-                      if (!user) {
-                        toast.error("Faça login para aceitar trocas.")
-                        return
-                      }
-                      
-                      // Buscar detalhes da troca na lista global de swaps
-                      const swap = swaps.find(s => s.id === slotId);
-                      
-                      if (swap && swap.mass) {
-                        setTakeSwapTarget({
-                          slotId,
-                          date: isValid(new Date(swap.mass.date + 'T00:00:00')) 
-                            ? format(new Date(swap.mass.date + 'T00:00:00'), "dd/MM/yyyy")
-                            : "--/--/----",
-                          time: swap.mass.time.substring(0, 5),
-                          roleName: roleLabel(swap.role)
-                        });
-                      }
-                    }}
-                  />
-                ))
+              ) : announcements.length === 0 ? null : (
+                <>
+                  {unreadAnnouncements.map(renderAnnouncement)}
+                  {readAnnouncements.length >= 2 ? (
+                    <ReadAnnouncementsGroup
+                      count={readAnnouncements.length}
+                      open={isReadGroupOpen}
+                      onOpenChange={setIsReadGroupOpen}
+                    >
+                      {readAnnouncements.map(renderAnnouncement)}
+                    </ReadAnnouncementsGroup>
+                  ) : (
+                    readAnnouncements.map(renderAnnouncement)
+                  )}
+                </>
               )}
             </div>
 
@@ -768,6 +790,7 @@ export default function Home() {
               </div>
             )}
           </section>
+          )}
 
           {/* Drawer de Confirmação de Exclusão */}
           <Drawer open={!!announcementToDelete} onOpenChange={(open) => !open && setAnnouncementToDelete(null)}>
