@@ -343,6 +343,19 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
       return
     }
 
+    // Um leitor não pode aparecer mais de uma vez no mesmo dia
+    const seenProfiles = new Map<string, string>()
+    for (const sess of sessions) {
+      for (const slot of sess.slots) {
+        if (!slot.profileId) continue
+        if (seenProfiles.has(slot.profileId)) {
+          toast.error(`${slot.profileName || seenProfiles.get(slot.profileId)} está escalado(a) mais de uma vez neste dia.`)
+          return
+        }
+        seenProfiles.set(slot.profileId, slot.profileName)
+      }
+    }
+
     // Validação de duplicidade contra o banco de dados
     for (const sess of sessions) {
       const conflict = existingMassesFromDb.find(m => 
@@ -412,29 +425,29 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   const pickerSession = pickerTarget ? sessions.find(x => x.tempId === pickerTarget.sessTempId) : undefined
   const pickerSlot = pickerSession?.slots.find(x => x.id === pickerTarget?.slotId)
 
+  const isScheduledElsewhere = (profileId: string, exceptSlotId: string) =>
+    sessions.some(s => s.slots.some(sl => sl.profileId === profileId && sl.id !== exceptSlotId))
+
   const renderPickerItem = (p: Profile, kind: "pref" | "available" | "unavailable") => {
     if (!pickerSession || !pickerSlot) return null
+    const isAlreadyScheduled = isScheduledElsewhere(p.id, pickerSlot.id)
     const isUnavailable = kind === "unavailable"
-    const isAlreadyScheduled = sessions.some(s => s.slots.some(sl => sl.profileId === p.id && sl.id !== pickerSlot.id))
+    const isBlocked = isUnavailable || isAlreadyScheduled
     const used = usageCounts[p.id] || 0
     return (
       <CommandItem
         key={p.id}
         value={p.fullName}
-        disabled={isUnavailable}
+        disabled={isBlocked}
         onSelect={() => {
-          if (isUnavailable) {
-            toast.warning(`${p.fullName} informou que não poderá participar nesta data.`, {
-              duration: 5000,
-              icon: <AlertCircle className="h-4 w-4 text-amber-600" />
-            })
+          if (isBlocked) {
+            toast.warning(
+              isAlreadyScheduled
+                ? `${p.fullName} já está escalado(a) neste dia.`
+                : `${p.fullName} informou que não poderá participar nesta data.`,
+              { duration: 5000, icon: <AlertCircle className="h-4 w-4 text-amber-600" /> }
+            )
             return
-          }
-          if (isAlreadyScheduled) {
-            toast.warning(`${p.fullName} já está escalado(a) neste dia!`, {
-              duration: 5000,
-              icon: <AlertCircle className="h-4 w-4 text-amber-600" />
-            })
           }
           updateSlotProfile(pickerSession.tempId, pickerSlot.id, p)
           closePicker()
@@ -442,19 +455,21 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
         className="flex min-h-[60px] items-center justify-between gap-3 rounded-[14px] px-2.5 py-2"
       >
         <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate text-[16px] font-bold text-black">{p.fullName}</span>
-          <span className={cn("text-xs", isUnavailable ? "font-bold text-[#A23F06]" : "text-[#6B5D50]")}>
-            {isUnavailable
-              ? "Informou indisponibilidade"
-              : used > 0
-                ? `${used}x neste mês`
-                : "Ainda sem escala neste mês"}
+          <span className={cn("truncate text-[16px] font-bold", isBlocked ? "text-black/50" : "text-black")}>{p.fullName}</span>
+          <span className={cn("text-xs", isBlocked ? "font-bold text-[#A23F06]" : "text-[#6B5D50]")}>
+            {isAlreadyScheduled
+              ? "Já escalado neste dia"
+              : isUnavailable
+                ? "Informou indisponibilidade"
+                : used > 0
+                  ? `${used}x neste mês`
+                  : "Ainda sem escala neste mês"}
           </span>
         </span>
-        {isUnavailable ? (
-          <span className="shrink-0 rounded-full bg-[#FDEBDD] px-2.5 py-1 text-xs font-bold text-[#A23F06]">Indisponível</span>
-        ) : isAlreadyScheduled ? (
+        {isAlreadyScheduled ? (
           <span className="shrink-0 rounded-full bg-[#FFF3D1] px-2.5 py-1 text-xs font-bold text-[#6B3F00]">Já escalado</span>
+        ) : isUnavailable ? (
+          <span className="shrink-0 rounded-full bg-[#FDEBDD] px-2.5 py-1 text-xs font-bold text-[#A23F06]">Indisponível</span>
         ) : kind === "pref" ? (
           <span className="shrink-0 rounded-full bg-[#E6F3EB] px-2.5 py-1 text-xs font-bold text-[#1E6B43]">Preferência</span>
         ) : null}
@@ -870,7 +885,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                 )}
                 {(() => {
                   const byName = (a: Profile, b: Profile) => a.fullName.localeCompare(b.fullName)
-                  const isUn = (p: Profile) => !!p.id && unavailableUserIds.includes(p.id)
+                  const isUn = (p: Profile) => (!!p.id && unavailableUserIds.includes(p.id)) || isScheduledElsewhere(p.id, pickerSlot.id)
                   const preferred = profiles.filter(p => !isUn(p) && checkPreference(p, pickerSession.time, date)).sort(byName)
                   const available = profiles.filter(p => !isUn(p) && !checkPreference(p, pickerSession.time, date)).sort(byName)
                   const unavailable = profiles.filter(isUn).sort(byName)
