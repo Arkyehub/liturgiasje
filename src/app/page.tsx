@@ -1011,7 +1011,7 @@ export default function Home() {
                             role: targetSlot.role,
                             roleName: roleLabel(targetSlot.role),
                             massDate: format(d, "dd/MM"),
-                            dateLabel: format(d, "EEE, dd/MM", { locale: ptBR }).replace(".", ""),
+                            dateLabel: `${format(d, "EEEE", { locale: ptBR }).slice(0, 3)}, ${format(d, "dd/MM")}`,
                             rawMassDate: targetMass.date,
                             massTime: targetMass.time.substring(0, 5),
                             rawMassTime: targetMass.time,
