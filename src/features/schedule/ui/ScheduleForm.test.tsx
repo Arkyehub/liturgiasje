@@ -138,17 +138,41 @@ describe("ScheduleForm Validation", () => {
     fireEvent.click(screen.getByText("30"))
     await waitFor(() => expect(makeListUnavailableByDate).toHaveBeenCalled())
 
-    await userEvent.click(await screen.findByText(/Adicionar leitura/i))
-    await userEvent.click(await screen.findByText(/Leitor \(L\)/))
-    await userEvent.click(await screen.findByText("Selecionar..."))
-    const blocked = await screen.findByText(/Indisponivel Teste \(Indisponível\)/)
+    await userEvent.click(await screen.findByRole("button", { name: /^Leitor$/ }))
+    await userEvent.click(await screen.findByText("Escolher leitor"))
+    const blocked = await screen.findByText("Indisponivel Teste")
     expect(blocked.closest("[cmdk-item]")).toHaveAttribute("data-disabled", "true")
 
     await userEvent.click(blocked)
-    expect(screen.queryByText("Indisponivel Teste", { selector: "span.truncate" })).not.toBeInTheDocument()
-    expect(screen.getByText("Selecionar...")).toBeInTheDocument()
+    expect(screen.getByText("Escolher leitor")).toBeInTheDocument()
 
     await userEvent.click(await screen.findByText(/^Disponivel Teste/))
-    await waitFor(() => expect(screen.queryByText("Selecionar...")).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText("Escolher leitor")).not.toBeInTheDocument())
+    expect(screen.getByText("Disponivel Teste", { selector: "span.truncate" })).toBeInTheDocument()
+  })
+
+  it("should collapse a mass into a summary and expand it again", async () => {
+    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
+    fireEvent.click(screen.getByText("30"))
+
+    fireEvent.click(await screen.findByRole("button", { name: /Concluir missa/i }))
+    expect(screen.queryByRole("button", { name: /Concluir missa/i })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: /Editar missa das 07:00/i }))
+    expect(await screen.findByRole("button", { name: /Concluir missa/i })).toBeInTheDocument()
+  })
+
+  it("should offer to edit the existing day instead of creating a duplicate", async () => {
+    ;(makeCheckMassExists as jest.Mock).mockReturnValue({
+      execute: jest.fn().mockResolvedValue([{ id: "db-1", time: "19:00:00" }])
+    })
+    const onEditExisting = jest.fn()
+
+    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} onEditExisting={onEditExisting} />)
+    fireEvent.click(screen.getByText("30"))
+
+    fireEvent.click(await screen.findByRole("button", { name: /Editar a escala do dia 30/i }))
+    expect(onEditExisting).toHaveBeenCalledWith("2026-04-30")
+    expect(screen.queryByText(/Adicionar outro Horário/i)).not.toBeInTheDocument()
   })
 })

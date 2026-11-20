@@ -11,7 +11,7 @@ import { SectionTitle } from "@/shared/ui/SectionTitle"
 import { MyScheduleWidget } from "@/features/schedule/ui/MyScheduleWidget"
 import { BirthdayCard } from "@/shared/ui/BirthdayCard"
 import { Button } from "@/shared/ui/button"
-import { ChevronLeft, ChevronRight, Loader2, Plus, Plane, CheckCircle, FileText, Share2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, Plus, Plane, CheckCircle, FileText, Share2, X } from "lucide-react"
 import { addMonths, format, subMonths, isToday, parseISO, isValid, startOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { roleLabel } from "@/shared/constants/roles"
@@ -33,6 +33,7 @@ import { scheduleErrorMessage } from "@/features/schedule/scheduleErrorMessage"
 import { usePullToRefresh } from "@/shared/hooks/usePullToRefresh"
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,
@@ -939,18 +940,38 @@ export default function Home() {
                       Adicionar Dia
                     </Button>
                   } />
-                  <SheetContent side="right" className="w-full sm:max-w-lg border-l-stone-100 p-0 flex flex-col">
-                    <div className="px-6 pt-6 pb-2">
-                      <SheetHeader className="mb-0">
-                        <SheetTitle className="text-stone-800 uppercase tracking-tighter font-black text-xl">
-                          {scheduleToEdit ? "Editar Escala" : `Escala de ${format(currentDate, "MMMM yyyy", { locale: ptBR })}`}
+                  <SheetContent side="right" showCloseButton={false} className="w-full sm:max-w-lg border-l-stone-100 bg-[#FAF5E6] p-0 flex flex-col gap-0">
+                    <div className="flex shrink-0 items-start justify-between rounded-b-[28px] bg-[#322113] pb-5 pl-5 pr-4 pt-5">
+                      <SheetHeader className="gap-1 p-0">
+                        <span className="text-[11px] font-bold tracking-[0.12em] text-[#E8C76A]">
+                          {scheduleToEdit ? "EDITAR ESCALA" : "NOVA ESCALA"}
+                        </span>
+                        <SheetTitle className="text-[26px] font-extrabold capitalize leading-tight tracking-tight text-[#FFF8E8]">
+                          {scheduleToEdit && scheduleToEdit[0]?.date && isValid(new Date(scheduleToEdit[0].date + 'T00:00:00'))
+                            ? format(new Date(scheduleToEdit[0].date + 'T00:00:00'), "d 'de' MMMM", { locale: ptBR })
+                            : format(currentDate, "MMMM yyyy", { locale: ptBR })}
                         </SheetTitle>
                       </SheetHeader>
+                      <SheetClose
+                        render={
+                          <button
+                            type="button"
+                            aria-label="Fechar"
+                            className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FFF8E8]/15 text-[#FFF8E8] transition-colors hover:bg-[#FFF8E8]/25"
+                          />
+                        }
+                      >
+                        <X className="h-5 w-5" strokeWidth={2.2} />
+                      </SheetClose>
                     </div>
                     <div className="flex-1 overflow-hidden">
                       <ScheduleForm 
                         currentMonth={currentDate}
                         initialData={scheduleToEdit}
+                        onEditExisting={(d) => {
+                          const items = schedule.filter((i: any) => i.date === d)
+                          if (items.length > 0) setScheduleToEdit(items)
+                        }}
                         onSuccess={async () => {
                           await loadSchedule(currentDate, profile?.role === "admin", true)
                         }}

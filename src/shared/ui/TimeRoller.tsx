@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronUp, ChevronDown } from "lucide-react"
+import { Minus, Plus } from "lucide-react"
 
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"))
 const MINUTES = ["00", "10", "20", "30", "40", "50"]
@@ -12,36 +12,28 @@ interface TimeRollerProps {
 }
 
 function StepColumn({
-  items,
   value,
+  label,
   onUp,
   onDown,
 }: {
-  items: string[]
   value: string
+  label: string
   onUp: () => void
   onDown: () => void
 }) {
+  const btn =
+    "flex h-11 w-11 items-center justify-center rounded-full border border-[#D9CDB8] bg-white text-[#322113] transition-all hover:bg-[#FAF5E6] active:scale-90"
   return (
-    <div className="flex flex-col items-center gap-0.5">
-      <button
-        type="button"
-        onClick={onUp}
-        className="p-1 text-stone-300 hover:text-stone-700 active:scale-90 transition-all rounded-lg hover:bg-stone-100"
-      >
-        <ChevronUp className="h-3 w-3" />
+    <div className="flex items-center gap-1.5">
+      <button type="button" aria-label={`Diminuir ${label}`} onClick={onDown} className={btn}>
+        <Minus className="h-[18px] w-[18px]" strokeWidth={2.2} />
       </button>
-
-      <span className="text-sm font-black text-stone-800 tabular-nums w-7 text-center leading-none select-none">
+      <span className="w-10 select-none text-center text-[30px] font-extrabold tabular-nums leading-none tracking-tight">
         {value}
       </span>
-
-      <button
-        type="button"
-        onClick={onDown}
-        className="p-1 text-stone-300 hover:text-stone-700 active:scale-90 transition-all rounded-lg hover:bg-stone-100"
-      >
-        <ChevronDown className="h-3 w-3" />
+      <button type="button" aria-label={`Aumentar ${label}`} onClick={onUp} className={btn}>
+        <Plus className="h-[18px] w-[18px]" strokeWidth={2.2} />
       </button>
     </div>
   )
@@ -56,24 +48,18 @@ export function TimeRoller({ value, onChange, prefix }: TimeRollerProps) {
   const mIdx = MINUTES.indexOf(m)
 
   return (
-    <div className="inline-flex items-center gap-2 bg-white rounded-xl border border-stone-200 shadow-sm px-3 py-1">
-      {prefix && (
-        <span className="text-sm font-black text-stone-700 leading-none select-none pr-1 border-r border-stone-100">
-          {prefix}
-        </span>
-      )}
+    <div className="inline-flex items-center gap-2">
+      {prefix && <span className="pr-1 text-sm font-black text-stone-700">{prefix}</span>}
       <StepColumn
-        items={HOURS}
         value={h}
+        label="hora"
         onUp={() => onChange(`${HOURS[(hIdx + 1) % 24]}:${m}`)}
         onDown={() => onChange(`${HOURS[(hIdx - 1 + 24) % 24]}:${m}`)}
       />
-
-      <span className="text-xl font-black text-stone-300 mb-0.5 select-none">:</span>
-
+      <span aria-hidden="true" className="mb-1 select-none text-[28px] font-extrabold text-[#B8A98E]">:</span>
       <StepColumn
-        items={MINUTES}
         value={m}
+        label="minutos"
         onUp={() => onChange(`${h}:${MINUTES[(mIdx + 1) % MINUTES.length]}`)}
         onDown={() => onChange(`${h}:${MINUTES[(mIdx - 1 + MINUTES.length) % MINUTES.length]}`)}
       />
