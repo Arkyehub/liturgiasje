@@ -17,3 +17,11 @@ Recuperação: `migration_archive_profiles_rollback.sql` remove tudo o que a mig
 ## Saúde do banco (proposta v1.43, não aplicada)
 
 `migration_v143_db_health.sql` (índices em chaves estrangeiras, revogação de `handle_new_user()` e policies com `(select auth.uid())`) e o rollback `migration_v143_db_health_rollback.sql` foram validados aplicando sobre `fixture-preview-policies.sql` + `migration_archive_profiles.sql`, repetindo a migration (idempotência), rodando `preview-archived-actor.sql`, `unarchive.sql`, `write-boundary.sql`, `slot-actions.sql`, `edit-revision.sql`, `create-delete.sql`, `batch-success.sql`, `privileges.sql` e `new-rpc-security.sql`, e comparando as policies antes e depois do rollback. `ops/2026-11-cron-auth-fix.sql` é um roteiro para o Production (segredo via Vault), sem valores.
+
+## Limpeza da tabela `users` (v1.44) e Storage (v1.45)
+
+Aplicadas no **Preview** em 20/11/2026 (v143, v144 e v145, nessa ordem). **Production: não aplicadas.**
+
+- `legacy-users-cleanup.sql` testa a v1.44 (inclui linhas órfãs, como no Preview: 1 em `unavailable_dates` e 2 em `announcement_views`), a idempotência e o rollback.
+- `storage-hardening.sql` testa a v1.45 com o estado de policies do Production (11), papéis `authenticated`/`anon` e o rollback dos dois ambientes (`migration_v145_storage_hardening_rollback_production.sql` e `_preview.sql`). Prova que leitor comum não altera mídia do mural nem avatar alheio, e que o avatar continua gravável na pasta do **id do perfil** (como o app faz) e na do id de login (formato antigo).
+- Ambos rodam sobre `fixture.sql` + `schema.sql` + `fixture-preview-policies.sql` + `migration_archive_profiles.sql`, cada um em banco novo.
