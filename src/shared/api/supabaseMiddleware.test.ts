@@ -27,3 +27,17 @@ test.each([
   expect(createServerClient).not.toHaveBeenCalled()
   expect(getUser).not.toHaveBeenCalled()
 })
+
+test.each(['serviceworker', 'script', 'manifest', 'image', 'style', 'font'])(
+  'never refreshes the session for %s requests (they race with the browser refresh token)',
+  async (dest) => {
+    await updateSession(new NextRequest('http://localhost:3000/sw.js', { headers: { 'sec-fetch-dest': dest } }))
+    expect(createServerClient).not.toHaveBeenCalled()
+    expect(getUser).not.toHaveBeenCalled()
+  }
+)
+
+test.each(['document', 'empty'])('still refreshes the session for %s requests (pages and data calls)', async (dest) => {
+  await updateSession(new NextRequest('http://localhost:3000/perfil', { headers: { 'sec-fetch-dest': dest } }))
+  expect(getUser).toHaveBeenCalledTimes(1)
+})
