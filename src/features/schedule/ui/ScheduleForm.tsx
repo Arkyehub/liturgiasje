@@ -499,7 +499,6 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   if (!date) footerSummary = "Escolha o dia da escala para começar."
   else if (blockedByExisting) footerSummary = "Escolha um dia sem escala para continuar."
   else if (hasAnyTimeConflict) footerSummary = <strong className="font-bold text-[#A23F06]">Corrija os horários repetidos para salvar.</strong>
-  else if (needsDescriptionCount > 0) footerSummary = <strong className="font-bold text-[#A23F06]">{needsDescriptionCount === 1 ? "Missa sem funções precisa de descrição para salvar." : "Missas sem funções precisam de descrição para salvar."}</strong>
   else {
     footerSummary = (
       <>
@@ -932,13 +931,18 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
 
                   <Button
                     type="button"
-                    disabled={timeConflict(sess)}
+                    disabled={timeConflict(sess) || (sess.slots.length === 0 && !sess.description.trim())}
                     onClick={() => updateSessionField(sess.tempId, 'collapsed', true)}
                     className="h-[52px] w-full gap-2 rounded-2xl bg-[#322113] text-[15px] font-extrabold text-[#FFF8E8] hover:bg-[#241709] disabled:bg-[#EFE8D6] disabled:text-[#6B5D50] disabled:opacity-100"
                   >
                     <Check className="h-[18px] w-[18px]" strokeWidth={2.6} />
                     Concluir missa
                   </Button>
+                  {sess.slots.length === 0 && !sess.description.trim() && !timeConflict(sess) && (
+                    <p role="status" className="text-center text-xs font-bold text-[#A23F06]">
+                      Missa sem funções precisa de descrição para ser concluída.
+                    </p>
+                  )}
                 </section>
               )
             })}

@@ -194,6 +194,7 @@ describe("ScheduleForm Validation", () => {
     render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
     fireEvent.click(screen.getByText("30"))
 
+    await userEvent.type(await screen.findByLabelText(/Descrição da missa/), "Missa da Catequese")
     fireEvent.click(await screen.findByRole("button", { name: /Concluir missa/i }))
     expect(screen.queryByRole("button", { name: /Concluir missa/i })).not.toBeInTheDocument()
 
@@ -251,15 +252,16 @@ describe("ScheduleForm Validation", () => {
     render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
     fireEvent.click(screen.getByText("30"))
 
-    // Missa sem funções e sem descrição: bloqueia
-    expect(await screen.findByText(/Missa sem funções precisa de descrição/)).toBeInTheDocument()
-    expect(screen.getAllByText(/precisa de (uma )?descrição/)).toHaveLength(1) // um único aviso
+    // Missa sem funções e sem descrição: não dá para concluir a missa (aviso único, no card)
+    expect(await screen.findByText(/precisa de descrição para ser concluída/)).toBeInTheDocument()
+    expect(screen.getAllByText(/precisa de (uma )?descrição/)).toHaveLength(1)
+    expect(screen.getByRole("button", { name: /Concluir missa/ })).toBeDisabled()
     expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled()
 
-    // Com descrição, salva sem nenhuma função, mas só depois de concluir a missa
+    // Com descrição, conclui e salva sem nenhuma função
     await userEvent.type(screen.getByLabelText(/Descrição da missa/), "Missa da Catequese")
-    expect(await screen.findByText(/1 missa aberta/)).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled()
+    expect(screen.queryByText(/precisa de descrição para ser concluída/)).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Concluir missa/ })).toBeEnabled()
     await userEvent.click(screen.getByRole("button", { name: /Concluir missa/ }))
     await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled())
     await userEvent.click(screen.getByRole("button", { name: /Editar missa das/ }))
