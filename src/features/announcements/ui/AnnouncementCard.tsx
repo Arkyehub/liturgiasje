@@ -163,6 +163,10 @@ export function AnnouncementCard({
   currentUserId,
 }: AnnouncementProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  // Aviso ainda não lido: fica sempre aberto e só fecha depois de "Confirmar Leitura".
+  // Rascunhos (admin) e trocas não entram na regra.
+  const mustStayOpen = !!isLoggedIn && !isRead && type === 'Aviso' && isPublished
+  const open = mustStayOpen || isExpanded
   const [activeImageIndex, setActiveImageIndex] = useState<number | null>(null)
   
   const handleShare = (e: React.MouseEvent) => {
@@ -185,7 +189,7 @@ export function AnnouncementCard({
     <Card id={`ann-${id}`} className={`overflow-hidden rounded-[20px] p-0 gap-0 transition-all duration-500 ${!isPublished && isAdmin
         ? "border-2 border-orange-500 ring-2 ring-orange-100 bg-white"
         : shouldShowGlow
-          ? `${isExpanded ? "border-amber-200 bg-white shadow-sm" : "border-amber-300 bg-white shadow-[0_4px_14px_rgba(50,33,19,0.08)]"}`
+          ? `${open ? "border-amber-200 bg-white shadow-sm" : "border-amber-300 bg-white shadow-[0_4px_14px_rgba(50,33,19,0.08)]"}`
           : isRead ? "border-[#E9DFCB] bg-[#F4EEDD] shadow-none" : "border-[#E9DFCB] bg-white shadow-sm"
       }`}>
       {/* Barra de Ações Administrativas (Admin Only) */}
@@ -314,16 +318,22 @@ export function AnnouncementCard({
           </div>
         </div>
       )}
-      <Accordion>
+      <Accordion
+        value={open ? ["item-1"] : []}
+        onValueChange={(value) => {
+          if (mustStayOpen) return
+          setIsExpanded(value.length > 0)
+        }}
+      >
         <AccordionItem
           value="item-1"
           className="border-none"
-          onOpenChange={setIsExpanded}
           disabled={!isLoggedIn}
         >
           <AccordionTrigger
-            className={`px-4 py-3 hover:no-underline ${!isLoggedIn ? 'cursor-default pointer-events-none' : ''}`}
-            hideChevron={!isLoggedIn}
+            className={`px-4 py-3 hover:no-underline ${!isLoggedIn || mustStayOpen ? 'cursor-default pointer-events-none' : ''}`}
+            hideChevron={!isLoggedIn || mustStayOpen}
+            tabIndex={mustStayOpen ? -1 : undefined}
           >
             <div className="flex items-center gap-2 text-left w-full pr-2">
               <div className={cn(
