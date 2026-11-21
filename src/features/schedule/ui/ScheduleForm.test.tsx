@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { ScheduleForm } from "./ScheduleForm"
 import { makeCheckMassExists, makeGetProfilesUsage, makeListOccupiedDatesForMonth, makeListSchedulesForMonth } from "@/main/factories/usecases/schedule"
@@ -276,6 +277,55 @@ describe("ScheduleForm Validation", () => {
       await waitFor(() => expect(occupied).toHaveBeenCalledWith("2026-04"))
       rerender(<ScheduleForm currentMonth={new Date(2026, 4, 1)} onSuccess={jest.fn()} onClose={jest.fn()} />)
       await waitFor(() => expect(occupied).toHaveBeenCalledWith("2026-05"))
+    })
+  })
+
+  describe("de criar para editar o dia existente (como no page.tsx)", () => {
+    const existing = [{ id: "db-1", time: "07:00:00" }]
+    const editData = (d: string) => [{
+      id: "db-1", date: d, time: "07:00:00", scheduleRevision: 1,
+      slots: [{ id: "s1", role: "C", profileId: "p1", readerName: "Leitor Teste" }]
+    }]
+
+    function Host({ onClose = jest.fn() }: { onClose?: () => void }) {
+      const [init, setInit] = useState<any>(null)
+      return (
+        <ScheduleForm
+          currentMonth={mockCurrentMonth}
+          initialData={init}
+          onEditExisting={(d) => setInit(editData(d))}
+          onSuccess={jest.fn()}
+          onClose={onClose}
+        />
+      )
+    }
+
+    beforeEach(() => {
+      ;(makeCheckMassExists as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue(existing) })
+    })
+
+    it("ao clicar em Editar no dia que já tem escala, abre a edição das missas do dia", async () => {
+      render(<Host />)
+      fireEvent.click(screen.getByText("30"))
+      fireEvent.click(await screen.findByRole("button", { name: /Editar a escala do dia 30/i }))
+
+      expect(await screen.findByRole("button", { name: /Editar missa das 07:00/i })).toBeInTheDocument()
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+      expect(screen.queryByText(/Horário repetido/)).not.toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled()
+    })
+
+    it("em edição o dia fica travado: trocar de data não move a missa nem cria conflito falso", async () => {
+      render(<Host />)
+      fireEvent.click(screen.getByText("30"))
+      fireEvent.click(await screen.findByRole("button", { name: /Editar a escala do dia 30/i }))
+      await screen.findByRole("button", { name: /Editar missa das 07:00/i })
+
+      const other = screen.getByRole("button", { name: /^27 de abril/i })
+      expect(other).toBeDisabled()
+      fireEvent.click(other)
+      expect(screen.queryByText(/Horário repetido/)).not.toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled()
     })
   })
 })
