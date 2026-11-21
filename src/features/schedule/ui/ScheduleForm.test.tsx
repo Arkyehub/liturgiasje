@@ -253,11 +253,16 @@ describe("ScheduleForm Validation", () => {
 
     // Missa sem funções e sem descrição: bloqueia
     expect(await screen.findByText(/Missa sem funções precisa de descrição/)).toBeInTheDocument()
+    expect(screen.getAllByText(/precisa de (uma )?descrição/)).toHaveLength(1) // um único aviso
     expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled()
 
-    // Com descrição, salva sem nenhuma função
+    // Com descrição, salva sem nenhuma função, mas só depois de concluir a missa
     await userEvent.type(screen.getByLabelText(/Descrição da missa/), "Missa da Catequese")
+    expect(await screen.findByText(/1 missa aberta/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled()
+    await userEvent.click(screen.getByRole("button", { name: /Concluir missa/ }))
     await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled())
+    await userEvent.click(screen.getByRole("button", { name: /Editar missa das/ }))
 
     // Declarou uma função: precisa de leitor
     await userEvent.click(await screen.findByRole("button", { name: /^Leitor$/ }))
@@ -267,6 +272,8 @@ describe("ScheduleForm Validation", () => {
     // Com leitor escolhido, libera
     await userEvent.click(await screen.findByText("Escolher leitor"))
     await userEvent.click(await screen.findByText(/^Disponivel Teste/))
+    expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled() // ainda aberta
+    await userEvent.click(screen.getByRole("button", { name: /Concluir missa/ }))
     await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled())
   })
 
@@ -287,13 +294,14 @@ describe("ScheduleForm Validation", () => {
       await userEvent.click(await screen.findByRole("button", { name: /^Leitor$/ }))
       await userEvent.click(await screen.findByText("Escolher leitor"))
       await userEvent.click(await screen.findByText(/^Leitor Um/))
+      await userEvent.click(screen.getByRole("button", { name: /Concluir missa/ }))
       await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled())
 
       fireEvent.click(screen.getByRole("button", { name: "Alterar data" }))
       fireEvent.click(screen.getByText("30"))
 
       await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled())
-      expect(screen.getByText("Escolher leitor")).toBeInTheDocument()
+      expect(screen.getAllByText(/1 função sem leitor/).length).toBeGreaterThan(0)
       expect(toast.warning).toHaveBeenCalledWith(expect.stringMatching(/Leitor Um/))
     })
 

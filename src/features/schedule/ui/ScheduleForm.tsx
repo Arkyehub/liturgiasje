@@ -398,6 +398,10 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
     }
 
     // Validações de campos
+    if (sessions.some(sess => !sess.collapsed)) {
+      toast.error('Conclua todas as missas antes de salvar.')
+      return
+    }
     for (const sess of sessions) {
       if (!sess.time) {
         toast.error("Preencha o horário de todas as missas")
@@ -487,7 +491,9 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   const hasAnyTimeConflict = sessions.some(hasTimeConflict)
   const hasUnavailableChosen = !initialData && sessions.some(s => s.slots.some(slot => !!slot.profileId && unavailableUserIds.includes(slot.profileId)))
   const needsDescriptionCount = sessions.filter(s => s.slots.length === 0 && !s.description.trim()).length
-  const canSave = !isSaving && !!date && !blockedByExisting && !hasAnyTimeConflict && !hasUnavailableChosen && sessions.length > 0 && needsDescriptionCount === 0 && !sessions.some(s => !s.time || s.slots.some(slot => !slot.profileId))
+  // Só salva com todas as missas concluídas (cards recolhidos pelo "Concluir missa").
+  const openCount = sessions.filter(s => !s.collapsed).length
+  const canSave = !isSaving && !!date && !blockedByExisting && !hasAnyTimeConflict && !hasUnavailableChosen && sessions.length > 0 && needsDescriptionCount === 0 && openCount === 0 && !sessions.some(s => !s.time || s.slots.some(slot => !slot.profileId))
 
   let footerSummary: React.ReactNode
   if (!date) footerSummary = "Escolha o dia da escala para começar."
@@ -506,6 +512,16 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
             </strong>
             <br />
             Escolha um leitor para cada função para salvar.
+          </>
+        )}
+        {missingCount === 0 && openCount > 0 && (
+          <>
+            {" · "}
+            <strong className="font-bold text-[#A23F06]">
+              {openCount === 1 ? "1 missa aberta" : `${openCount} missas abertas`}
+            </strong>
+            <br />
+            Toque em "Concluir missa" para salvar.
           </>
         )}
       </>
@@ -716,9 +732,9 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                       ) : (
                         <span className={cn(
                           "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold",
-                          sess.slots.length === 0 && sess.description.trim() ? "bg-[#F4EEDD] text-[#6B5D50]" : "bg-[#FDEBDD] text-[#A23F06]"
+                          sess.slots.length === 0 ? "bg-[#F4EEDD] text-[#6B5D50]" : "bg-[#FDEBDD] text-[#A23F06]"
                         )}>
-                          {sess.slots.length === 0 ? (sess.description.trim() ? "Sem funções" : "Falta descrição") : sessMissing === 1 ? "1 função sem leitor" : `${sessMissing} funções sem leitor`}
+                          {sess.slots.length === 0 ? "Sem funções" : sessMissing === 1 ? "1 função sem leitor" : `${sessMissing} funções sem leitor`}
                         </span>
                       )}
                       <span className="flex-1" />
@@ -788,7 +804,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                   )}
 
                   <div className="space-y-1.5">
-                    <label htmlFor={`desc-${sess.tempId}`} className="pl-0.5 text-xs font-bold text-[#6B5D50]">{sess.slots.length === 0 ? "Descrição da missa (obrigatória sem funções)" : "Celebração (opcional)"}</label>
+                    <label htmlFor={`desc-${sess.tempId}`} className="pl-0.5 text-xs font-bold text-[#6B5D50]">{sess.slots.length === 0 ? "Descrição da missa" : "Celebração (opcional)"}</label>
                     <Input
                       id={`desc-${sess.tempId}`}
                       placeholder="Ex.: 1º Domingo do Advento"
@@ -797,9 +813,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                       aria-required={sess.slots.length === 0}
                       className="h-12 rounded-[14px] border-[#E9DFCB] bg-[#FAF5E6] px-3.5 text-[15px] font-semibold placeholder:font-normal placeholder:text-[#6B5D50]"
                     />
-                    {sess.slots.length === 0 && !sess.description.trim() && (
-                      <p className="pl-0.5 text-xs font-bold text-[#A23F06]">Missa sem funções precisa de uma descrição, como "Missa da Catequese".</p>
-                    )}
+
                   </div>
 
                   {/* Funções da missa */}
