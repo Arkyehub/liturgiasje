@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { AnnouncementCard } from "@/features/announcements/ui/AnnouncementCard"
 import { ScheduleCard } from "@/features/schedule/ui/ScheduleCard"
 import { hasAnyMassPreference } from "@/features/profile/lib/massPreferences"
+import { groupAnnouncements, PUBLISH_PIN_MS } from "@/features/announcements/lib/groupAnnouncements"
 import { ReadAnnouncementsGroup } from "@/features/announcements/ui/ReadAnnouncementsGroup"
 import { MassSummaryGrid } from "@/features/schedule/ui/MassSummaryGrid"
 import { PastDaysGroup } from "@/features/schedule/ui/PastDaysGroup"
@@ -137,6 +138,16 @@ export default function Home() {
   const [isUnconfirmedAlertOpen, setIsUnconfirmedAlertOpen] = useState(false)
   const [shareSwapOnRequest, setShareSwapOnRequest] = useState(true)
   const [isReadGroupOpen, setIsReadGroupOpen] = useState(false)
+  // Recados recém-publicados pelo admin: id -> instante (ms) em que voltam a poder ir para o grupo de lidos
+  const [pinnedUntil, setPinnedUntil] = useState<Record<string, number>>({})
+  const [nowTick, setNowTick] = useState(() => Date.now())
+  const pendingCreatePinRef = useRef<Set<string> | null>(null)
+  const pinAnnouncement = useCallback((id: string) => {
+    const until = Date.now() + PUBLISH_PIN_MS
+    setNowTick(Date.now())
+    setPinnedUntil((prev) => ({ ...prev, [id]: until }))
+    setTimeout(() => setNowTick(Date.now()), PUBLISH_PIN_MS + 50)
+  }, [])
   const [isConfirmingPending, setIsConfirmingPending] = useState(false)
 
   // Lista de escalas do usuário logado que não foram confirmadas
@@ -552,9 +563,21 @@ export default function Home() {
   }
 
   // Recados já lidos (só vale para quem está logado) ficam agrupados; os não lidos ganham destaque
-  const isReadByMe = (ann: any) => !!user && !!ann.isRead
-  const unreadAnnouncements = announcements.filter((a: any) => !isReadByMe(a))
-  const readAnnouncements = announcements.filter(isReadByMe)
+  // Rascunhos e recados recém-publicados (30s) ficam fora do grupo para o admin conferir
+  const { visible: unreadAnnouncements, read: readAnnouncements } = groupAnnouncements(
+    announcements as any[],
+    !!user,
+    new Set(Object.keys(pinnedUntil).filter((id) => pinnedUntil[id] > nowTick))
+  )
+
+  useEffect(() => {
+    const before = pendingCreatePinRef.current
+    if (!before) return
+    const created = (announcements as any[]).filter((a) => !before.has(a.id) && a.isPublished !== false)
+    if (created.length === 0) return
+    pendingCreatePinRef.current = null
+    created.forEach((a) => pinAnnouncement(a.id))
+  }, [announcements, pinAnnouncement])
 
   const renderAnnouncement = (ann: any) => (
                   <AnnouncementCard
@@ -580,6 +603,7 @@ export default function Home() {
       onUpdate={async (id, data) => {
         try {
           await updateAnnouncement(id, data)
+          if (data?.isPublished === true) pinAnnouncement(id)
           toast.success("Aviso atualizado!")
           if (profile) await loadAnnouncements(profile.id, true)
         } catch (error) {
@@ -803,9 +827,11 @@ export default function Home() {
                               ...data,
                               expiresAt: data.expiresAt ? data.expiresAt.toISOString() : undefined
                             })
+                            if (data.isPublished !== false && announcementToEdit && announcementToEdit.isPublished === false) pinAnnouncement(data.id)
                             toast.success("Aviso atualizado!")
                           } else {
                             // Criação
+                            if (data.isPublished !== false) pendingCreatePinRef.current = new Set((announcements as any[]).map((x) => x.id))
                             await createAnnouncement({ 
                               ...data, 
                               type: 'Aviso',

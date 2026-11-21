@@ -84,3 +84,19 @@ describe("AnnouncementCard — visual novo do mural", () => {
     expect(screen.queryByRole("button", { name: /Confirmar leitura/i })).not.toBeInTheDocument()
   })
 })
+
+describe("AnnouncementCard — rascunho com anel laranja", () => {
+  const ringOf = () => document.querySelector("article")!
+
+  it("rascunho do admin tem anel laranja, lido ou não", () => {
+    const { rerender } = render(<AnnouncementCard {...base} isRead={false} isPublished={false} isAdmin />)
+    expect(ringOf()).toHaveClass("border-orange-500", "ring-orange-100")
+    rerender(<AnnouncementCard {...base} isRead={true} isPublished={false} isAdmin />)
+    expect(ringOf()).toHaveClass("border-orange-500", "ring-orange-100")
+  })
+
+  it("publicado não tem anel laranja", () => {
+    render(<AnnouncementCard {...base} isRead={true} isAdmin />)
+    expect(ringOf()).not.toHaveClass("border-orange-500")
+  })
+})

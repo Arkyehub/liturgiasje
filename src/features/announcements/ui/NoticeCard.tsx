@@ -175,8 +175,8 @@ export function NoticeCard({
       id={`ann-${id}`}
       className={cn(
         "overflow-hidden transition-all duration-500",
-        isRead ? "rounded-[20px] border border-[#E9DFCB] bg-[#F4EEDD]" : "rounded-3xl bg-white shadow-[0_6px_22px_rgba(50,33,19,0.07)]",
-        !isRead && (isDraft ? "border-2 border-orange-500 ring-2 ring-orange-100" : "border border-[#E9DFCB]")
+        isRead && !isDraft ? "rounded-[20px] border border-[#E9DFCB] bg-[#F4EEDD]" : "rounded-3xl bg-white shadow-[0_6px_22px_rgba(50,33,19,0.07)]",
+        isDraft ? "border-2 border-orange-500 ring-2 ring-orange-100" : !isRead && "border border-[#E9DFCB]"
       )}
     >
       {isAdmin && (
