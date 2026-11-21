@@ -114,6 +114,7 @@ export default function Home() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [isScheduleSheetOpen, setIsScheduleSheetOpen] = useState(false)
   const [scheduleToEdit, setScheduleToEdit] = useState<any | null>(null)
+  const [scheduleFormDate, setScheduleFormDate] = useState("")
   const [scheduleToDelete, setScheduleToDelete] = useState<string[] | null>(null)
   const [isDeletingSchedule, setIsDeletingSchedule] = useState(false)
   const [swapTargetSlot, setSwapTargetSlot] = useState<any | null>(null)
@@ -955,7 +956,10 @@ export default function Home() {
                     setIsScheduleSheetOpen(open)
                     // Fechar pelo X, pelo fundo ou pelo gesto de voltar também sai do modo edição;
                     // senão o próximo "Adicionar Dia" reabriria o dia antigo.
-                    if (!open) setScheduleToEdit(null)
+                    if (!open) {
+                      setScheduleToEdit(null)
+                      setScheduleFormDate("")
+                    }
                   }}
                 >
                   <SheetTrigger render={
@@ -974,9 +978,13 @@ export default function Home() {
                           {scheduleToEdit ? "EDITAR ESCALA" : "NOVA ESCALA"}
                         </span>
                         <SheetTitle className="text-[26px] font-extrabold capitalize leading-tight tracking-tight text-[#FFF8E8]">
-                          {scheduleToEdit && scheduleToEdit[0]?.date && isValid(new Date(scheduleToEdit[0].date + 'T00:00:00'))
-                            ? format(new Date(scheduleToEdit[0].date + 'T00:00:00'), "d 'de' MMMM", { locale: ptBR })
-                            : format(currentDate, "MMMM yyyy", { locale: ptBR })}
+                          {(() => {
+                            const chosen = scheduleFormDate || scheduleToEdit?.[0]?.date || ""
+                            const d = chosen ? new Date(chosen + 'T00:00:00') : null
+                            return d && isValid(d)
+                              ? format(d, "d 'de' MMMM", { locale: ptBR })
+                              : format(currentDate, "MMMM yyyy", { locale: ptBR })
+                          })()}
                         </SheetTitle>
                       </SheetHeader>
                       <SheetClose
@@ -995,6 +1003,7 @@ export default function Home() {
                       <ScheduleForm 
                         currentMonth={currentDate}
                         initialData={scheduleToEdit}
+                        onDateChange={setScheduleFormDate}
                         onEditExisting={(d) => {
                           const items = schedule.filter((i: any) => i.date === d)
                           if (items.length > 0) setScheduleToEdit(items)
@@ -1005,6 +1014,7 @@ export default function Home() {
                         onClose={() => {
                           setIsScheduleSheetOpen(false)
                           setScheduleToEdit(null)
+                          setScheduleFormDate("")
                         }}
                       />
                     </div>

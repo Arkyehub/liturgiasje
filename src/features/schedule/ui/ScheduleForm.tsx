@@ -42,6 +42,8 @@ interface ScheduleFormProps {
   currentMonth: Date
   onSuccess: () => void
   onClose: () => void
+  /** Avisa o dia escolhido (yyyy-MM-dd, ou "" sem escolha) para o título do sheet. */
+  onDateChange?: (date: string) => void
   initialData?: any
   /** Abre a edição do dia que já tem escala (aviso de duplicidade). */
   onEditExisting?: (date: string) => void
@@ -65,8 +67,20 @@ interface Session {
   collapsed?: boolean
 }
 
-export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, onEditExisting }: ScheduleFormProps) {
+export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, onEditExisting, onDateChange }: ScheduleFormProps) {
   const [date, setDate] = useState("")
+  // Depois de escolher o dia, o calendário some; o lápis reabre. Evita trocar de dia sem querer.
+  const [calendarOpen, setCalendarOpen] = useState(!initialData)
+  const onDateChangeRef = useRef(onDateChange)
+  useEffect(() => {
+    onDateChangeRef.current = onDateChange
+  })
+  useEffect(() => {
+    onDateChangeRef.current?.(date)
+  }, [date])
+  useEffect(() => {
+    setCalendarOpen(!initialData)
+  }, [initialData])
   const [sessions, setSessions] = useState<Session[]>([])
   const [removedMasses, setRemovedMasses] = useState<{ id: string; expectedRevision?: number }[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
@@ -561,7 +575,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
         <div className="space-y-3.5">
           <StepTitle n={1}>Dia da escala</StepTitle>
 
-          {(() => {
+          {calendarOpen ? (() => {
             const year = currentMonth.getFullYear()
             const month = currentMonth.getMonth()
             const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -599,6 +613,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                         onClick={() => {
                           if (initialData) return
                           setDate(fullDate)
+                          setCalendarOpen(false)
                           if (sessions.length === 0) setSessions([createEmptySession()])
                         }}
                         className={cn(
@@ -627,13 +642,23 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                 )}
               </div>
             )
-          })()}
+          })() : null}
 
-          {dateLong && (
-            <p className="flex items-center gap-2 text-[15px] font-bold text-[#322113] first-letter:uppercase">
-              <CalendarDays className="h-[18px] w-[18px] shrink-0" />
-              {dateLong}
-            </p>
+          {!calendarOpen && date && dateLong && (
+            <div className="flex min-h-14 items-center gap-3 rounded-[22px] border border-[#E9DFCB] bg-white p-2 pl-4">
+              <CalendarDays className="h-[18px] w-[18px] shrink-0 text-[#322113]" />
+              <p className="min-w-0 flex-1 text-[16px] font-extrabold leading-tight text-[#322113] first-letter:uppercase">{dateLong}</p>
+              {!initialData && (
+                <button
+                  type="button"
+                  aria-label="Alterar data"
+                  onClick={() => setCalendarOpen(true)}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#E9DFCB] bg-[#FAF5E6] text-[#322113] transition-transform active:scale-95"
+                >
+                  <Pencil className="h-[18px] w-[18px]" />
+                </button>
+              )}
+            </div>
           )}
         </div>
 

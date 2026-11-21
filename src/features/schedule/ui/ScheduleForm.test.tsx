@@ -173,6 +173,23 @@ describe("ScheduleForm Validation", () => {
     expect(group).not.toHaveTextContent("Sem Preferencia")
   })
 
+  it("esconde o calendário ao escolher o dia, mostra o dia com lápis, e o lápis reabre", async () => {
+    const onDateChange = jest.fn()
+    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} onDateChange={onDateChange} />)
+    expect(screen.getByText("DOM")).toBeInTheDocument()
+    fireEvent.click(screen.getByText("30"))
+    expect(screen.queryByText("DOM")).not.toBeInTheDocument()
+    expect(screen.getByText(/Quinta-feira, 30 de abril/i)).toBeInTheDocument()
+    await waitFor(() => expect(onDateChange).toHaveBeenLastCalledWith("2026-04-30"))
+
+    await userEvent.click(screen.getByRole("button", { name: "Alterar data" }))
+    expect(screen.getByText("DOM")).toBeInTheDocument()
+    fireEvent.click(screen.getByText("29"))
+    expect(screen.queryByText("DOM")).not.toBeInTheDocument()
+    expect(screen.getByText(/Quarta-feira, 29 de abril/i)).toBeInTheDocument()
+    await waitFor(() => expect(onDateChange).toHaveBeenLastCalledWith("2026-04-29"))
+  })
+
   it("should collapse a mass into a summary and expand it again", async () => {
     render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
     fireEvent.click(screen.getByText("30"))
@@ -268,6 +285,7 @@ describe("ScheduleForm Validation", () => {
       await userEvent.click(await screen.findByText(/^Leitor Um/))
       await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled())
 
+      fireEvent.click(screen.getByRole("button", { name: "Alterar data" }))
       fireEvent.click(screen.getByText("30"))
 
       await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled())
@@ -285,6 +303,7 @@ describe("ScheduleForm Validation", () => {
       render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
 
       fireEvent.click(screen.getByText("29"))
+      fireEvent.click(screen.getByRole("button", { name: "Alterar data" }))
       fireEvent.click(screen.getByText("30"))
       await waitFor(() => expect(makeListUnavailableByDate).toHaveBeenCalledTimes(2))
       resolveA(["p1"]) // resposta do dia 29 chega depois da do dia 30
@@ -346,9 +365,10 @@ describe("ScheduleForm Validation", () => {
       fireEvent.click(await screen.findByRole("button", { name: /Editar a escala do dia 30/i }))
       await screen.findByRole("button", { name: /Editar missa das 07:00/i })
 
-      const other = screen.getByRole("button", { name: /^27 de abril/i })
-      expect(other).toBeDisabled()
-      fireEvent.click(other)
+      // Em edição o calendário fica recolhido e sem lápis: não há como trocar o dia.
+      expect(screen.queryByRole("button", { name: /^27 de abril/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole("button", { name: "Alterar data" })).not.toBeInTheDocument()
+      expect(screen.getByText(/Quinta-feira, 30 de abril/i)).toBeInTheDocument()
       expect(screen.queryByText(/Horário repetido/)).not.toBeInTheDocument()
       expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled()
     })
