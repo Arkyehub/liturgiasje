@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react"
 import { useAuth } from "@/shared/hooks/useAuth"
 import { makeUploadAvatar, makeUpdateProfile } from "@/main/factories/usecases/profiles"
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar"
-import { Button } from "@/shared/ui/button"
 import { ImageCropperModal } from "./ImageCropperModal"
 import { Camera, UserCircle, Loader2, Sparkles } from "lucide-react"
 import { toast } from "sonner"
@@ -33,6 +32,7 @@ export function ProfileImageEditor() {
         toast.success("Foto importada do Google!")
       } catch (error) {
         console.error(error)
+        toast.error("Não foi possível importar a foto do Google. Use o botão para tentar de novo.")
       }
     })()
   }, [user, profile, googleAvatarUrl, refreshProfile])
@@ -76,7 +76,7 @@ export function ProfileImageEditor() {
       await makeUpdateProfile().execute(profile.id, { avatarUrl: googleAvatarUrl })
       toast.success("Foto importada do Google!")
       await refreshProfile()
-    } catch (error) {
+    } catch {
       toast.error("Erro ao importar foto.")
     } finally {
       setIsUpdating(false)

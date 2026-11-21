@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { ScheduleForm } from "./ScheduleForm"
-import { makeCheckMassExists, makeCreateMassWithSlots, makeGetProfilesUsage, makeListOccupiedDatesForMonth, makeListSchedulesForMonth } from "@/main/factories/usecases/schedule"
+import { makeCheckMassExists, makeGetProfilesUsage, makeListOccupiedDatesForMonth, makeListSchedulesForMonth } from "@/main/factories/usecases/schedule"
 import { makeListProfiles, makeListUnavailableByDate } from "@/main/factories/usecases/profiles"
 import userEvent from "@testing-library/user-event"
 import { toast } from "sonner"
@@ -221,5 +221,61 @@ describe("ScheduleForm Validation", () => {
     await userEvent.click(await screen.findByText("Escolher leitor"))
     await userEvent.click(await screen.findByText(/^Disponivel Teste/))
     await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled())
+  })
+
+  describe("revalidação ao trocar de dia", () => {
+    const profiles = [{ id: "p1", fullName: "Leitor Um", role: "reader", createdAt: "", updatedAt: "" }]
+
+    beforeEach(() => {
+      ;(makeListProfiles as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue(profiles) })
+    })
+
+    it("remove da função o leitor que está indisponível no novo dia e impede salvar", async () => {
+      ;(makeListUnavailableByDate as jest.Mock).mockReturnValue({
+        execute: jest.fn((d: string) => Promise.resolve(d === "2026-04-30" ? ["p1"] : []))
+      })
+      render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
+
+      fireEvent.click(screen.getByText("29"))
+      await userEvent.click(await screen.findByRole("button", { name: /^Leitor$/ }))
+      await userEvent.click(await screen.findByText("Escolher leitor"))
+      await userEvent.click(await screen.findByText(/^Leitor Um/))
+      await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled())
+
+      fireEvent.click(screen.getByText("30"))
+
+      await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled())
+      expect(screen.getByText("Escolher leitor")).toBeInTheDocument()
+      expect(toast.warning).toHaveBeenCalledWith(expect.stringMatching(/Leitor Um/))
+    })
+
+    it("ignora resposta atrasada de um dia anterior", async () => {
+      let resolveA: (v: string[]) => void = () => {}
+      ;(makeListUnavailableByDate as jest.Mock).mockReturnValue({
+        execute: jest.fn((d: string) => d === "2026-04-29"
+          ? new Promise<string[]>(r => { resolveA = r })
+          : Promise.resolve([]))
+      })
+      render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
+
+      fireEvent.click(screen.getByText("29"))
+      fireEvent.click(screen.getByText("30"))
+      await waitFor(() => expect(makeListUnavailableByDate).toHaveBeenCalledTimes(2))
+      resolveA(["p1"]) // resposta do dia 29 chega depois da do dia 30
+      await new Promise(r => setTimeout(r, 30))
+
+      await userEvent.click(await screen.findByRole("button", { name: /^Leitor$/ }))
+      await userEvent.click(await screen.findByText("Escolher leitor"))
+      expect(screen.queryByText(/Não podem neste dia/)).not.toBeInTheDocument()
+    })
+
+    it("recarrega os dias ocupados quando o mês muda", async () => {
+      const occupied = jest.fn().mockResolvedValue([])
+      ;(makeListOccupiedDatesForMonth as jest.Mock).mockReturnValue({ execute: occupied })
+      const { rerender } = render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
+      await waitFor(() => expect(occupied).toHaveBeenCalledWith("2026-04"))
+      rerender(<ScheduleForm currentMonth={new Date(2026, 4, 1)} onSuccess={jest.fn()} onClose={jest.fn()} />)
+      await waitFor(() => expect(occupied).toHaveBeenCalledWith("2026-05"))
+    })
   })
 })

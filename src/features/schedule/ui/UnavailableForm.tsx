@@ -13,28 +13,28 @@ interface UnavailableFormProps {
   onClose: () => void
 }
 
-export function UnavailableForm({ profileId, onClose }: UnavailableFormProps) {
+export function UnavailableForm({ profileId }: UnavailableFormProps) {
   const [unavailableDates, setUnavailableDates] = useState<Date[]>([])
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date())
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    loadUnavailableDates()
+    let cancelled = false
+    ;(async () => {
+      try {
+        setIsLoading(true)
+        const datesStr = await makeListUnavailableByProfile().execute(profileId)
+        // Ajuste de timezone: Adicionar T00:00:00 para evitar que vire o dia anterior
+        const dates = datesStr.map(d => new Date(d + 'T00:00:00'))
+        if (!cancelled) setUnavailableDates(dates)
+      } catch {
+        if (!cancelled) toast.error("Erro ao carregar datas indisponíveis.")
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
   }, [profileId])
-
-  const loadUnavailableDates = async () => {
-    try {
-      setIsLoading(true)
-      const datesStr = await makeListUnavailableByProfile().execute(profileId)
-      // Ajuste de timezone: Adicionar T00:00:00 para evitar que vire o dia anterior
-      const dates = datesStr.map(d => new Date(d + 'T00:00:00'))
-      setUnavailableDates(dates)
-    } catch (error) {
-      toast.error("Erro ao carregar datas indisponíveis.")
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const handleSelect = async (date: Date | undefined) => {
     if (!date) return
@@ -56,7 +56,7 @@ export function UnavailableForm({ profileId, onClose }: UnavailableFormProps) {
 
     try {
       await makeToggleUnavailableDate().execute(profileId, dateStr)
-    } catch (error) {
+    } catch {
       // Em caso de falha na API, reverter o estado
       setUnavailableDates(prev =>
         isCurrentlySelected

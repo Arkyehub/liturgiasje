@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu"
-import { LogOut, User, LayoutDashboard, Users, UserCircle, Download, ArrowLeft, BarChart3 } from "lucide-react"
+import { LogOut, User, Users, UserCircle, Download, ArrowLeft, BarChart3 } from "lucide-react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 

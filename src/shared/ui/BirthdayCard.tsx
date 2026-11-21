@@ -3,9 +3,8 @@
 import { useState, useRef, useEffect } from "react"
 import { Card } from "@/shared/ui/card"
 import { UserAvatar } from "@/shared/ui/UserAvatar"
-import { cn } from "@/shared/lib/utils"
 import { Cake, ChevronDown, ChevronUp, PartyPopper } from "lucide-react"
-import { format, isToday, parseISO, isValid } from "date-fns"
+import { format, parseISO, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 interface BirthdayMember {
