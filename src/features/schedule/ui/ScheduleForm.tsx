@@ -2,7 +2,7 @@
 
 import { scheduleErrorMessage } from '@/features/schedule/scheduleErrorMessage'
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/shared/ui/button"
 import { Input } from "@/shared/ui/input"
 import {
@@ -80,6 +80,11 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   const [existingMassesFromDb, setExistingMassesFromDb] = useState<any[]>([])
   const [occupiedDates, setOccupiedDates] = useState<string[]>([])
   const [allMonthMasses, setAllMonthMasses] = useState<any[]>([])
+  // Contadores de requisição: respostas atrasadas de um dia/mês anterior são descartadas
+  const unavailableReqRef = useRef(0)
+  const sessionsRef = useRef<Session[]>([])
+  const monthReqRef = useRef(0)
+  sessionsRef.current = sessions
 
   // Missas já gravadas no dia que NÃO estão no formulário (as do formulário valem pelo estado atual)
   const otherDbMassTimes = (): string[] =>
@@ -108,9 +113,11 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   })
 
   const loadAllMonthMasses = async (mRef: string) => {
+    const reqId = ++monthReqRef.current
     try {
       const d = new Date(`${mRef}-01T00:00:00`)
       const masses = await makeListSchedulesForMonth().execute(d, true)
+      if (reqId !== monthReqRef.current) return
       setAllMonthMasses(masses)
     } catch (error) {
       console.error("Erro ao carregar missas do mês para tooltip:", error)
@@ -121,11 +128,18 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
     loadProfiles()
     loadUsage(activeMonthRef)
     loadAllMonthMasses(activeMonthRef)
-    // Carrega os dias já com escala cadastrada para o mês atual
-    makeListOccupiedDatesForMonth().execute(format(currentMonth, "yyyy-MM"))
-      .then(setOccupiedDates)
-      .catch(console.error)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- carga inicial: só no mount
   }, [])
+
+  // Dias já com escala cadastrada: recarrega se o mês exibido mudar
+  const occupiedMonthRef = format(currentMonth, "yyyy-MM")
+  useEffect(() => {
+    let cancelled = false
+    makeListOccupiedDatesForMonth().execute(occupiedMonthRef)
+      .then(dates => { if (!cancelled) setOccupiedDates(dates) })
+      .catch(console.error)
+    return () => { cancelled = true }
+  }, [occupiedMonthRef])
 
   useEffect(() => {
     if (date) {
@@ -142,15 +156,37 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
         console.error("Erro ao processar data para contadores:", e)
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reage somente à troca de data
   }, [date])
 
   const loadUnavailableForDate = async (d: string) => {
+    const reqId = ++unavailableReqRef.current
     try {
       const [ids, existingMasses] = await Promise.all([
         makeListUnavailableByDate().execute(d),
         makeCheckMassExists().execute(d)
       ])
+      // Descarta resposta de um dia que já não é o selecionado
+      if (reqId !== unavailableReqRef.current) return
       setUnavailableUserIds(ids)
+      // Nova escala: quem já foi escolhido e está indisponível neste dia sai da função
+      if (!initialData) {
+        const removed = sessionsRef.current
+          .flatMap(sess => sess.slots)
+          .filter(slot => slot.profileId && ids.includes(slot.profileId))
+          .map(slot => slot.profileName || "Leitor")
+        if (removed.length > 0) {
+          setSessions(prev => prev.map(sess => ({
+            ...sess,
+            slots: sess.slots.map(slot =>
+              slot.profileId && ids.includes(slot.profileId) ? { ...slot, profileId: "", profileName: "" } : slot
+            )
+          })))
+          const names = Array.from(new Set(removed)).join(", ")
+          const plural = removed.length > 1
+          toast.warning(`${names} ${plural ? "estão indisponíveis" : "está indisponível"} neste dia e ${plural ? "foram removidos" : "foi removido(a)"} da escala.`)
+        }
+      }
       setExistingMassesFromDb(existingMasses)
       
       // Se não houver data inicial (nova escala) e já existirem missas, avisar
@@ -362,6 +398,15 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
       
     }
 
+    // Nova escala: nenhum leitor indisponível no dia (cobre troca de dia e dados desatualizados)
+    if (!initialData) {
+      const unavailableSlot = sessions.flatMap(s => s.slots).find(slot => slot.profileId && unavailableUserIds.includes(slot.profileId))
+      if (unavailableSlot) {
+        toast.error(`${unavailableSlot.profileName || "Um leitor"} está indisponível neste dia.`)
+        return
+      }
+    }
+
     // Validação de duplicidade no formulário
     const timesInForm = sessions.map(s => s.time)
     const hasDuplicateInForm = timesInForm.some((t, i) => timesInForm.indexOf(t) !== i)
@@ -423,8 +468,9 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   const dateLong = dateObj && dateIsValid ? format(dateObj, "EEEE, d 'de' MMMM", { locale: ptBR }) : ""
   const dayShort = dateObj && dateIsValid ? format(dateObj, "d 'de' MMMM", { locale: ptBR }) : ""
   const hasAnyTimeConflict = sessions.some(hasTimeConflict)
+  const hasUnavailableChosen = !initialData && sessions.some(s => s.slots.some(slot => !!slot.profileId && unavailableUserIds.includes(slot.profileId)))
   const emptyMassCount = sessions.filter(s => s.slots.length === 0).length
-  const canSave = !isSaving && !!date && !blockedByExisting && !hasAnyTimeConflict && sessions.length > 0 && emptyMassCount === 0 && !sessions.some(s => !s.time || s.slots.some(slot => !slot.profileId))
+  const canSave = !isSaving && !!date && !blockedByExisting && !hasAnyTimeConflict && !hasUnavailableChosen && sessions.length > 0 && emptyMassCount === 0 && !sessions.some(s => !s.time || s.slots.some(slot => !slot.profileId))
 
   let footerSummary: React.ReactNode
   if (!date) footerSummary = "Escolha o dia da escala para começar."
