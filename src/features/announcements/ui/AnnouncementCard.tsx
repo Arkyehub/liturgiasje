@@ -17,6 +17,7 @@ import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn, getFileType, getFileViewerUrl } from "@/shared/lib/utils"
 import { UserAvatar } from "@/shared/ui/UserAvatar"
+import { NoticeCard } from "./NoticeCard"
 
 interface AudioPlayerProps {
   url: string;
@@ -111,7 +112,7 @@ function AudioPlayer({ url, index }: AudioPlayerProps) {
   )
 }
 
-interface AnnouncementProps {
+export interface AnnouncementProps {
   id: string
   title: string
   content: string
@@ -137,7 +138,7 @@ interface AnnouncementProps {
   currentUserId?: string
 }
 
-export function AnnouncementCard({
+function SwapAnnouncementCard({
   id,
   title,
   content,
@@ -558,4 +559,13 @@ export function AnnouncementCard({
       </Accordion>
     </Card>
   )
+}
+
+/**
+ * Recado do mural. Avisos usam o visual novo (NoticeCard);
+ * a Troca segue no card anterior, sem alterações.
+ */
+export function AnnouncementCard(props: AnnouncementProps) {
+  if (props.type === "Troca") return <SwapAnnouncementCard {...props} />
+  return <NoticeCard {...props} />
 }

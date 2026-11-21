@@ -14,18 +14,18 @@ interface ReadAnnouncementsGroupProps {
 /** Um único card recolhido que reúne os recados que a pessoa já visualizou. */
 export function ReadAnnouncementsGroup({ count, open, onOpenChange, children }: ReadAnnouncementsGroupProps) {
   return (
-    <section aria-label="Recados já lidos" className="overflow-hidden rounded-[20px] border border-[#E9DFCB] bg-[#F4EEDD]">
+    <section aria-label="Recados já lidos" className="overflow-hidden rounded-3xl border border-[#E9DFCB] bg-[#F4EEDD]">
       <button
         type="button"
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}
-        className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left"
+        className="flex min-h-14 w-full items-center gap-3 py-3 pl-4 pr-3 text-left"
       >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E6F2EA]">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E6F2EA]">
           <Check className="h-4 w-4 text-[#1E6B43]" strokeWidth={3} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="text-sm font-bold text-[#4A3D31]">{count} recados já lidos</span>
+          <span className="text-[15px] font-extrabold text-[#4A3D31]">{count} recados já lidos</span>
           <span className="text-xs text-[#6B5D50]">{open ? "Toque para recolher" : "Toque para rever"}</span>
         </span>
         <ChevronDown className={cn("h-5 w-5 shrink-0 text-[#6B5D50] transition-transform duration-200", open && "rotate-180")} />
