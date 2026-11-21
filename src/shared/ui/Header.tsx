@@ -70,16 +70,16 @@ export function Header({
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 w-full border-b border-[#4A3523] bg-[#322113]">
       <div className="container relative flex h-[68px] items-center justify-between px-4 max-w-md mx-auto">
         {/* Botão Voltar (Opcional) */}
         {showBackButton && (
           <button
             onClick={() => window.history.back()}
-            className="absolute left-4 z-10 p-2 rounded-full hover:bg-stone-100 transition-colors active:scale-95"
+            className="absolute left-4 z-10 p-2 rounded-full hover:bg-white/10 transition-colors active:scale-95"
             aria-label="Voltar"
           >
-            <ArrowLeft className="h-6 w-6 text-stone-600" />
+            <ArrowLeft className="h-6 w-6 text-[#E8C76A]" />
           </button>
         )}
 
@@ -105,10 +105,10 @@ export function Header({
               className={`${centerLogo ? 'h-9 w-9' : 'h-11 w-11'} rounded-xl shadow-md shadow-[#322113]/20 group-hover:shadow-lg transition-all`}
             />
             <div className={`flex flex-col ${centerLogo ? 'items-start' : ''}`}>
-              <h1 className={`${centerLogo ? 'text-base' : 'text-[19px]'} font-black tracking-tight text-stone-800 leading-none`}>
+              <h1 className={`${centerLogo ? 'text-base' : 'text-[19px]'} font-black tracking-tight text-[#E8C76A] leading-none`}>
                 Liturgia SJE
               </h1>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[#8A7A66]">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#E9DFCB]">
                 Painel do Leitor
               </span>
             </div>
@@ -120,7 +120,7 @@ export function Header({
           <div className="flex-1 flex justify-center ml-2 mr-12">
             <button
               onClick={handleInstallClick}
-              className="flex items-center gap-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-[9px] uppercase tracking-widest px-3 py-2 rounded-xl border border-stone-200 shadow-sm transition-all active:scale-95 animate-in fade-in zoom-in duration-500"
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-[#F4EEDD] font-bold text-[9px] uppercase tracking-widest px-3 py-2 rounded-xl border border-white/20 shadow-sm transition-all active:scale-95 animate-in fade-in zoom-in duration-500"
             >
               <Download className="h-3 w-3" />
               Baixar App

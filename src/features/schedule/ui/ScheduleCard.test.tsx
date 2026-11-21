@@ -6,3 +6,11 @@ test('identifies archived historical readers and preserves prior assignment cont
   expect(screen.getByText('Maria · membro inativo')).toHaveClass('text-red-700')
   expect(screen.getByText(/Anteriormente: João · membro inativo/)).toBeInTheDocument()
 })
+
+test('troca aberta aparece como etiqueta completa e o botão Cancelar troca continua disponível', () => {
+  const onCancelSwap = jest.fn()
+  render(<ScheduleCard date="01/12" rawDate={new Date('2099-12-01T12:00:00')} isPublished onCancelSwap={onCancelSwap} items={[{id:'mass',time:'10:00',slots:[{id:'one',role:'2L',readerName:'Maria',isMine:true,isConfirmed:false,isSwapRequested:true}]}]} />)
+  expect(screen.getByText('Troca aberta')).toBeInTheDocument()
+  screen.getByRole('button', { name: /Cancelar troca/ }).click()
+  expect(onCancelSwap).toHaveBeenCalledWith('one')
+})

@@ -240,7 +240,7 @@ export function ScheduleCard({
                       key={slot.id}
                       id={`slot-${slot.id}`}
                       className={cn(
-                        "flex min-h-[52px] items-center gap-3 rounded-[14px] px-2 py-2 transition-all",
+                        "flex min-h-[52px] flex-wrap items-center gap-x-3 gap-y-2 rounded-[14px] px-2 py-2 transition-all",
                         slot.isSwapRequested
                           ? "bg-[#FDEBDD]"
                           : slot.isMine
@@ -279,7 +279,6 @@ export function ScheduleCard({
                         <span className="truncate text-xs text-[#6B5D50]">
                           {slot.roleName || roleLabel(slot.role)}
                           {slot.isMine && !slot.isSwapRequested && " · você"}
-                          {slot.isSwapRequested && <span className="font-bold text-[#A23F06]"> · troca aberta</span>}
                         </span>
                         {!!slot.previousAssignments?.length && (
                           <span className="text-[10px] text-red-700">Anteriormente: {slot.previousAssignments.map(p => `${p.fullName}${p.archived ? " · membro inativo" : ""}`).join(", ")}</span>
@@ -291,7 +290,16 @@ export function ScheduleCard({
                         )}
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-1.5">
+                      <div className={cn(
+                        "flex items-center gap-1.5",
+                        slot.isSwapRequested ? "basis-full justify-between pl-14" : "shrink-0"
+                      )}>
+                        {slot.isSwapRequested && (
+                          <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-white/70 px-3 text-xs font-extrabold text-[#A23F06]">
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            Troca aberta
+                          </span>
+                        )}
                         {slot.isConfirmed && !slot.isSwapRequested && checkBadge}
 
                         {showPending && (
