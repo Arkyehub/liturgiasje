@@ -148,6 +148,31 @@ describe("ScheduleForm Validation", () => {
     expect(screen.getByText("Disponivel Teste", { selector: "span.truncate" })).toBeInTheDocument()
   })
 
+  it.each([
+    ["28", "2", "terça"],
+    ["24", "5", "sexta"],
+  ])("lista em 'Preferem este horário' quem marcou %s (%s) 19h na %s", async (day, key) => {
+    const other = key === "2" ? "5" : "2"
+    const mk = (id: string, name: string, dp: Record<string, string[]>) => ({ id, fullName: name, role: "reader", createdAt: "", updatedAt: "", preferences: { day_preferences: dp } })
+    const profiles = [
+      mk("p-pref", "Quer Este Dia", { [key]: ["19:00"] }),
+      mk("p-other", "Quer Outro Dia", { [other]: ["19:00"] }),
+      mk("p-none", "Sem Preferencia", {}),
+    ]
+    ;(makeListProfiles as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue(profiles) })
+    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
+    fireEvent.click(screen.getByText(day))
+    fireEvent.change(screen.getAllByLabelText(/Horário/i)[0], { target: { value: "19:00" } })
+    await userEvent.click(await screen.findByRole("button", { name: /^Leitor$/ }))
+    await userEvent.click(await screen.findByText("Escolher leitor"))
+
+    const heading = await screen.findByText("Preferem este horário")
+    const group = heading.closest("[cmdk-group]") as HTMLElement
+    expect(group).toHaveTextContent("Quer Este Dia")
+    expect(group).not.toHaveTextContent("Quer Outro Dia")
+    expect(group).not.toHaveTextContent("Sem Preferencia")
+  })
+
   it("should collapse a mass into a summary and expand it again", async () => {
     render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
     fireEvent.click(screen.getByText("30"))
