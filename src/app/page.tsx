@@ -148,6 +148,14 @@ export default function Home() {
     setPinnedUntil((prev) => ({ ...prev, [id]: until }))
     setTimeout(() => setNowTick(Date.now()), PUBLISH_PIN_MS + 50)
   }, [])
+  useEffect(() => {
+    const before = pendingCreatePinRef.current
+    if (!before) return
+    const created = (announcements as any[]).filter((a) => !before.has(a.id) && a.isPublished !== false)
+    if (created.length === 0) return
+    pendingCreatePinRef.current = null
+    created.forEach((a) => pinAnnouncement(a.id))
+  }, [announcements, pinAnnouncement])
   const [isConfirmingPending, setIsConfirmingPending] = useState(false)
 
   // Lista de escalas do usuário logado que não foram confirmadas
@@ -569,15 +577,6 @@ export default function Home() {
     !!user,
     new Set(Object.keys(pinnedUntil).filter((id) => pinnedUntil[id] > nowTick))
   )
-
-  useEffect(() => {
-    const before = pendingCreatePinRef.current
-    if (!before) return
-    const created = (announcements as any[]).filter((a) => !before.has(a.id) && a.isPublished !== false)
-    if (created.length === 0) return
-    pendingCreatePinRef.current = null
-    created.forEach((a) => pinAnnouncement(a.id))
-  }, [announcements, pinAnnouncement])
 
   const renderAnnouncement = (ann: any) => (
                   <AnnouncementCard
