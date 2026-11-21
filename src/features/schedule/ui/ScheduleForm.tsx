@@ -858,22 +858,6 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                       value={sess.time || "07:00"}
                       onChange={(val) => updateSessionField(sess.tempId, 'time', val)}
                     />
-                    <div className="mt-3 flex flex-wrap justify-center gap-2" role="group" aria-label="Atalhos de hora">
-                      {["07:00", "09:00", "11:00", "19:00"].map((t) => (
-                        <button
-                          key={t}
-                          type="button"
-                          aria-pressed={sess.time === t}
-                          onClick={() => updateSessionField(sess.tempId, 'time', t)}
-                          className={cn(
-                            "h-11 min-w-[4.5rem] rounded-full border px-3 text-sm font-bold transition-colors active:scale-95",
-                            sess.time === t ? "border-[#322113] bg-[#322113] text-[#FFF8E8]" : "border-[#D9CDB8] bg-white text-[#322113] hover:bg-[#FAF5E6]"
-                          )}
-                        >
-                          {t}
-                        </button>
-                      ))}
-                    </div>
                   </div>
                   {timeConflict(sess) && (
                     <p role="alert" className="-mt-1 flex items-start gap-2 rounded-xl bg-[#FDEBDD] px-3 py-2 text-[13px] font-semibold leading-snug text-[#A23F06]">

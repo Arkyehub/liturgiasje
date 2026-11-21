@@ -203,13 +203,6 @@ describe("ScheduleForm Validation", () => {
     expect(screen.getByText(/abril 2026/i)).toBeInTheDocument()
   })
 
-  it("atalhos de horário mudam o horário da missa", async () => {
-    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
-    fireEvent.click(screen.getByText("30"))
-    await userEvent.click(await screen.findByRole("button", { name: "19:00" }))
-    expect((screen.getAllByLabelText(/Horário/i)[0] as HTMLInputElement).value).toBe("19:00")
-  })
-
   it("ao tocar numa função a lista de leitores abre, com os menos escalados primeiro", async () => {
     const mk = (id: string, name: string) => ({ id, fullName: name, role: "reader", createdAt: "", updatedAt: "" })
     ;(makeListProfiles as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([mk("a", "Ana"), mk("b", "Bruno"), mk("c", "Carla")]) })
