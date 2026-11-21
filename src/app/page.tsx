@@ -759,12 +759,29 @@ export default function Home() {
                         Adicionar Recado
                       </Button>
                   } />
-                  <SheetContent side="right" className="w-full sm:max-w-lg border-l-stone-100 p-6 overflow-y-auto">
-                    <SheetHeader>
-                      <SheetTitle className="text-stone-800 uppercase tracking-tighter font-black text-xl mb-4">
-                        {announcementToEdit ? "Editar Aviso" : "Novo Aviso"}
-                      </SheetTitle>
-                    </SheetHeader>
+                  <SheetContent side="right" showCloseButton={false} className="w-full data-[side=right]:w-full sm:max-w-lg data-[side=right]:sm:max-w-lg border-l-stone-100 bg-[#FAF5E6] p-0 flex flex-col gap-0">
+                    <div className="flex shrink-0 items-start justify-between gap-3 rounded-b-[28px] bg-[#322113] pb-5 pl-5 pr-4 pt-5">
+                      <SheetHeader className="min-w-0 gap-1 p-0">
+                        <span className="text-[11px] font-bold tracking-[0.12em] text-[#E8C76A]">
+                          {announcementToEdit ? "EDITAR AVISO" : "MURAL DE AVISOS"}
+                        </span>
+                        <SheetTitle className="line-clamp-2 text-[26px] font-extrabold leading-tight tracking-tight text-[#FFF8E8]">
+                          {announcementToEdit?.title || "Novo aviso"}
+                        </SheetTitle>
+                      </SheetHeader>
+                      <SheetClose
+                        render={
+                          <button
+                            type="button"
+                            aria-label="Fechar"
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FFF8E8]/15 text-[#FFF8E8] transition-colors hover:bg-[#FFF8E8]/25"
+                          />
+                        }
+                      >
+                        <X className="h-5 w-5" strokeWidth={2.2} />
+                      </SheetClose>
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-hidden">
                     <AnnouncementForm 
                       initialData={announcementToEdit}
                       onSave={async (data) => {
@@ -783,7 +800,7 @@ export default function Home() {
                               type: 'Aviso',
                               expiresAt: data.expiresAt ? data.expiresAt.toISOString() : undefined
                             })
-                            toast.success("Aviso publicado com sucesso!")
+                            toast.success(data.isPublished === false ? "Rascunho salvo!" : "Aviso publicado com sucesso!")
                           }
                           triggerRefresh()
                           setIsFormOpen(false)
@@ -798,6 +815,7 @@ export default function Home() {
                         setAnnouncementToEdit(null)
                       }}
                     />
+                    </div>
                   </SheetContent>
                 </Sheet>
               </div>
