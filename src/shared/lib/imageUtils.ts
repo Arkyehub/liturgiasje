@@ -16,6 +16,41 @@ export function scaleToMax(width: number, height: number, max: number) {
   return { width: Math.max(1, Math.round(width * ratio)), height: Math.max(1, Math.round(height * ratio)) }
 }
 
+/** Fotos do Google vêm em 96 px (`=s96-c`); pede 512 px para guardar com qualidade. Outras URLs ficam intactas. */
+export function upscaleGoogleAvatarUrl(url: string, size: number = MAX_CROPPED_SIDE): string {
+  try {
+    const u = new URL(url)
+    if (!u.hostname.endsWith("googleusercontent.com")) return url
+    return url.replace(/=s\d+(-c)?$/, `=s${size}-c`)
+  } catch {
+    return url
+  }
+}
+
+/** Maior área quadrada centralizada de uma imagem (avatar é sempre quadrado). */
+export function centerSquare(width: number, height: number) {
+  const side = Math.min(width, height)
+  return { x: Math.round((width - side) / 2), y: Math.round((height - side) / 2), side }
+}
+
+/**
+ * Baixa uma foto por URL (ex.: Google), recorta o quadrado central, reduz para no máximo
+ * MAX_CROPPED_SIDE e comprime para até 500 KB em WebP. Devolve null se o canvas não estiver disponível.
+ * Lança erro se o download falhar (CORS, rede, imagem inválida).
+ */
+export async function imageUrlToAvatarBlob(url: string): Promise<Blob | null> {
+  const image = await createImage(upscaleGoogleAvatarUrl(url))
+  const { x, y, side } = centerSquare(image.naturalWidth || image.width, image.naturalHeight || image.height)
+  const canvas = document.createElement("canvas")
+  const ctx = canvas.getContext("2d")
+  if (!ctx) return null
+  const target = scaleToMax(side, side, MAX_CROPPED_SIDE)
+  canvas.width = target.width
+  canvas.height = target.height
+  ctx.drawImage(image, x, y, side, side, 0, 0, target.width, target.height)
+  return compressToTargetSize(canvas, 500 * 1024)
+}
+
 export async function getCroppedImg(
   imageSrc: string,
   pixelCrop: { x: number; y: number; width: number; height: number }

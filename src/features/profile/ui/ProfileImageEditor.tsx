@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar"
 import { ImageCropperModal } from "./ImageCropperModal"
 import { Camera, UserCircle, Loader2, Sparkles } from "lucide-react"
 import { toast } from "sonner"
+import { imageUrlToAvatarBlob } from "@/shared/lib/imageUtils"
 
 export function ProfileImageEditor() {
   const { user, profile, refreshProfile } = useAuth()
@@ -18,6 +19,21 @@ export function ProfileImageEditor() {
 
   const googleAvatarUrl: string | undefined = user?.user_metadata?.avatar_url || user?.user_metadata?.picture
 
+  // Guarda a foto do Google no nosso storage (redimensionada e compactada), para não depender da URL do Google.
+  // Se o download ou a compactação falharem (CORS, rede), mantém só a URL como plano B.
+  const saveGooglePhoto = async (profileId: string, url: string) => {
+    try {
+      const blob = await imageUrlToAvatarBlob(url)
+      if (blob) {
+        await makeUploadAvatar().execute(profileId, blob)
+        return
+      }
+    } catch (error) {
+      console.warn("Não foi possível guardar a foto do Google; usando a URL.", error)
+    }
+    await makeUpdateProfile().execute(profileId, { avatarUrl: url })
+  }
+
   // Primeira visita com e-mail vinculado: importa a foto do Google sozinho.
   // Só roda quando o perfil ainda não tem foto, para nunca sobrescrever uma foto escolhida.
   useEffect(() => {
@@ -27,7 +43,7 @@ export function ProfileImageEditor() {
     autoImportTried.current = true
     ;(async () => {
       try {
-        await makeUpdateProfile().execute(profile.id, { avatarUrl: googleAvatarUrl })
+        await saveGooglePhoto(profile.id, googleAvatarUrl)
         await refreshProfile()
         toast.success("Foto importada do Google!")
       } catch (error) {
@@ -73,7 +89,7 @@ export function ProfileImageEditor() {
 
     setIsUpdating(true)
     try {
-      await makeUpdateProfile().execute(profile.id, { avatarUrl: googleAvatarUrl })
+      await saveGooglePhoto(profile.id, googleAvatarUrl)
       toast.success("Foto importada do Google!")
       await refreshProfile()
     } catch {
