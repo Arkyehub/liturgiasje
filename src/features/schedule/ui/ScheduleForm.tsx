@@ -30,7 +30,7 @@ import {
 } from "@/main/factories/usecases/schedule"
 import { makeListUnavailableByDate } from "@/main/factories/usecases/profiles"
 import { Profile } from "@/domain/models/Profile"
-import { Plus, Trash2, AlertCircle, Eye, Pencil, Check, ChevronDown, CalendarDays } from "lucide-react"
+import { Plus, Trash2, AlertCircle, Eye, Pencil, Check, ChevronDown, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react"
 import { roleLabel as roleName } from "@/shared/constants/roles"
 import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -44,6 +44,10 @@ interface ScheduleFormProps {
   onClose: () => void
   /** Avisa o dia escolhido (yyyy-MM-dd, ou "" sem escolha) para o título do sheet. */
   onDateChange?: (date: string) => void
+  /** Avisa se há alterações não salvas (para confirmar antes de descartar). */
+  onDirtyChange?: (dirty: boolean) => void
+  /** Chamado pelo botão Cancelar (a tela pode pedir confirmação). Sem isso, usa onClose. */
+  onRequestClose?: () => void
   initialData?: any
   /** Abre a edição do dia que já tem escala (aviso de duplicidade). */
   onEditExisting?: (date: string) => void
@@ -67,7 +71,7 @@ interface Session {
   collapsed?: boolean
 }
 
-export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, onEditExisting, onDateChange }: ScheduleFormProps) {
+export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, onEditExisting, onDateChange, onDirtyChange, onRequestClose }: ScheduleFormProps) {
   const [date, setDate] = useState("")
   // Depois de escolher o dia, o calendário some; o lápis reabre. Evita trocar de dia sem querer.
   const [calendarOpen, setCalendarOpen] = useState(!initialData)
@@ -81,6 +85,11 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   useEffect(() => {
     setCalendarOpen(!initialData)
   }, [initialData])
+  // Mês exibido no calendário (o admin pode navegar sem fechar o sheet)
+  const [viewMonth, setViewMonth] = useState(() => new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1))
+  useEffect(() => {
+    setViewMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1))
+  }, [currentMonth])
   const [sessions, setSessions] = useState<Session[]>([])
   const [removedMasses, setRemovedMasses] = useState<{ id: string; expectedRevision?: number }[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
@@ -98,6 +107,9 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   const unavailableReqRef = useRef(0)
   const sessionsRef = useRef<Session[]>([])
   const monthReqRef = useRef(0)
+  // Alterações não salvas: nova escala = algo preenchido; edição = diferente do que foi carregado
+  const baselineRef = useRef<string | null>(null)
+  const snapshotOf = (list: Session[]) => JSON.stringify(list.map(x => [x.time, x.description, x.slots.map(sl => [sl.roleType, sl.profileId])]))
   sessionsRef.current = sessions
 
   // Missas já gravadas no dia que NÃO estão no formulário (as do formulário valem pelo estado atual)
@@ -146,7 +158,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   }, [])
 
   // Dias já com escala cadastrada: recarrega se o mês exibido mudar
-  const occupiedMonthRef = format(currentMonth, "yyyy-MM")
+  const occupiedMonthRef = format(viewMonth, "yyyy-MM")
   useEffect(() => {
     let cancelled = false
     makeListOccupiedDatesForMonth().execute(occupiedMonthRef)
@@ -246,6 +258,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
           collapsed: true
         }
       })
+      baselineRef.current = snapshotOf(mappedSessions)
       setSessions(mappedSessions)
     } else {
       setSessions([])
@@ -344,9 +357,25 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   }
 
   const removeSession = (tempId: string, dbId?: string) => {
-    const session = sessions.find(item => item.tempId === tempId)
-    if (dbId) setRemovedMasses(previous => [...previous, { id: dbId, expectedRevision: session?.scheduleRevision }])
+    const index = sessions.findIndex(item => item.tempId === tempId)
+    const session = sessions[index]
+    if (!session) return
+    if (dbId) setRemovedMasses(previous => [...previous, { id: dbId, expectedRevision: session.scheduleRevision }])
     setSessions(previous => previous.filter(item => item.tempId !== tempId))
+    toast.message(`Missa das ${session.time} excluída`, {
+      duration: 8000,
+      action: {
+        label: "Desfazer",
+        onClick: () => {
+          if (dbId) setRemovedMasses(previous => previous.filter(removed => removed.id !== dbId))
+          setSessions(previous => {
+            const next = [...previous]
+            next.splice(Math.min(index, next.length), 0, session)
+            return next
+          })
+        }
+      }
+    })
   }
   const updateSessionField = (tempId: string, field: keyof Session, value: any) => {
     setSessions(sessions.map(s => s.tempId === tempId ? { ...s, [field]: value } : s))
@@ -367,6 +396,8 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
       }
       return sess
     }))
+    // Já abre a lista de leitores: um toque na função basta
+    setPickerTarget({ sessTempId: sessionTempId, slotId: newSlot.id })
   }
 
   const removeSlot = (sessionTempId: string, slotId: string) => {
@@ -482,11 +513,23 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
     setSearchTerm("")
   }
 
+  const isDirty = !isSaving && (initialData
+    ? removedMasses.length > 0 || (baselineRef.current !== null && snapshotOf(sessions) !== baselineRef.current)
+    : sessions.length > 1 || sessions.some(x => x.slots.length > 0 || x.description.trim() !== ""))
+  const onDirtyChangeRef = useRef(onDirtyChange)
+  useEffect(() => {
+    onDirtyChangeRef.current = onDirtyChange
+  })
+  useEffect(() => {
+    onDirtyChangeRef.current?.(isDirty)
+  }, [isDirty])
+
   const missingCount = sessions.reduce((n, sess) => n + sess.slots.filter(sl => !sl.profileId).length, 0)
   const blockedByExisting = hasExistingScale && !initialData && !!onEditExisting
   const dateObj = date ? new Date(date + 'T00:00:00') : null
   const dateIsValid = !!dateObj && isValid(dateObj)
   const dateLong = dateObj && dateIsValid ? format(dateObj, "EEEE, d 'de' MMMM", { locale: ptBR }) : ""
+  const dateShortWeekday = dateObj && dateIsValid ? format(dateObj, "EEE, d 'de' MMMM", { locale: ptBR }) : ""
   const dayShort = dateObj && dateIsValid ? format(dateObj, "d 'de' MMMM", { locale: ptBR }) : ""
   const hasAnyTimeConflict = sessions.some(hasTimeConflict)
   const hasUnavailableChosen = !initialData && sessions.some(s => s.slots.some(slot => !!slot.profileId && unavailableUserIds.includes(slot.profileId)))
@@ -499,33 +542,26 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   if (!date) footerSummary = "Escolha o dia da escala para começar."
   else if (blockedByExisting) footerSummary = "Escolha um dia sem escala para continuar."
   else if (hasAnyTimeConflict) footerSummary = <strong className="font-bold text-[#A23F06]">Corrija os horários repetidos para salvar.</strong>
-  else {
+  else if (openCount > 0) {
     footerSummary = (
       <>
-        {sessions.length === 1 ? "1 missa" : `${sessions.length} missas`}
-        {missingCount > 0 && (
-          <>
-            {" · "}
-            <strong className="font-bold text-[#A23F06]">
-              {missingCount === 1 ? "1 função sem leitor" : `${missingCount} funções sem leitor`}
-            </strong>
-            <br />
-            Escolha um leitor para cada função para salvar.
-          </>
-        )}
-        {missingCount === 0 && openCount > 0 && (
-          <>
-            {" · "}
-            <strong className="font-bold text-[#A23F06]">
-              {openCount === 1 ? "1 missa aberta" : `${openCount} missas abertas`}
-            </strong>
-            <br />
-            Toque em "Concluir missa" para salvar.
-          </>
-        )}
+        <strong className="font-bold text-[#A23F06]">{openCount === 1 ? "1 missa aberta" : `${openCount} missas abertas`}</strong>
+        <br />
+        Toque em "Concluir missa" para salvar.
       </>
     )
+  } else if (missingCount > 0) {
+    footerSummary = (
+      <>
+        <strong className="font-bold text-[#A23F06]">{missingCount === 1 ? "1 função sem leitor" : `${missingCount} funções sem leitor`}</strong>
+        <br />
+        Reabra a missa e escolha um leitor para cada função.
+      </>
+    )
+  } else {
+    footerSummary = sessions.length === 1 ? "1 missa pronta para salvar." : `${sessions.length} missas prontas para salvar.`
   }
+
 
   const pickerSession = pickerTarget ? sessions.find(x => x.tempId === pickerTarget.sessTempId) : undefined
   const pickerSlot = pickerSession?.slots.find(x => x.id === pickerTarget?.slotId)
@@ -592,8 +628,8 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
           <StepTitle n={1}>Dia da escala</StepTitle>
 
           {calendarOpen ? (() => {
-            const year = currentMonth.getFullYear()
-            const month = currentMonth.getMonth()
+            const year = viewMonth.getFullYear()
+            const month = viewMonth.getMonth()
             const daysInMonth = new Date(year, month + 1, 0).getDate()
             const firstDayOfWeek = new Date(year, month, 1).getDay() // 0 = Domingo
             const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
@@ -601,6 +637,25 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
 
             return (
               <div className="space-y-2.5 rounded-[22px] border border-[#E9DFCB] bg-white p-3">
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    aria-label="Mês anterior"
+                    onClick={() => setViewMonth(new Date(year, month - 1, 1))}
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-[#322113] transition-colors hover:bg-[#FAF5E6] active:scale-95"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <span className="text-[15px] font-extrabold text-[#322113] first-letter:uppercase">{format(viewMonth, "MMMM yyyy", { locale: ptBR })}</span>
+                  <button
+                    type="button"
+                    aria-label="Próximo mês"
+                    onClick={() => setViewMonth(new Date(year, month + 1, 1))}
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-[#322113] transition-colors hover:bg-[#FAF5E6] active:scale-95"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </div>
                 <div className="grid grid-cols-7 gap-1">
                   {weekDays.map((day, i) => (
                     <div key={`header-${i}`} className={cn("pb-1 text-center text-[11px] font-bold tracking-wide", i === 0 ? "text-[#322113]" : "text-[#6B5D50]")}>
@@ -663,7 +718,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
           {!calendarOpen && date && dateLong && (
             <div className="flex min-h-14 items-center gap-3 rounded-[22px] border border-[#E9DFCB] bg-white p-2 pl-4">
               <CalendarDays className="h-[18px] w-[18px] shrink-0 text-[#322113]" />
-              <p className="min-w-0 flex-1 text-[16px] font-extrabold leading-tight text-[#322113] first-letter:uppercase">{dateLong}</p>
+              <p className="min-w-0 flex-1 text-[15px] font-extrabold leading-tight text-[#322113] first-letter:uppercase" title={dateLong}>{dateShortWeekday}</p>
               {!initialData && (
                 <button
                   type="button"
@@ -718,7 +773,12 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
 
               if (sess.collapsed) {
                 return (
-                  <section key={sess.tempId} className="space-y-3 rounded-[22px] border border-[#E9DFCB] bg-white py-3.5 pl-4 pr-2 pb-4">
+                  <section
+                    key={sess.tempId}
+                    aria-label={`Missa das ${sess.time}`}
+                    onClick={() => updateSessionField(sess.tempId, 'collapsed', false)}
+                    className="cursor-pointer space-y-3 rounded-[22px] border border-[#E9DFCB] bg-white py-3.5 pl-4 pr-2 pb-4"
+                  >
                     <div className="flex items-center gap-2.5">
                       <span className="text-[28px] font-extrabold tabular-nums tracking-tight">{sess.time}</span>
                       {timeConflict(sess) ? (
@@ -740,7 +800,11 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                       <button
                         type="button"
                         aria-label={`Editar missa das ${sess.time}`}
-                        onClick={() => updateSessionField(sess.tempId, 'collapsed', false)}
+                        aria-expanded={false}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          updateSessionField(sess.tempId, 'collapsed', false)
+                        }}
                         className="flex h-11 w-11 items-center justify-center rounded-full border border-[#D9CDB8] bg-white text-[#322113] transition-colors hover:bg-[#FAF5E6]"
                       >
                         <Pencil className="h-[18px] w-[18px]" />
@@ -794,6 +858,22 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                       value={sess.time || "07:00"}
                       onChange={(val) => updateSessionField(sess.tempId, 'time', val)}
                     />
+                    <div className="mt-3 flex flex-wrap justify-center gap-2" role="group" aria-label="Atalhos de hora">
+                      {["07:00", "09:00", "11:00", "19:00"].map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          aria-pressed={sess.time === t}
+                          onClick={() => updateSessionField(sess.tempId, 'time', t)}
+                          className={cn(
+                            "h-11 min-w-[4.5rem] rounded-full border px-3 text-sm font-bold transition-colors active:scale-95",
+                            sess.time === t ? "border-[#322113] bg-[#322113] text-[#FFF8E8]" : "border-[#D9CDB8] bg-white text-[#322113] hover:bg-[#FAF5E6]"
+                          )}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   {timeConflict(sess) && (
                     <p role="alert" className="-mt-1 flex items-start gap-2 rounded-xl bg-[#FDEBDD] px-3 py-2 text-[13px] font-semibold leading-snug text-[#A23F06]">
@@ -931,16 +1011,20 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
 
                   <Button
                     type="button"
-                    disabled={timeConflict(sess) || (sess.slots.length === 0 && !sess.description.trim())}
+                    disabled={timeConflict(sess) || (sess.slots.length === 0 && !sess.description.trim()) || sessMissing > 0}
                     onClick={() => updateSessionField(sess.tempId, 'collapsed', true)}
                     className="h-[52px] w-full gap-2 rounded-2xl bg-[#322113] text-[15px] font-extrabold text-[#FFF8E8] hover:bg-[#241709] disabled:bg-[#EFE8D6] disabled:text-[#6B5D50] disabled:opacity-100"
                   >
                     <Check className="h-[18px] w-[18px]" strokeWidth={2.6} />
                     Concluir missa
                   </Button>
-                  {sess.slots.length === 0 && !sess.description.trim() && !timeConflict(sess) && (
+                  {!timeConflict(sess) && (sess.slots.length === 0 ? !sess.description.trim() : sessMissing > 0) && (
                     <p role="status" className="text-center text-xs font-bold text-[#A23F06]">
-                      Missa sem funções precisa de descrição para ser concluída.
+                      {sess.slots.length === 0
+                        ? "Missa sem funções precisa de descrição para ser concluída."
+                        : sessMissing === 1
+                          ? "Escolha o leitor da função que está vazia para concluir a missa."
+                          : `Escolha o leitor das ${sessMissing} funções vazias para concluir a missa.`}
                     </p>
                   )}
                 </section>
@@ -967,7 +1051,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
           <Button
             type="button"
             variant="outline"
-            onClick={onClose}
+            onClick={onRequestClose ?? onClose}
             disabled={isSaving}
             className="h-[52px] flex-1 rounded-2xl border-[#D9CDB8] bg-white text-[15px] font-bold text-[#322113] hover:bg-[#FAF5E6]"
           >
@@ -982,7 +1066,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
             {isSaving ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#FFF8E8] border-t-transparent" />
             ) : (
-              "Salvar Rascunho"
+              initialData ? "Salvar alterações" : "Salvar Rascunho"
             )}
           </Button>
         </div>
@@ -990,7 +1074,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
 
       {/* Gaveta de escolha do leitor (dentro do sheet, sem portal) */}
       {pickerTarget && pickerSession && pickerSlot && (
-        <div className="absolute inset-0 z-[60] flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={`Escolher ${roleName(pickerSlot.roleLabel)}`}>
+        <div className="absolute inset-0 z-[60] flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={`Escolher ${roleName(pickerSlot.roleLabel)}`} onKeyDown={(e) => { if (e.key === "Escape") closePicker() }}>
           <button type="button" aria-label="Fechar seleção de leitor" className="absolute inset-0 bg-[#241A10]/55" onClick={closePicker} />
           <div className="relative flex max-h-[85%] flex-col rounded-t-[28px] bg-[#FBF7EE] shadow-2xl animate-in slide-in-from-bottom duration-200">
             <span aria-hidden="true" className="mx-auto mt-3 h-[5px] w-10 shrink-0 rounded-full bg-[#D9CDB8]" />
@@ -1025,7 +1109,8 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                   </CommandGroup>
                 )}
                 {(() => {
-                  const byName = (a: Profile, b: Profile) => a.fullName.localeCompare(b.fullName)
+                  // Quem foi menos escalado no mês aparece primeiro (equilibra a escala); empate: ordem alfabética
+                  const byName = (a: Profile, b: Profile) => (usageCounts[a.id] || 0) - (usageCounts[b.id] || 0) || a.fullName.localeCompare(b.fullName)
                   const isUn = (p: Profile) => (!!p.id && unavailableUserIds.includes(p.id)) || isScheduledElsewhere(p.id, pickerSlot.id)
                   const preferred = profiles.filter(p => !isUn(p) && checkPreference(p, pickerSession.time, date)).sort(byName)
                   const available = profiles.filter(p => !isUn(p) && !checkPreference(p, pickerSession.time, date)).sort(byName)
@@ -1033,12 +1118,12 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                   return (
                     <>
                       {preferred.length > 0 && (
-                        <CommandGroup heading="Preferem este horário">
+                        <CommandGroup heading="Preferem este horário · menos escalados primeiro">
                           {preferred.map(p => renderPickerItem(p, "pref"))}
                         </CommandGroup>
                       )}
                       {available.length > 0 && (
-                        <CommandGroup heading="Disponíveis">
+                        <CommandGroup heading="Disponíveis · menos escalados primeiro">
                           {available.map(p => renderPickerItem(p, "available"))}
                         </CommandGroup>
                       )}

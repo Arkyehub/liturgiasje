@@ -27,7 +27,8 @@ jest.mock("sonner", () => ({
   toast: {
     error: jest.fn(),
     success: jest.fn(),
-    warning: jest.fn()
+    warning: jest.fn(),
+    message: jest.fn()
   }
 }))
 
@@ -82,7 +83,7 @@ describe("ScheduleForm Validation", () => {
 
     // Horário repetido: avisa no card e trava o salvamento
     expect((await screen.findAllByText(/Já existe uma missa às 07:00 neste dia/))).toHaveLength(2)
-    expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled()
+    expect(screen.getByRole("button", { name: /Salvar (Rascunho|alterações)/i })).toBeDisabled()
     expect(screen.getAllByRole("button", { name: /Concluir missa/i })[0]).toBeDisabled()
 
     // Corrigindo um dos horários, libera
@@ -110,7 +111,7 @@ describe("ScheduleForm Validation", () => {
     fireEvent.change(timeInput, { target: { value: "19:00" } })
 
     expect(await screen.findByText(/Já existe uma missa às 19:00 neste dia/)).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled()
+    expect(screen.getByRole("button", { name: /Salvar (Rascunho|alterações)/i })).toBeDisabled()
   })
 
   it("should fetch usage counts for the initial month", async () => {
@@ -166,7 +167,7 @@ describe("ScheduleForm Validation", () => {
     await userEvent.click(await screen.findByRole("button", { name: /^Leitor$/ }))
     await userEvent.click(await screen.findByText("Escolher leitor"))
 
-    const heading = await screen.findByText("Preferem este horário")
+    const heading = await screen.findByText(/Preferem este horário/)
     const group = heading.closest("[cmdk-group]") as HTMLElement
     expect(group).toHaveTextContent("Quer Este Dia")
     expect(group).not.toHaveTextContent("Quer Outro Dia")
@@ -179,15 +180,74 @@ describe("ScheduleForm Validation", () => {
     expect(screen.getByText("DOM")).toBeInTheDocument()
     fireEvent.click(screen.getByText("30"))
     expect(screen.queryByText("DOM")).not.toBeInTheDocument()
-    expect(screen.getByText(/Quinta-feira, 30 de abril/i)).toBeInTheDocument()
+    expect(screen.getByText(/Quinta, 30 de abril/i)).toBeInTheDocument()
     await waitFor(() => expect(onDateChange).toHaveBeenLastCalledWith("2026-04-30"))
 
     await userEvent.click(screen.getByRole("button", { name: "Alterar data" }))
     expect(screen.getByText("DOM")).toBeInTheDocument()
     fireEvent.click(screen.getByText("29"))
     expect(screen.queryByText("DOM")).not.toBeInTheDocument()
-    expect(screen.getByText(/Quarta-feira, 29 de abril/i)).toBeInTheDocument()
+    expect(screen.getByText(/Quarta, 29 de abril/i)).toBeInTheDocument()
     await waitFor(() => expect(onDateChange).toHaveBeenLastCalledWith("2026-04-29"))
+  })
+
+  it("navega entre meses no calendário e recarrega os dias ocupados", async () => {
+    const occupied = jest.fn().mockResolvedValue([])
+    ;(makeListOccupiedDatesForMonth as jest.Mock).mockReturnValue({ execute: occupied })
+    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
+    await waitFor(() => expect(occupied).toHaveBeenCalledWith("2026-04"))
+    await userEvent.click(screen.getByRole("button", { name: "Próximo mês" }))
+    await waitFor(() => expect(occupied).toHaveBeenCalledWith("2026-05"))
+    expect(screen.getByText(/maio 2026/i)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Mês anterior" }))
+    expect(screen.getByText(/abril 2026/i)).toBeInTheDocument()
+  })
+
+  it("atalhos de horário mudam o horário da missa", async () => {
+    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
+    fireEvent.click(screen.getByText("30"))
+    await userEvent.click(await screen.findByRole("button", { name: "19:00" }))
+    expect((screen.getAllByLabelText(/Horário/i)[0] as HTMLInputElement).value).toBe("19:00")
+  })
+
+  it("ao tocar numa função a lista de leitores abre, com os menos escalados primeiro", async () => {
+    const mk = (id: string, name: string) => ({ id, fullName: name, role: "reader", createdAt: "", updatedAt: "" })
+    ;(makeListProfiles as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([mk("a", "Ana"), mk("b", "Bruno"), mk("c", "Carla")]) })
+    ;(makeGetProfilesUsage as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue({ a: 3, b: 0, c: 1 }) })
+    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
+    fireEvent.click(screen.getByText("30"))
+    await userEvent.click(await screen.findByRole("button", { name: /^Leitor$/ }))
+    const dialog = await screen.findByRole("dialog", { name: /Escolher/ })
+    await screen.findByText(/Bruno/)
+    const names = Array.from(dialog.querySelectorAll("[cmdk-item]")).map(el => el.textContent || "")
+    expect(names[0]).toMatch(/Bruno/)
+    expect(names[1]).toMatch(/Carla/)
+    expect(names[2]).toMatch(/Ana/)
+  })
+
+  it("Concluir missa fica bloqueado com função sem leitor", async () => {
+    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
+    fireEvent.click(screen.getByText("30"))
+    await userEvent.click(await screen.findByRole("button", { name: /^Leitor$/ }))
+    await userEvent.click(await screen.findByRole("button", { name: /Fechar seleção de leitor/ }))
+    expect(screen.getByRole("button", { name: /Concluir missa/ })).toBeDisabled()
+  })
+
+  it("avisa quando há alterações não salvas e permite desfazer a exclusão de uma missa", async () => {
+    const onDirtyChange = jest.fn()
+    render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} onDirtyChange={onDirtyChange} />)
+    fireEvent.click(screen.getByText("30"))
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false))
+    await userEvent.type(await screen.findByLabelText(/Descrição da missa/), "Missa da Catequese")
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(true))
+
+    fireEvent.click(screen.getByText(/Adicionar outro Horário/i))
+    await userEvent.click((await screen.findAllByRole("button", { name: "Excluir esta missa" }))[1])
+    expect(toast.message).toHaveBeenCalledWith(expect.stringMatching(/excluída/), expect.objectContaining({ action: expect.objectContaining({ label: "Desfazer" }) }))
+    const { action } = (toast.message as jest.Mock).mock.calls.at(-1)[1]
+    expect(screen.getAllByLabelText(/Horário/i)).toHaveLength(1)
+    action.onClick()
+    await waitFor(() => expect(screen.getAllByLabelText(/Horário/i)).toHaveLength(2))
   })
 
   it("should collapse a mass into a summary and expand it again", async () => {
@@ -256,24 +316,28 @@ describe("ScheduleForm Validation", () => {
     expect(await screen.findByText(/precisa de descrição para ser concluída/)).toBeInTheDocument()
     expect(screen.getAllByText(/precisa de (uma )?descrição/)).toHaveLength(1)
     expect(screen.getByRole("button", { name: /Concluir missa/ })).toBeDisabled()
-    expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled()
+    expect(screen.getByRole("button", { name: /Salvar (Rascunho|alterações)/i })).toBeDisabled()
 
     // Com descrição, conclui e salva sem nenhuma função
     await userEvent.type(screen.getByLabelText(/Descrição da missa/), "Missa da Catequese")
     expect(screen.queryByText(/precisa de descrição para ser concluída/)).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Concluir missa/ })).toBeEnabled()
     await userEvent.click(screen.getByRole("button", { name: /Concluir missa/ }))
-    await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled())
+    await waitFor(() => expect(screen.getByRole("button", { name: /Salvar (Rascunho|alterações)/i })).toBeEnabled())
     await userEvent.click(screen.getByRole("button", { name: /Editar missa das/ }))
 
-    // Declarou uma função: precisa de leitor
+    // Declarou uma função: a lista de leitores já abre; sem leitor, a missa não conclui
     await userEvent.click(await screen.findByRole("button", { name: /^Leitor$/ }))
-    expect(await screen.findByText(/1 função sem leitor/)).toBeInTheDocument()
+    expect(await screen.findByRole("dialog", { name: /Escolher/ })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: /Fechar seleção de leitor/ }))
+    expect(await screen.findByText(/Escolha o leitor da função que está vazia/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Concluir missa/ })).toBeDisabled()
     expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled()
 
-    // Com leitor escolhido, libera
+    // Com leitor escolhido, conclui e libera
     await userEvent.click(await screen.findByText("Escolher leitor"))
     await userEvent.click(await screen.findByText(/^Disponivel Teste/))
+    expect(screen.getByRole("button", { name: /Concluir missa/ })).toBeEnabled()
     expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled() // ainda aberta
     await userEvent.click(screen.getByRole("button", { name: /Concluir missa/ }))
     await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled())
@@ -297,12 +361,12 @@ describe("ScheduleForm Validation", () => {
       await userEvent.click(await screen.findByText("Escolher leitor"))
       await userEvent.click(await screen.findByText(/^Leitor Um/))
       await userEvent.click(screen.getByRole("button", { name: /Concluir missa/ }))
-      await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled())
+      await waitFor(() => expect(screen.getByRole("button", { name: /Salvar (Rascunho|alterações)/i })).toBeEnabled())
 
       fireEvent.click(screen.getByRole("button", { name: "Alterar data" }))
       fireEvent.click(screen.getByText("30"))
 
-      await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled())
+      await waitFor(() => expect(screen.getByRole("button", { name: /Salvar (Rascunho|alterações)/i })).toBeDisabled())
       expect(screen.getAllByText(/1 função sem leitor/).length).toBeGreaterThan(0)
       expect(toast.warning).toHaveBeenCalledWith(expect.stringMatching(/Leitor Um/))
     })
@@ -370,7 +434,7 @@ describe("ScheduleForm Validation", () => {
       expect(await screen.findByRole("button", { name: /Editar missa das 07:00/i })).toBeInTheDocument()
       expect(screen.queryByRole("alert")).not.toBeInTheDocument()
       expect(screen.queryByText(/Horário repetido/)).not.toBeInTheDocument()
-      expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled()
+      expect(screen.getByRole("button", { name: /Salvar (Rascunho|alterações)/i })).toBeEnabled()
     })
 
     it("em edição o dia fica travado: trocar de data não move a missa nem cria conflito falso", async () => {
@@ -382,9 +446,9 @@ describe("ScheduleForm Validation", () => {
       // Em edição o calendário fica recolhido e sem lápis: não há como trocar o dia.
       expect(screen.queryByRole("button", { name: /^27 de abril/i })).not.toBeInTheDocument()
       expect(screen.queryByRole("button", { name: "Alterar data" })).not.toBeInTheDocument()
-      expect(screen.getByText(/Quinta-feira, 30 de abril/i)).toBeInTheDocument()
+      expect(screen.getByText(/Quinta, 30 de abril/i)).toBeInTheDocument()
       expect(screen.queryByText(/Horário repetido/)).not.toBeInTheDocument()
-      expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled()
+      expect(screen.getByRole("button", { name: /Salvar (Rascunho|alterações)/i })).toBeEnabled()
     })
   })
 })

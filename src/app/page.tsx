@@ -115,6 +115,15 @@ export default function Home() {
   const [isScheduleSheetOpen, setIsScheduleSheetOpen] = useState(false)
   const [scheduleToEdit, setScheduleToEdit] = useState<any | null>(null)
   const [scheduleFormDate, setScheduleFormDate] = useState("")
+  const scheduleDirtyRef = useRef(false)
+  const [confirmDiscardSchedule, setConfirmDiscardSchedule] = useState(false)
+  const closeScheduleSheet = () => {
+    scheduleDirtyRef.current = false
+    setConfirmDiscardSchedule(false)
+    setIsScheduleSheetOpen(false)
+    setScheduleToEdit(null)
+    setScheduleFormDate("")
+  }
   const [scheduleToDelete, setScheduleToDelete] = useState<string[] | null>(null)
   const [isDeletingSchedule, setIsDeletingSchedule] = useState(false)
   const [swapTargetSlot, setSwapTargetSlot] = useState<any | null>(null)
@@ -953,15 +962,37 @@ export default function Home() {
                 <Sheet
                   open={isScheduleSheetOpen}
                   onOpenChange={(open) => {
-                    setIsScheduleSheetOpen(open)
-                    // Fechar pelo X, pelo fundo ou pelo gesto de voltar também sai do modo edição;
-                    // senão o próximo "Adicionar Dia" reabriria o dia antigo.
-                    if (!open) {
-                      setScheduleToEdit(null)
-                      setScheduleFormDate("")
+                    if (open) {
+                      setIsScheduleSheetOpen(true)
+                      return
                     }
+                    // Fechar pelo X, pelo fundo ou pelo gesto de voltar: com alterações não salvas, pergunta antes.
+                    // Fechar também sai do modo edição; senão o próximo "Adicionar Dia" reabriria o dia antigo.
+                    if (scheduleDirtyRef.current) {
+                      setConfirmDiscardSchedule(true)
+                      return
+                    }
+                    closeScheduleSheet()
                   }}
                 >
+                  <Dialog open={confirmDiscardSchedule} onOpenChange={setConfirmDiscardSchedule}>
+                    <DialogContent className="max-w-sm rounded-[24px] border-[#E9DFCB] bg-white p-6" showCloseButton={false}>
+                      <DialogHeader className="gap-2 text-left">
+                        <DialogTitle className="text-xl font-extrabold text-[#241A10]">Descartar alterações?</DialogTitle>
+                        <DialogDescription className="text-sm leading-snug text-[#6B5D50]">
+                          Você montou missas que ainda não foram salvas. Se sair agora, elas serão perdidas.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter className="mt-2 flex-col gap-2 sm:flex-col">
+                        <Button type="button" onClick={() => setConfirmDiscardSchedule(false)} className="h-12 w-full rounded-2xl bg-[#322113] font-extrabold text-[#FFF8E8] hover:bg-[#241709]">
+                          Continuar editando
+                        </Button>
+                        <Button type="button" variant="outline" onClick={closeScheduleSheet} className="h-12 w-full rounded-2xl border-[#E8C2A8] font-bold text-[#A23F06] hover:bg-[#FDEBDD]">
+                          Descartar e sair
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                   <SheetTrigger render={
                     <Button 
                       variant="outline" 
@@ -977,7 +1008,7 @@ export default function Home() {
                         <span className="text-[11px] font-bold tracking-[0.12em] text-[#E8C76A]">
                           {scheduleToEdit ? "EDITAR ESCALA" : "NOVA ESCALA"}
                         </span>
-                        <SheetTitle className="text-[26px] font-extrabold capitalize leading-tight tracking-tight text-[#FFF8E8]">
+                        <SheetTitle className="text-[26px] font-extrabold leading-tight tracking-tight text-[#FFF8E8] first-letter:uppercase">
                           {(() => {
                             const chosen = scheduleFormDate || scheduleToEdit?.[0]?.date || ""
                             const d = chosen ? new Date(chosen + 'T00:00:00') : null
@@ -1004,6 +1035,11 @@ export default function Home() {
                         currentMonth={currentDate}
                         initialData={scheduleToEdit}
                         onDateChange={setScheduleFormDate}
+                        onDirtyChange={(dirty) => { scheduleDirtyRef.current = dirty }}
+                        onRequestClose={() => {
+                          if (scheduleDirtyRef.current) setConfirmDiscardSchedule(true)
+                          else closeScheduleSheet()
+                        }}
                         onEditExisting={(d) => {
                           const items = schedule.filter((i: any) => i.date === d)
                           if (items.length > 0) setScheduleToEdit(items)
@@ -1011,11 +1047,7 @@ export default function Home() {
                         onSuccess={async () => {
                           await loadSchedule(currentDate, profile?.role === "admin", true)
                         }}
-                        onClose={() => {
-                          setIsScheduleSheetOpen(false)
-                          setScheduleToEdit(null)
-                          setScheduleFormDate("")
-                        }}
+                        onClose={closeScheduleSheet}
                       />
                     </div>
                   </SheetContent>
