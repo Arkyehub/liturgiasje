@@ -1,18 +1,12 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback, useId } from "react"
-import { Button } from "@/shared/ui/button"
-import { Input } from "@/shared/ui/input"
-import { Textarea } from "@/shared/ui/textarea"
 import { Label } from "@/shared/ui/label"
-import { Switch } from "@/shared/ui/switch"
-import { Calendar } from "@/shared/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover"
-import { format, isValid } from "date-fns"
+import { addMonths, format, getDaysInMonth, isSameDay, isValid, startOfMonth } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import {
-  CalendarIcon, Loader2, Image as ImageIcon,
-  Music, X, Mic, Square, FileText, Trash2
+  CalendarDays, Check, ChevronLeft, ChevronRight, FileText, Image as ImageIcon,
+  Loader2, Mic, Pause, Play, Square, Trash2, Upload, X
 } from "lucide-react"
 import { cn, getFileType } from "@/shared/lib/utils"
 import { toast } from "sonner"
@@ -101,66 +95,43 @@ function FilePickerButton({
   )
 }
 
-// ─── Sub-componente: AttachmentItem ──────────────────────────────────────────
-
-interface AttachmentItemProps {
-  label: string
-  icon: React.ReactNode
-  isNew?: boolean
-  onRemove: () => void
-}
-
-function AttachmentItem({ label, icon, isNew = false, onRemove }: AttachmentItemProps) {
-  return (
-    <div className={cn(
-      "flex items-center justify-between gap-2 rounded-md border p-2",
-      isNew ? "border-green-200 bg-green-50/30" : "border-stone-200 bg-stone-50"
-    )}>
-      <div className="flex items-center gap-1.5 overflow-hidden">
-        {icon}
-        <span className="truncate text-[10px] font-medium text-stone-600">
-          {label.startsWith('http') ? 'Anexo' : label}
-        </span>
-      </div>
-      <button
-        type="button"
-        onClick={onRemove}
-        className="flex-shrink-0 text-stone-400 transition-colors hover:text-red-500"
-        aria-label={`Remover anexo`}
-      >
-        <X className="h-3 w-3" />
-      </button>
-    </div>
-  )
-}
-
-// ─── Sub-componente: ImagePreview ─────────────────────────────────────────────
+// ─── Sub-componentes de anexos (visual do design "Novo aviso") ────────────────
 
 interface ImagePreviewProps {
   src: string
-  isNew?: boolean
   onRemove: () => void
 }
 
-function ImagePreview({ src, isNew = false, onRemove }: ImagePreviewProps) {
+function ImagePreview({ src, onRemove }: ImagePreviewProps) {
   return (
-    <div className="relative h-16 w-16">
-      <div className={cn(
-        "h-full w-full overflow-hidden rounded-md border",
-        isNew ? "border-green-200" : "border-stone-200"
-      )}>
+    <div className="relative h-[84px] w-[84px] shrink-0">
+      <div className="h-full w-full overflow-hidden rounded-2xl border border-[#E9DFCB] bg-[#F4EEDD]">
         <img src={src} alt="Anexo" className="h-full w-full object-cover" />
       </div>
       <button
         type="button"
         onClick={onRemove}
-        className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white shadow-md transition-all hover:bg-red-600 hover:scale-110 active:scale-95 z-10"
+        className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#B5472A] text-white shadow-sm transition-transform active:scale-95"
         aria-label="Remover imagem"
       >
-        <X className="h-3 w-3" />
+        <X className="h-3.5 w-3.5" strokeWidth={2.6} />
       </button>
     </div>
   )
+}
+
+const formatClock = (seconds: number) => {
+  if (!Number.isFinite(seconds) || seconds < 0) return "--:--"
+  const m = Math.floor(seconds / 60)
+  const sec = Math.floor(seconds % 60)
+  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
+}
+
+const attachmentName = (url: string, fallback: string) => {
+  const raw = url.split("/").pop()?.split("?")[0] || fallback
+  let decoded = raw
+  try { decoded = decodeURIComponent(raw) } catch { /* mantém o nome original */ }
+  return decoded.split("-").slice(1).join("-") || decoded
 }
 
 interface AudioPreviewProps {
@@ -169,28 +140,58 @@ interface AudioPreviewProps {
 }
 
 function AudioPreview({ url, onRemove }: AudioPreviewProps) {
-  const fileName = url.split('/').pop()?.split('?')[0] || 'Áudio'
-  const decodedName = decodeURIComponent(fileName).split('-').slice(1).join('-') || fileName
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [playing, setPlaying] = useState(false)
+  const [current, setCurrent] = useState(0)
+  const [duration, setDuration] = useState(NaN)
+  const name = attachmentName(url, "Áudio")
+  const progress = Number.isFinite(duration) && duration > 0 ? Math.min(100, (current / duration) * 100) : 0
+
+  const toggle = () => {
+    const el = audioRef.current
+    if (!el) return
+    if (el.paused) el.play().catch(() => toast.error("Não foi possível reproduzir o áudio."))
+    else el.pause()
+  }
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-md border border-stone-200 bg-stone-50 p-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 overflow-hidden">
-          <Music className="h-3.5 w-3.5 flex-shrink-0 text-stone-400" />
-          <span className="truncate text-[10px] font-medium text-stone-600" title={decodedName}>
-            {decodedName}
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={onRemove}
-          className="flex-shrink-0 text-stone-400 transition-colors hover:text-red-500"
-          aria-label="Remover áudio"
-        >
-          <X className="h-3 w-3" />
-        </button>
+    <div className="flex items-center gap-2.5 rounded-[14px] border border-[#E9DFCB] bg-[#FAF5E6] py-2.5 pl-2.5 pr-1.5">
+      <audio
+        ref={audioRef}
+        src={url}
+        preload="metadata"
+        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+        onDurationChange={(e) => setDuration(e.currentTarget.duration)}
+        onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => { setPlaying(false); setCurrent(0) }}
+      />
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={playing ? "Pausar áudio" : "Ouvir áudio"}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#322113] text-[#FFF8E8]"
+      >
+        {playing ? <Pause className="h-4 w-4" strokeWidth={2.4} /> : <Play className="h-4 w-4" strokeWidth={2.4} />}
+      </button>
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <span className="truncate text-sm font-bold text-[#241A10]">{name}</span>
+        <span className="block h-1 rounded-full bg-[#E9DFCB]">
+          <span className="block h-1 rounded-full bg-[#E8B21E]" style={{ width: `${progress}%` }} />
+        </span>
       </div>
-      <audio controls src={url} className="mt-1 h-8 w-full" preload="metadata" />
+      <span className="text-xs font-semibold tabular-nums text-[#6B5D50]">
+        {formatClock(playing || current > 0 ? current : duration)}
+      </span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="flex h-11 w-11 shrink-0 items-center justify-center text-[#B5472A]"
+        aria-label="Remover áudio"
+      >
+        <Trash2 className="h-[18px] w-[18px]" />
+      </button>
     </div>
   )
 }
@@ -202,48 +203,121 @@ interface PDFPreviewProps {
 
 function PDFPreview({ url, onRemove }: PDFPreviewProps) {
   const fileType = getFileType(url)
-  const fileName = url.split('/').pop()?.split('?')[0] || 'Documento'
-  const decodedName = decodeURIComponent(fileName).split('-').slice(1).join('-') || fileName
-
-  // Cores dinâmicas para a tag baseadas no tipo
-  const tagColors: Record<string, string> = {
-    pdf: "bg-red-600",
-    ppt: "bg-orange-600",
-    pptx: "bg-orange-600",
-    doc: "bg-blue-600",
-    docx: "bg-blue-600",
-    xls: "bg-green-600",
-    xlsx: "bg-green-600"
-  };
-  
-  const tagColorClass = tagColors[fileType] || "bg-stone-600";
-
+  const name = attachmentName(url, "Documento")
+  const tags: Record<string, string> = {
+    pdf: "bg-[#FDEBDD] text-[#B5472A]",
+    ppt: "bg-[#FFF3D1] text-[#6B3F00]",
+    pptx: "bg-[#FFF3D1] text-[#6B3F00]",
+    doc: "bg-[#E4EEF9] text-[#1F5A99]",
+    docx: "bg-[#E4EEF9] text-[#1F5A99]",
+    xls: "bg-[#E6F3EB] text-[#1E6B43]",
+    xlsx: "bg-[#E6F3EB] text-[#1E6B43]",
+  }
   return (
-    <div className="relative h-20 w-20">
-      <div className="h-full w-full overflow-hidden rounded-xl border border-stone-200 bg-stone-50 flex flex-col items-center justify-center p-1">
-        <FileText className="h-8 w-8 text-stone-300" />
-        {/* Tag Dinâmica - Alinhada à Esquerda conforme solicitado */}
-        <div className={cn(
-          "absolute top-1.5 left-1.5 text-white text-[7px] font-black px-1.5 py-0.5 rounded shadow-sm",
-          tagColorClass
-        )}>
-          {fileType.toUpperCase()}
-        </div>
-        <span className="mt-1 w-full truncate text-center text-[8px] font-bold text-stone-500 px-1 leading-tight">
-          {decodedName}
-        </span>
-      </div>
+    <div className="flex items-center gap-2.5 rounded-[14px] border border-[#E9DFCB] bg-[#FAF5E6] py-2.5 pl-2.5 pr-1.5">
+      <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] text-[11px] font-extrabold", tags[fileType] || "bg-[#F4EEDD] text-[#6B5D50]")}>
+        {fileType.toUpperCase().slice(0, 4)}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-sm font-bold text-[#241A10]">{name}</span>
       <button
         type="button"
         onClick={onRemove}
-        className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white shadow-md transition-all hover:bg-red-600 hover:scale-110 active:scale-95 z-10 border-2 border-white"
+        className="flex h-11 w-11 shrink-0 items-center justify-center text-[#B5472A]"
         aria-label={`Remover ${fileType.toUpperCase()}`}
       >
-        <X className="h-3 w-3" />
+        <Trash2 className="h-[18px] w-[18px]" />
       </button>
     </div>
   )
 }
+
+// Calendário de validade: sem dias passados (hoje também fica de fora, como antes)
+function ExpiryCalendar({ value, onSelect }: { value?: Date; onSelect: (d: Date) => void }) {
+  const [view, setView] = useState(() => startOfMonth(value && isValid(value) ? value : new Date()))
+  const now = new Date()
+  const year = view.getFullYear()
+  const month = view.getMonth()
+  const firstDow = view.getDay()
+  const days = Array.from({ length: getDaysInMonth(view) }, (_, i) => i + 1)
+  const canGoBack = view > startOfMonth(now)
+
+  return (
+    <div className="space-y-2 rounded-[18px] border border-[#E9DFCB] bg-white p-2.5">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setView(addMonths(view, -1))}
+          disabled={!canGoBack}
+          aria-label="Mês anterior"
+          className="flex h-11 w-11 items-center justify-center rounded-full text-[#322113] disabled:opacity-30"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <span className="text-[15px] font-extrabold capitalize text-[#241A10]">{format(view, "MMMM yyyy", { locale: ptBR })}</span>
+        <button
+          type="button"
+          onClick={() => setView(addMonths(view, 1))}
+          aria-label="Próximo mês"
+          className="flex h-11 w-11 items-center justify-center rounded-full text-[#322113]"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"].map((d, i) => (
+          <span key={d} className={cn("pb-1 text-center text-[11px] font-bold tracking-[0.06em]", i === 0 ? "text-[#322113]" : "text-[#6B5D50]")}>{d}</span>
+        ))}
+        {Array.from({ length: firstDow }).map((_, i) => <span key={`e${i}`} />)}
+        {days.map((day) => {
+          const date = new Date(year, month, day)
+          const disabled = date < now
+          const selected = !!value && isSameDay(date, value)
+          return (
+            <button
+              key={day}
+              type="button"
+              disabled={disabled}
+              aria-label={`${day} de ${format(date, "MMMM", { locale: ptBR })}`}
+              aria-pressed={selected}
+              onClick={() => onSelect(date)}
+              className={cn(
+                "flex h-[46px] items-center justify-center rounded-xl border text-[15px] transition-all active:scale-95",
+                selected
+                  ? "border-[#322113] bg-[#322113] font-extrabold text-[#FFF8E8]"
+                  : disabled
+                    ? "border-transparent font-semibold text-[#B8A98E]"
+                    : "border-[#E9DFCB] bg-white font-semibold text-[#241A10]"
+              )}
+            >
+              {day}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function FieldLabel({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between px-0.5">
+      <span className="text-xs font-bold text-[#6B5D50]">{children}</span>
+      {right && <span className="text-xs font-semibold text-[#6B5D50]">{right}</span>}
+    </div>
+  )
+}
+
+function StepTitle({ n, children, optional }: { n: number; children: React.ReactNode; optional?: boolean }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[#E8B21E] text-[13px] font-extrabold text-[#322113]">{n}</span>
+      <h2 className="text-lg font-extrabold text-[#241A10]">{children}</h2>
+      {optional && <span className="rounded-full bg-[#F4EEDD] px-2.5 py-0.5 text-xs font-bold text-[#6B5D50]">opcional</span>}
+    </div>
+  )
+}
+
+const OUTLINE_BTN = "flex h-12 items-center justify-center gap-2 rounded-[14px] border border-[#D9CDB8] bg-white px-3.5 text-sm font-bold text-[#322113] active:bg-[#FAF5E6]"
 
 // ─── Hook: useAudioRecorder ───────────────────────────────────────────────────
 
@@ -520,6 +594,11 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
       return
     }
 
+    if (hasExpiration && !(expirationDateValue && isValid(expirationDateValue))) {
+      toast.error("Escolha a data de validade ou desligue a opção \"Sumir do mural sozinho\"")
+      return
+    }
+
     const publishedStatus = isPublishedOverride !== undefined ? isPublishedOverride : isPublished
 
     setIsSubmitting(true)
@@ -549,285 +628,273 @@ export function AnnouncementForm({ initialData, onSave, onClose }: AnnouncementF
   const canAddAudios = audioUrls.length < MAX_ATTACHMENTS
   const canAddPdfs = pdfUrls.length < MAX_ATTACHMENTS
 
-  const isFormValid = title.trim().length > 0 && (
-    content.trim().length > 0 || 
-    imageUrls.length > 0 || 
-    audioUrls.length > 0 || 
-    pdfUrls.length > 0
-  )
+  const isUploading = Object.values(uploadingStatus).some(Boolean)
+  const hasTitle = title.trim().length > 0
+  const hasBody = content.trim().length > 0 || imageUrls.length > 0 || audioUrls.length > 0 || pdfUrls.length > 0
+  const missingExpiryDate = hasExpiration && !(expirationDateValue && isValid(expirationDateValue))
+
+  const isFormValid = hasTitle && hasBody
+  const canPublish = isFormValid && !missingExpiryDate && !isUploading && !isSubmitting
+  const canDraft = isFormValid && !isUploading && !isSubmitting
+
+  let footerSummary: React.ReactNode
+  if (isUploading) footerSummary = "Enviando arquivos… aguarde para publicar."
+  else if (!hasTitle && !hasBody) footerSummary = "Escreva um título e uma mensagem (ou anexe algo) para publicar."
+  else if (!hasTitle) footerSummary = "Falta o título do aviso."
+  else if (!hasBody) footerSummary = "Escreva a mensagem ou anexe algo para publicar."
+  else if (missingExpiryDate) footerSummary = <strong className="font-bold text-[#A23F06]">Escolha a data de validade ou desligue a opção.</strong>
+  else {
+    const parts = [
+      imageUrls.length > 0 && `${imageUrls.length} ${imageUrls.length === 1 ? "imagem" : "imagens"}`,
+      audioUrls.length > 0 && `${audioUrls.length} ${audioUrls.length === 1 ? "áudio" : "áudios"}`,
+      pdfUrls.length > 0 && `${pdfUrls.length} ${pdfUrls.length === 1 ? "documento" : "documentos"}`,
+    ].filter(Boolean).join(", ")
+    footerSummary = (
+      <>
+        {initialData && !isPublished ? "Fica como rascunho até você publicar" : "Vai para o mural"}
+        {hasExpiration && expirationDateValue && isValid(expirationDateValue) && (
+          <> até <strong className="font-bold text-[#241A10]">{format(expirationDateValue, "d 'de' MMMM", { locale: ptBR })}</strong></>
+        )}
+        {parts && <> · {parts}</>}
+      </>
+    )
+  }
 
   // ── Render ──────────────────────────────────────────────────────────────────
   if (!isHydrated) return null
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 pt-4 text-stone-900">
+    <form onSubmit={(e) => handleSubmit(e)} className="relative flex h-full min-h-0 flex-col text-[#241A10]">
+      <div className="flex-1 space-y-[26px] overflow-y-auto px-4 pb-8 pt-6">
 
-      {/* Campos de texto */}
-      <div className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="ann-title" className="text-stone-700 font-semibold">
-            Título do Aviso
-          </Label>
-          <Input
-            id="ann-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="border-stone-300 focus-visible:ring-stone-400 font-medium"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="ann-content" className="text-stone-700 font-semibold">
-            Mensagem
-          </Label>
-          <Textarea
-            id="ann-content"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="min-h-[120px] border-stone-300 focus-visible:ring-stone-400 font-medium"
-          />
-        </div>
-      </div>
-
-      {/* Imagens */}
-      <div className="space-y-2">
-        <Label className="text-stone-700 font-semibold">
-          Imagens{" "}
-          <span className="text-xs font-normal text-stone-400">
-            ({imageUrls.length}/{MAX_ATTACHMENTS})
-          </span>
-          {uploadingStatus.images && (
-            <Loader2 className="ml-2 h-3 w-3 animate-spin inline text-stone-400" />
-          )}
-        </Label>
-        <div className="flex flex-wrap gap-2">
-          {imageUrls.map((url, i) => (
-            <ImagePreview
-              key={`img-${i}`}
-              src={url}
-              onRemove={() => handleRemoveUrl(url, 'image')}
-            />
-          ))}
-          {uploadingStatus.images && (
-            <div className="flex h-16 w-16 animate-pulse items-center justify-center rounded-md border border-stone-200 bg-stone-100">
-              <Loader2 className="h-4 w-4 animate-spin text-stone-300" />
-            </div>
-          )}
-          {canAddImages && (
-            <FilePickerButton
-              accept="image/*"
-              multiple
-              onChange={addImages}
-              className="flex h-16 w-16 flex-col items-center justify-center rounded-md border border-dashed border-stone-400 bg-white transition-all hover:bg-stone-50 active:bg-stone-100"
-            >
-              <ImageIcon className="h-5 w-5 text-stone-500" />
-              <span className="mt-0.5 text-[8px] font-bold uppercase text-stone-400">Add</span>
-            </FilePickerButton>
-          )}
-        </div>
-      </div>
-
-      {/* Áudios e PDFs */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-
-        {/* Áudios */}
-        <div className="space-y-2">
-          <Label className="text-stone-700 font-semibold">
-            Áudios{" "}
-            <span className="text-xs font-normal text-stone-400">
-              ({audioUrls.length}/{MAX_ATTACHMENTS})
+        {/* 1 · Título e mensagem */}
+        <div className="space-y-3.5">
+          <StepTitle n={1}>O que você quer avisar?</StepTitle>
+          {initialData && (
+            <span className={cn(
+              "inline-block rounded-full px-2.5 py-1 text-xs font-bold",
+              isPublished ? "bg-[#E6F3EB] text-[#1E6B43]" : "bg-[#FFF3D1] text-[#6B3F00]"
+            )}>
+              {isPublished ? "Publicado no mural" : "Rascunho"}
             </span>
-            {uploadingStatus.audios && (
-              <Loader2 className="ml-2 h-3 w-3 animate-spin inline text-stone-400" />
-            )}
-          </Label>
-          <div className="space-y-1.5">
-            {audioUrls.map((url, i) => (
-              <AudioPreview
-                key={`audio-${i}`}
-                url={url}
-                onRemove={() => handleRemoveUrl(url, 'audio')}
+          )}
+          <div className="space-y-4 rounded-[22px] border border-[#E9DFCB] bg-white p-4">
+            <div className="space-y-2">
+              <label htmlFor="ann-title" className="px-0.5 text-xs font-bold text-[#6B5D50]">Título</label>
+              <input
+                id="ann-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Ex.: Ensaio do coral neste sábado"
+                className="h-[52px] w-full rounded-[14px] border border-[#E9DFCB] bg-[#FAF5E6] px-3.5 text-base font-semibold text-[#241A10] outline-none placeholder:font-normal placeholder:text-[#9A8C78] focus:border-[#322113]"
               />
-            ))}
-            {uploadingStatus.audios && (
-              <div className="flex h-10 w-full animate-pulse items-center justify-center rounded-md border border-stone-200 bg-stone-50">
-                <Loader2 className="h-4 w-4 animate-spin text-stone-300 mr-2" />
-                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Enviando áudio...</span>
-              </div>
-            )}
-            {canAddAudios && (
-              <div className="flex h-10 gap-1.5">
-                <button
-                  type="button"
-                  onClick={isRecording ? stopRecording : startRecording}
-                  className={cn(
-                    "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md border transition-all",
-                    isRecording
-                      ? "border-red-400 bg-red-50 text-red-500"
-                      : "border-stone-300 bg-white text-stone-500 hover:bg-stone-50"
-                  )}
-                  aria-label={isRecording ? "Parar gravação" : "Gravar áudio"}
-                >
-                  {isRecording
-                    ? <Square className="h-4 w-4 fill-red-500" />
-                    : <Mic className="h-4 w-4" />
-                  }
-                </button>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="ann-content" className="px-0.5 text-xs font-bold text-[#6B5D50]">Mensagem</label>
+              <textarea
+                id="ann-content"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="Escreva o aviso para a comunidade"
+                className="min-h-[140px] w-full resize-y rounded-[14px] border border-[#E9DFCB] bg-[#FAF5E6] p-3.5 text-base font-semibold leading-snug text-[#241A10] outline-none placeholder:font-normal placeholder:text-[#9A8C78] focus:border-[#322113]"
+              />
+            </div>
+          </div>
+        </div>
 
-                {isRecording ? (
-                  <div className="flex flex-1 items-center justify-center rounded-md border border-red-200 bg-red-50 text-[11px] font-bold text-red-500">
-                    {formatTime(recordingTime)}
+        {/* 2 · Anexos */}
+        <div className="space-y-3.5">
+          <StepTitle n={2} optional>Anexos</StepTitle>
+          <div className="space-y-[18px] rounded-[22px] border border-[#E9DFCB] bg-white p-4">
+
+            <div className="space-y-2.5">
+              <FieldLabel right={`${imageUrls.length} de ${MAX_ATTACHMENTS}`}>Imagens</FieldLabel>
+              <div className="flex flex-wrap gap-2.5 pt-1.5">
+                {imageUrls.map((url, i) => (
+                  <ImagePreview key={`img-${i}`} src={url} onRemove={() => handleRemoveUrl(url, 'image')} />
+                ))}
+                {uploadingStatus.images && (
+                  <div className="flex h-[84px] w-[84px] animate-pulse items-center justify-center rounded-2xl border border-[#E9DFCB] bg-[#F4EEDD]">
+                    <Loader2 className="h-5 w-5 animate-spin text-[#B8A98E]" />
                   </div>
-                ) : (
+                )}
+                {canAddImages && !uploadingStatus.images && (
                   <FilePickerButton
-                    accept="audio/*"
-                    onChange={addAudios}
-                    className="flex flex-1 items-center justify-center rounded-md border border-dashed border-stone-400 bg-white transition-all hover:bg-stone-50 active:bg-stone-100 h-10"
+                    accept="image/*"
+                    multiple
+                    onChange={addImages}
+                    className="flex h-[84px] w-[84px] flex-col items-center justify-center gap-1 rounded-2xl border-[1.5px] border-dashed border-[#C9B99C] text-[#322113]"
                   >
-                    <span className="text-[10px] font-bold uppercase text-stone-500">
-                      Arquivo
-                    </span>
+                    <ImageIcon className="h-[22px] w-[22px]" strokeWidth={2} />
+                    <span className="text-xs font-bold">Foto</span>
                   </FilePickerButton>
+                )}
+              </div>
+            </div>
+
+            <div className="h-px bg-[#F1EADC]" />
+
+            <div className="space-y-2.5">
+              <FieldLabel right={`${audioUrls.length} de ${MAX_ATTACHMENTS}`}>Áudios</FieldLabel>
+              {audioUrls.map((url, i) => (
+                <AudioPreview key={`audio-${i}`} url={url} onRemove={() => handleRemoveUrl(url, 'audio')} />
+              ))}
+              {uploadingStatus.audios && (
+                <div className="flex h-12 animate-pulse items-center justify-center gap-2 rounded-[14px] border border-[#E9DFCB] bg-[#FAF5E6] text-xs font-bold text-[#6B5D50]">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Enviando áudio…
+                </div>
+              )}
+              {isRecording && (
+                <div className="flex items-center gap-3 rounded-[14px] border border-[#F2CDB0] bg-[#FDEBDD] p-2.5" role="status" aria-label="Gravando áudio">
+                  <span aria-hidden="true" className="ml-1 h-3 w-3 animate-pulse rounded-full bg-[#D43F1F] shadow-[0_0_0_5px_rgba(212,63,31,0.18)]" />
+                  <span className="flex-1 text-sm font-bold text-[#6B2A02]">Gravando…</span>
+                  <span className="text-lg font-extrabold tabular-nums text-[#6B2A02]">{formatTime(recordingTime)}</span>
+                  <button
+                    type="button"
+                    onClick={stopRecording}
+                    aria-label="Parar gravação"
+                    className="flex h-11 items-center gap-1.5 rounded-xl bg-[#A23F06] px-3.5 text-sm font-extrabold text-white"
+                  >
+                    <Square className="h-3.5 w-3.5 fill-white" />
+                    Parar
+                  </button>
+                </div>
+              )}
+              {canAddAudios && !isRecording && !uploadingStatus.audios && (
+                <div className="flex gap-2">
+                  <button type="button" onClick={startRecording} aria-label="Gravar áudio" className={cn(OUTLINE_BTN, "flex-1")}>
+                    <Mic className="h-[18px] w-[18px]" strokeWidth={2.2} />
+                    Gravar
+                  </button>
+                  <FilePickerButton accept="audio/*" onChange={addAudios} className={cn(OUTLINE_BTN, "flex-1")}>
+                    <Upload className="h-[18px] w-[18px]" strokeWidth={2.2} />
+                    Arquivo
+                  </FilePickerButton>
+                </div>
+              )}
+            </div>
+
+            <div className="h-px bg-[#F1EADC]" />
+
+            <div className="space-y-2.5">
+              <FieldLabel right={`${pdfUrls.length} de ${MAX_ATTACHMENTS}`}>Documentos</FieldLabel>
+              {pdfUrls.map((url, i) => (
+                <PDFPreview key={`pdf-${i}`} url={url} onRemove={() => handleRemoveUrl(url, 'pdf')} />
+              ))}
+              {uploadingStatus.pdfs && (
+                <div className="flex h-12 animate-pulse items-center justify-center gap-2 rounded-[14px] border border-[#E9DFCB] bg-[#FAF5E6] text-xs font-bold text-[#6B5D50]">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Enviando documento…
+                </div>
+              )}
+              {canAddPdfs && !uploadingStatus.pdfs && (
+                <FilePickerButton
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf"
+                  onChange={addPdfs}
+                  className={OUTLINE_BTN}
+                >
+                  <FileText className="h-[18px] w-[18px]" strokeWidth={2.2} />
+                  Adicionar PDF, Word ou PowerPoint
+                </FilePickerButton>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 3 · Validade */}
+        <div className="space-y-3.5">
+          <StepTitle n={3} optional>Validade</StepTitle>
+          <div className="space-y-3.5 rounded-[22px] border border-[#E9DFCB] bg-white p-4">
+            <div className="flex items-center gap-3.5">
+              <div className="flex-1 space-y-0.5">
+                <p id="ann-expiry-label" className="text-base font-extrabold">Sumir do mural sozinho</p>
+                <p className="text-[13px] leading-snug text-[#6B5D50]">
+                  {hasExpiration && expirationDateValue && isValid(expirationDateValue)
+                    ? `Sai do mural em ${format(expirationDateValue, "d 'de' MMMM", { locale: ptBR })}.`
+                    : "Depois da data escolhida o aviso deixa de aparecer."}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={hasExpiration}
+                aria-labelledby="ann-expiry-label"
+                onClick={() => setHasExpiration(!hasExpiration)}
+                className={cn("relative h-[30px] w-[52px] shrink-0 rounded-full transition-colors", hasExpiration ? "bg-[#1E6B43]" : "bg-[#D9CDB8]")}
+              >
+                <span className={cn("absolute top-0.5 h-[26px] w-[26px] rounded-full bg-white shadow transition-all", hasExpiration ? "left-6" : "left-0.5")} />
+              </button>
+            </div>
+
+            {hasExpiration && (
+              <div className="space-y-3.5 animate-in fade-in slide-in-from-top-1">
+                <div className={cn(
+                  "flex h-[52px] items-center gap-2.5 rounded-[14px] border px-3.5 text-base font-bold",
+                  expirationDateValue && isValid(expirationDateValue) ? "border-[#D9CDB8] bg-white text-[#241A10]" : "border-[#F2CDB0] bg-[#FDEBDD] text-[#A23F06]"
+                )}>
+                  <CalendarDays className="h-5 w-5 shrink-0" />
+                  <span className="first-letter:uppercase">
+                    {expirationDateValue && isValid(expirationDateValue)
+                      ? format(expirationDateValue, "EEEE, d 'de' MMMM", { locale: ptBR })
+                      : "Escolha a data abaixo"}
+                  </span>
+                </div>
+                <ExpiryCalendar value={expirationDateValue} onSelect={(d) => setExpirationDate(d)} />
+                {expirationDateValue && (
+                  <button
+                    type="button"
+                    onClick={() => setExpirationDate(null)}
+                    className="flex h-11 w-full items-center justify-center gap-2 text-sm font-bold text-[#B5472A]"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Remover data
+                  </button>
                 )}
               </div>
             )}
           </div>
         </div>
-
-        {/* PDFs */}
-        <div className="space-y-2">
-          <Label className="text-stone-700 font-semibold">
-            Documentos{" "}
-            <span className="text-xs font-normal text-stone-400">
-              ({pdfUrls.length}/{MAX_ATTACHMENTS})
-            </span>
-            {uploadingStatus.pdfs && (
-              <Loader2 className="ml-2 h-3 w-3 animate-spin inline text-stone-400" />
-            )}
-          </Label>
-          <div className="flex flex-wrap gap-2">
-            {pdfUrls.map((url, i) => (
-              <PDFPreview
-                key={`pdf-${i}`}
-                url={url}
-                onRemove={() => handleRemoveUrl(url, 'pdf')}
-              />
-            ))}
-            {uploadingStatus.pdfs && (
-              <div className="flex h-20 w-20 animate-pulse items-center justify-center rounded-xl border border-stone-200 bg-stone-50">
-                <Loader2 className="h-4 w-4 animate-spin text-stone-300" />
-              </div>
-            )}
-            {canAddPdfs && (
-              <FilePickerButton
-                accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf"
-                onChange={addPdfs}
-                className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-stone-400 bg-white transition-all hover:bg-stone-50 active:bg-stone-100"
-              >
-                <FileText className="h-5 w-5 text-stone-500" />
-                <span className="text-[8px] font-bold uppercase text-stone-400 text-center px-1">
-                  Add
-                </span>
-              </FilePickerButton>
-            )}
-          </div>
-        </div>
       </div>
 
-      {/* Data de Expiração */}
-      <div className="rounded-lg border border-stone-100 bg-stone-50/50 p-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <Label className="text-stone-800 font-semibold">Data de Expiração</Label>
-            <p className="text-[10px] text-stone-500">O aviso sumirá automaticamente após esta data</p>
-          </div>
-          <Switch checked={hasExpiration} onCheckedChange={setHasExpiration} />
-        </div>
-
-        {hasExpiration && (
-          <div className="mt-3 animate-in fade-in slide-in-from-top-1">
-            <Popover>
-              <PopoverTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-semibold border-stone-400",
-                      !expirationDate && "text-stone-400"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {expirationDateValue && isValid(expirationDateValue)
-                      ? format(expirationDateValue, "PPP", { locale: ptBR })
-                      : "Selecione a data"
-                    }
-                  </Button>
-                }
-              />
-              <PopoverContent className="w-auto p-0 flex flex-col" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={expirationDateValue}
-                    onSelect={(date) => setExpirationDate(date ?? null)}
-                    initialFocus
-                    locale={ptBR}
-                    disabled={(date) => date < new Date()}
-                  />
-                  {expirationDateValue && (
-                    <div className="p-1 border-t border-stone-100">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setExpirationDate(null)}
-                        className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 font-bold text-[10px] h-8"
-                      >
-                        <Trash2 className="h-3 w-3 mr-2" />
-                        REMOVER DATA
-                      </Button>
-                    </div>
-                  )}
-              </PopoverContent>
-            </Popover>
-          </div>
-        )}
-      </div>
-
-      {/* Ações */}
-      <div className="flex flex-col gap-3 pt-2">
-        <div className="flex gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleCancel}
-            disabled={isSubmitting}
-            className="flex-1 border-stone-300 text-stone-500 bg-white hover:bg-stone-50"
-          >
-            Cancelar
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={(e) => handleSubmit(e, false)}
-            disabled={isSubmitting || !isFormValid}
-            className="flex-1 bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100 font-bold disabled:opacity-50"
-          >
-            Salvar Rascunho
-          </Button>
-        </div>
-        
-        <Button
+      {/* Rodapé fixo */}
+      <div className="shrink-0 space-y-2.5 border-t border-[#E9DFCB] bg-white px-4 pb-6 pt-3 shadow-[0_-10px_30px_rgba(50,33,19,0.06)]">
+        <p className="text-center text-[13px] leading-snug text-[#6B5D50]" aria-live="polite">{footerSummary}</p>
+        <button
           type="button"
           onClick={(e) => handleSubmit(e, true)}
-          disabled={isSubmitting || !isFormValid}
-          className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-base font-bold shadow-md active:scale-[0.98] transition-all disabled:opacity-50"
+          disabled={!canPublish}
+          className={cn(
+            "flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-base font-extrabold transition-all",
+            canPublish ? "bg-[#322113] text-[#FFF8E8] active:scale-[0.98]" : "bg-[#EFE8D6] text-[#6B5D50]"
+          )}
         >
           {isSubmitting
-            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando...</>
-            : initialData ? "Salvar e Publicar" : "Publicar Aviso"
+            ? <><Loader2 className="h-[18px] w-[18px] animate-spin" />Salvando...</>
+            : <><Check className="h-[18px] w-[18px]" strokeWidth={2.6} />{initialData ? "Salvar e publicar" : "Publicar aviso"}</>
           }
-        </Button>
+        </button>
+        <div className="flex gap-2.5">
+          <button
+            type="button"
+            onClick={handleCancel}
+            disabled={isSubmitting}
+            className="h-12 flex-1 rounded-2xl border border-[#D9CDB8] bg-white text-[15px] font-bold text-[#322113]"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={(e) => handleSubmit(e, false)}
+            disabled={!canDraft}
+            className={cn(
+              "h-12 flex-1 rounded-2xl border text-[15px] font-bold",
+              canDraft ? "border-[#D9CDB8] bg-white text-[#322113]" : "border-[#EFE8D6] bg-[#FBF7EE] text-[#9A8C78]"
+            )}
+          >
+            Salvar rascunho
+          </button>
+        </div>
       </div>
     </form>
   )
