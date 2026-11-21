@@ -403,8 +403,9 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
         toast.error("Preencha o horário de todas as missas")
         return
       }
-      if (sess.slots.length === 0) {
-        toast.error(`Adicione ao menos uma função na missa das ${sess.time}.`)
+      // Missa sem funções (sem leitores) é permitida, mas precisa de descrição.
+      if (sess.slots.length === 0 && !sess.description.trim()) {
+        toast.error(`Escreva a descrição da missa das ${sess.time}, que não tem funções.`)
         return
       }
       if (sess.slots.some(slot => !slot.profileId)) {
@@ -485,14 +486,14 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   const dayShort = dateObj && dateIsValid ? format(dateObj, "d 'de' MMMM", { locale: ptBR }) : ""
   const hasAnyTimeConflict = sessions.some(hasTimeConflict)
   const hasUnavailableChosen = !initialData && sessions.some(s => s.slots.some(slot => !!slot.profileId && unavailableUserIds.includes(slot.profileId)))
-  const emptyMassCount = sessions.filter(s => s.slots.length === 0).length
-  const canSave = !isSaving && !!date && !blockedByExisting && !hasAnyTimeConflict && !hasUnavailableChosen && sessions.length > 0 && emptyMassCount === 0 && !sessions.some(s => !s.time || s.slots.some(slot => !slot.profileId))
+  const needsDescriptionCount = sessions.filter(s => s.slots.length === 0 && !s.description.trim()).length
+  const canSave = !isSaving && !!date && !blockedByExisting && !hasAnyTimeConflict && !hasUnavailableChosen && sessions.length > 0 && needsDescriptionCount === 0 && !sessions.some(s => !s.time || s.slots.some(slot => !slot.profileId))
 
   let footerSummary: React.ReactNode
   if (!date) footerSummary = "Escolha o dia da escala para começar."
   else if (blockedByExisting) footerSummary = "Escolha um dia sem escala para continuar."
   else if (hasAnyTimeConflict) footerSummary = <strong className="font-bold text-[#A23F06]">Corrija os horários repetidos para salvar.</strong>
-  else if (emptyMassCount > 0) footerSummary = <strong className="font-bold text-[#A23F06]">{emptyMassCount === 1 ? "Adicione ao menos uma função na missa para salvar." : "Adicione ao menos uma função em cada missa para salvar."}</strong>
+  else if (needsDescriptionCount > 0) footerSummary = <strong className="font-bold text-[#A23F06]">{needsDescriptionCount === 1 ? "Missa sem funções precisa de descrição para salvar." : "Missas sem funções precisam de descrição para salvar."}</strong>
   else {
     footerSummary = (
       <>
@@ -713,8 +714,11 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                           Completa
                         </span>
                       ) : (
-                        <span className="inline-flex items-center rounded-full bg-[#FDEBDD] px-2.5 py-0.5 text-xs font-bold text-[#A23F06]">
-                          {sess.slots.length === 0 ? "Sem funções" : sessMissing === 1 ? "1 função sem leitor" : `${sessMissing} funções sem leitor`}
+                        <span className={cn(
+                          "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold",
+                          sess.slots.length === 0 && sess.description.trim() ? "bg-[#F4EEDD] text-[#6B5D50]" : "bg-[#FDEBDD] text-[#A23F06]"
+                        )}>
+                          {sess.slots.length === 0 ? (sess.description.trim() ? "Sem funções" : "Falta descrição") : sessMissing === 1 ? "1 função sem leitor" : `${sessMissing} funções sem leitor`}
                         </span>
                       )}
                       <span className="flex-1" />
@@ -784,14 +788,18 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                   )}
 
                   <div className="space-y-1.5">
-                    <label htmlFor={`desc-${sess.tempId}`} className="pl-0.5 text-xs font-bold text-[#6B5D50]">Celebração (opcional)</label>
+                    <label htmlFor={`desc-${sess.tempId}`} className="pl-0.5 text-xs font-bold text-[#6B5D50]">{sess.slots.length === 0 ? "Descrição da missa (obrigatória sem funções)" : "Celebração (opcional)"}</label>
                     <Input
                       id={`desc-${sess.tempId}`}
                       placeholder="Ex.: 1º Domingo do Advento"
                       value={sess.description}
                       onChange={(e) => updateSessionField(sess.tempId, 'description', e.target.value)}
+                      aria-required={sess.slots.length === 0}
                       className="h-12 rounded-[14px] border-[#E9DFCB] bg-[#FAF5E6] px-3.5 text-[15px] font-semibold placeholder:font-normal placeholder:text-[#6B5D50]"
                     />
+                    {sess.slots.length === 0 && !sess.description.trim() && (
+                      <p className="pl-0.5 text-xs font-bold text-[#A23F06]">Missa sem funções precisa de uma descrição, como "Missa da Catequese".</p>
+                    )}
                   </div>
 
                   {/* Funções da missa */}

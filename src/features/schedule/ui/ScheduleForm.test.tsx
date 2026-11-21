@@ -244,18 +244,22 @@ describe("ScheduleForm Validation", () => {
     expect(timeInputs.map(i => i.value)).toEqual(["07:00", "09:00"])
   })
 
-  it("should not allow saving a mass without functions or with a function without reader", async () => {
+  it("missa sem funções só salva com descrição; função declarada exige leitor", async () => {
     const profiles = [{ id: "p-ok", fullName: "Disponivel Teste", role: "reader", createdAt: "", updatedAt: "" }]
     ;(makeListProfiles as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue(profiles) })
 
     render(<ScheduleForm currentMonth={mockCurrentMonth} onSuccess={jest.fn()} onClose={jest.fn()} />)
     fireEvent.click(screen.getByText("30"))
 
-    // Missa sem nenhuma função
-    expect(await screen.findByText(/Adicione ao menos uma função/)).toBeInTheDocument()
+    // Missa sem funções e sem descrição: bloqueia
+    expect(await screen.findByText(/Missa sem funções precisa de descrição/)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled()
 
-    // Função sem leitor
+    // Com descrição, salva sem nenhuma função
+    await userEvent.type(screen.getByLabelText(/Descrição da missa/), "Missa da Catequese")
+    await waitFor(() => expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeEnabled())
+
+    // Declarou uma função: precisa de leitor
     await userEvent.click(await screen.findByRole("button", { name: /^Leitor$/ }))
     expect(await screen.findByText(/1 função sem leitor/)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Salvar Rascunho/i })).toBeDisabled()
