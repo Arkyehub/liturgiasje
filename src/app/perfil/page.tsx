@@ -12,14 +12,13 @@ import { maskPhone, cn } from "@/shared/lib/utils"
 import { ProfileImageEditor } from "@/features/profile/ui/ProfileImageEditor"
 import { BirthDatePicker } from "@/features/profile/ui/BirthDatePicker"
 import { Badge } from "@/shared/ui/badge"
-
-const COMMON_TIMES = ["07:00", "09:00", "11:00", "19:00"]
+import { MassPreferencesField } from "@/features/profile/ui/MassPreferencesField"
+import { hasAnyMassPreference, toggleDayPreference } from "@/features/profile/lib/massPreferences"
 
 export default function ProfilePage() {
   const { user, profile, isActive, loading, signInWithGoogle, signOut, refreshProfile } = useAuth()
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [selectedDay] = useState(6) // Fixo Domingo
   const [formData, setFormData] = useState({
     fullName: "",
     whatsapp: "",
@@ -42,28 +41,17 @@ export default function ProfilePage() {
     }
   }, [user, profile, loading])
 
-  const toggleTimePreference = (dayIndex: number, time: string) => {
-    setFormData(prev => {
-      const dayPrefs = prev.preferences?.day_preferences || {}
-      const currentTimes = dayPrefs[dayIndex] || []
-      const nextTimes = currentTimes.includes(time)
-        ? currentTimes.filter(t => t !== time)
-        : [...currentTimes, time]
-      
-      return {
-        ...prev,
-        preferences: {
-          ...prev.preferences,
-          day_preferences: {
-            ...dayPrefs,
-            [dayIndex]: nextTimes
-          }
-        }
+  const toggleTimePreference = (dayKey: string, time: string) => {
+    setFormData(prev => ({
+      ...prev,
+      preferences: {
+        ...prev.preferences,
+        day_preferences: toggleDayPreference(prev.preferences?.day_preferences, dayKey, time)
       }
-    })
+    }))
   }
 
-  const hasSelectedTimes = formData.preferences?.day_preferences?.[selectedDay]?.length > 0
+  const hasSelectedTimes = hasAnyMassPreference(formData.preferences?.day_preferences)
   const isFormValid = formData.fullName.trim() !== "" && 
                      formData.whatsapp.length >= 14 && 
                      formData.birthDate !== "" && 
@@ -104,7 +92,7 @@ export default function ProfilePage() {
       
       <main className="flex-1 overflow-auto">
         <div className="container max-w-md mx-auto px-4 py-6 space-y-5 pb-20">
-          {isActive && (!profile?.birthDate || !((profile?.preferences?.day_preferences?.[6]?.length ?? 0) > 0)) && (
+          {isActive && (!profile?.birthDate || !hasAnyMassPreference(profile?.preferences?.day_preferences)) && (
             <div className="bg-[#FDEBDD] border border-[#F2CDB0] rounded-2xl p-4 animate-in fade-in slide-in-from-top-2">
               <h3 className="text-[#A23F06] font-extrabold text-sm">Complete seu perfil</h3>
               <p className="text-[#7A4A2A] text-xs mt-1">
@@ -169,37 +157,15 @@ export default function ProfilePage() {
                   />
                 </div>
 
-                <div className="space-y-6 pt-2">
+                <div className="space-y-3 pt-2">
                   <div className="flex items-center gap-2 text-[#8A7A66]">
                     <Clock className="h-3 w-3" />
-                    <label className="text-[10px] font-bold uppercase tracking-widest">Horários de Preferência (Domingo)</label>
+                    <label className="text-[10px] font-bold uppercase tracking-widest">Missas de preferência</label>
                   </div>
-
-                  <div className="space-y-6">
-                    {/* Chips de Horários para o domingo */}
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        {COMMON_TIMES.map((time) => {
-                          const isSelected = formData.preferences?.day_preferences?.[selectedDay]?.includes(time)
-                          return (
-                            <button
-                              key={time}
-                              type="button"
-                              onClick={() => toggleTimePreference(selectedDay, time)}
-                              className={cn(
-                                "flex items-center justify-center h-12 px-4 rounded-2xl border text-sm font-bold transition-all",
-                                isSelected 
-                                  ? "bg-[#322113] border-[#322113] text-[#FFF8E8] shadow-md"
-                                  : "bg-[#FAF5E6]/60 border-[#E9DFCB] text-[#6B5D50] hover:border-[#D9CDB8]"
-                              )}
-                            >
-                              {time}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  </div>
+                  <MassPreferencesField
+                    value={formData.preferences?.day_preferences ?? {}}
+                    onToggle={toggleTimePreference}
+                  />
                 </div>
               </div>
 

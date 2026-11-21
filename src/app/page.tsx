@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { AnnouncementCard } from "@/features/announcements/ui/AnnouncementCard"
 import { ScheduleCard } from "@/features/schedule/ui/ScheduleCard"
+import { hasAnyMassPreference } from "@/features/profile/lib/massPreferences"
 import { ReadAnnouncementsGroup } from "@/features/announcements/ui/ReadAnnouncementsGroup"
 import { MassSummaryGrid } from "@/features/schedule/ui/MassSummaryGrid"
 import { PastDaysGroup } from "@/features/schedule/ui/PastDaysGroup"
@@ -213,7 +214,7 @@ export default function Home() {
       } else if (profile) {
         // 2. Tem perfil, mas verificar se está completo (Data Nasc + Missa Preferencial)
         const hasBirthDate = !!profile.birthDate
-        const hasPreferences = (profile.preferences?.day_preferences?.[6]?.length || 0) > 0
+        const hasPreferences = hasAnyMassPreference(profile.preferences?.day_preferences)
         
         if (!hasBirthDate || !hasPreferences) {
           console.log("[Page] Redirecionando para /perfil (perfil incompleto)")
