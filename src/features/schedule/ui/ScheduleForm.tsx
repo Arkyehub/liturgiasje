@@ -203,6 +203,8 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   useEffect(() => {
     setRemovedMasses([])
     if (initialData && Array.isArray(initialData)) {
+      // Entrou em modo edição (inclusive vindo do aviso "já existe escala"): o aviso deixa de valer
+      setHasExistingScale(false)
       setDate(initialData[0].date)
       
       const mappedSessions = initialData.map((item: any) => {
@@ -462,7 +464,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   }
 
   const missingCount = sessions.reduce((n, sess) => n + sess.slots.filter(sl => !sl.profileId).length, 0)
-  const blockedByExisting = hasExistingScale && !!onEditExisting
+  const blockedByExisting = hasExistingScale && !initialData && !!onEditExisting
   const dateObj = date ? new Date(date + 'T00:00:00') : null
   const dateIsValid = !!dateObj && isValid(dateObj)
   const dateLong = dateObj && dateIsValid ? format(dateObj, "EEEE, d 'de' MMMM", { locale: ptBR }) : ""
@@ -593,12 +595,14 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                         key={day}
                         type="button"
                         aria-label={`${day} de ${format(new Date(year, month, day), "MMMM", { locale: ptBR })}${isOccupied ? ", já tem escala" : ""}`}
+                        disabled={!!initialData && !isSelected}
                         onClick={() => {
+                          if (initialData) return
                           setDate(fullDate)
                           if (sessions.length === 0) setSessions([createEmptySession()])
                         }}
                         className={cn(
-                          "flex h-12 w-full flex-col items-center justify-center rounded-xl border text-[15px] leading-none transition-all active:scale-95",
+                          "flex h-12 w-full flex-col items-center justify-center rounded-xl border text-[15px] leading-none transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100",
                           isSelected
                             ? "border-[#322113] bg-[#322113] font-extrabold text-[#FFF8E8]"
                             : isOccupied
@@ -618,6 +622,9 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
                   <span aria-hidden="true" className="ml-2.5 inline-block h-3 w-3 rounded-[4px] bg-[#322113]" />
                   Dia escolhido
                 </div>
+                {initialData && (
+                  <p className="px-1 text-xs text-[#6B5D50]">Você está editando este dia. Para escolher outro dia, feche e abra de novo.</p>
+                )}
               </div>
             )
           })()}
@@ -631,7 +638,7 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
         </div>
 
         {/* Aviso de Escala Existente */}
-        {hasExistingScale && (
+        {hasExistingScale && !initialData && (
           <div role="alert" className="space-y-3 rounded-[20px] border border-[#F2CDB0] bg-[#FDEBDD] p-4 animate-in fade-in zoom-in duration-300">
             <div className="flex items-start gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#A23F06]">

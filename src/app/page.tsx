@@ -930,7 +930,15 @@ export default function Home() {
 
             {profile?.role === "admin" && (
               <div className="w-full">
-                <Sheet open={isScheduleSheetOpen} onOpenChange={setIsScheduleSheetOpen}>
+                <Sheet
+                  open={isScheduleSheetOpen}
+                  onOpenChange={(open) => {
+                    setIsScheduleSheetOpen(open)
+                    // Fechar pelo X, pelo fundo ou pelo gesto de voltar também sai do modo edição;
+                    // senão o próximo "Adicionar Dia" reabriria o dia antigo.
+                    if (!open) setScheduleToEdit(null)
+                  }}
+                >
                   <SheetTrigger render={
                     <Button 
                       variant="outline" 
