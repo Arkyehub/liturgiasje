@@ -1,5 +1,6 @@
 "use client"
 
+import { preferredTimesForDate } from "@/features/profile/lib/massPreferences"
 import { scheduleErrorMessage } from '@/features/schedule/scheduleErrorMessage'
 
 import { useState, useEffect, useRef } from "react"
@@ -335,21 +336,9 @@ export function ScheduleForm({ currentMonth, onSuccess, onClose, initialData, on
   }
 
   const checkPreference = (profile: Profile, massTime: string, massDate: string) => {
-    if (!profile.preferences?.day_preferences) return false
-    
-    // Obter dia da semana (0-6, 0 é domingo)
-    try {
-      const dateObj = new Date(massDate + 'T00:00:00')
-      const dayOfWeek = dateObj.getDay()
-      
-      // O app usa "6" para Domingo nas preferências do perfil
-      const dayKey = dayOfWeek === 0 ? "6" : dayOfWeek.toString()
-      
-      const prefs = profile.preferences.day_preferences[dayKey]
-      return Array.isArray(prefs) && (prefs.includes(massTime) || prefs.includes(massTime.substring(0, 5)))
-    } catch {
-      return false
-    }
+    // Sábado não tem preferência: nunca herda a do domingo (ver preferenceKeyForWeekday)
+    const prefs = preferredTimesForDate(profile.preferences?.day_preferences, massDate)
+    return prefs.includes(massTime) || prefs.includes(massTime.substring(0, 5))
   }
 
   const addSession = () => {

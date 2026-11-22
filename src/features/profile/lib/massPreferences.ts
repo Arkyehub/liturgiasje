@@ -27,3 +27,23 @@ export function toggleDayPreference(prefs: DayPreferences, dayKey: string, time:
 export function hasAnyMassPreference(prefs: DayPreferences): boolean {
   return Object.values(prefs ?? {}).some((times) => Array.isArray(times) && times.length > 0)
 }
+
+/**
+ * Chave de day_preferences para um dia da semana do JavaScript (0=domingo … 6=sábado).
+ * O app grava o Domingo como "6", terça como "2" e sexta como "5". Sábado não tem preferência
+ * (retorna null), para nunca herdar a do Domingo.
+ */
+export function preferenceKeyForWeekday(jsWeekday: number): string | null {
+  if (jsWeekday === 0) return "6"
+  if (jsWeekday === 6) return null
+  return String(jsWeekday)
+}
+
+/** Horários preferidos do leitor numa data (YYYY-MM-DD); vazio quando o dia não é de preferência. */
+export function preferredTimesForDate(prefs: DayPreferences, dateKey: string): string[] {
+  const d = new Date(dateKey + "T00:00:00")
+  if (Number.isNaN(d.getTime())) return []
+  const key = preferenceKeyForWeekday(d.getDay())
+  const times = key ? prefs?.[key] : undefined
+  return Array.isArray(times) ? times : []
+}
