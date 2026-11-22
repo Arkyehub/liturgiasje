@@ -70,7 +70,7 @@ export function Header({
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-[#4A3523] bg-[#322113]">
+    <header className="sticky top-0 z-50 w-full bg-[#322113]">
       <div className="container relative flex h-[68px] items-center justify-between px-4 max-w-md mx-auto">
         {/* Botão Voltar (Opcional) */}
         {showBackButton && (
@@ -102,7 +102,7 @@ export function Header({
             <img
               src="/Logo-Liturgia-SJE-header.png"
               alt="Logo Liturgia SJE"
-              className={`${centerLogo ? 'h-9 w-9' : 'h-11 w-11'} rounded-xl shadow-md shadow-[#322113]/20 group-hover:shadow-lg transition-all`}
+              className={`${centerLogo ? 'h-9 w-9' : 'h-11 w-11'} rounded-xl`}
             />
             <div className={`flex flex-col ${centerLogo ? 'items-start' : ''}`}>
               <h1 className={`${centerLogo ? 'text-base' : 'text-[19px]'} font-black tracking-tight text-[#E8C76A] leading-none`}>
