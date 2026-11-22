@@ -100,7 +100,7 @@ export function Header({
             }}
           >
             <img
-              src="/Logo-Liturgia-SJE-header.png"
+              src="/Logo-Liturgia-SJE-header.png?v=2"
               alt="Logo Liturgia SJE"
               className={`${centerLogo ? 'h-9 w-9' : 'h-11 w-11'} rounded-xl`}
             />
