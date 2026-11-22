@@ -944,7 +944,9 @@ export default function Home() {
           </Drawer>
 
           {/* Sessão Interativa: Seletor de Mês */}
-          <section className="flex flex-col items-center gap-4 py-2">
+          {/* Bloco da escala: o seletor de mês fica fixo (sticky) logo abaixo do header ao rolar */}
+          <div className="flex flex-col gap-3">
+          <section className="py-1">
             <div className="grid w-full grid-cols-[44px_1fr_44px] items-center">
               <div className="flex justify-start">
                 {profile?.role === "admin" && (
@@ -978,8 +980,9 @@ export default function Home() {
                 )}
               </div>
             </div>
+          </section>
 
-
+          <div className="sticky top-[68px] z-40 -mx-4 bg-[#FAF5E6]/95 px-4 py-1.5 backdrop-blur-sm">
             <div className="flex items-center justify-between w-full bg-white rounded-full border border-[#E9DFCB] px-1.5 py-1 shadow-sm">
               <Button 
                 variant="ghost" 
@@ -1005,6 +1008,7 @@ export default function Home() {
                 <ChevronRight className="h-5 w-5" />
               </Button>
             </div>
+          </div>
 
             {profile?.role === "admin" && (
               <div className="w-full">
@@ -1103,7 +1107,6 @@ export default function Home() {
                 </Sheet>
               </div>
             )}
-          </section>
 
           {/* Sessão 2: Escala do Mês */}
           <section className="space-y-4">
@@ -1234,6 +1237,7 @@ export default function Home() {
               )}
             </div>
           </section>
+          </div>
 
           {/* Drawer de Confirmação de Exclusão de Escala */}
           <Drawer open={!!scheduleToDelete} onOpenChange={(open) => !open && setScheduleToDelete(null)}>
