@@ -12,7 +12,9 @@ import { MassSummaryGrid } from "@/features/schedule/ui/MassSummaryGrid"
 import { PastDaysGroup } from "@/features/schedule/ui/PastDaysGroup"
 import { SectionTitle } from "@/shared/ui/SectionTitle"
 import { MyScheduleWidget } from "@/features/schedule/ui/MyScheduleWidget"
-import { BirthdayCard } from "@/shared/ui/BirthdayCard"
+import { BirthdayNoticeCard } from "@/features/birthdays/ui/BirthdayNoticeCard"
+import { Confetti } from "@/features/birthdays/ui/Confetti"
+import { buildBirthdayNotices, msUntilNextSaoPauloMidnight, readSeenBirthdays, saveSeenBirthday } from "@/features/birthdays/lib/birthdays"
 import { Button } from "@/shared/ui/button"
 import { ChevronLeft, ChevronRight, Loader2, Plus, Plane, CheckCircle, FileText, Share2, X } from "lucide-react"
 import { addMonths, format, subMonths, isToday, parseISO, isValid, startOfDay } from "date-fns"
@@ -157,6 +159,22 @@ export default function Home() {
     pendingCreatePinRef.current = null
     created.forEach((a) => pinAnnouncement(a.id))
   }, [announcements, pinAnnouncement])
+  // Cards de aniversário do dia (gerados pelo sistema). "Visto" fica guardado neste aparelho.
+  const [seenBirthdays, setSeenBirthdays] = useState<Set<string>>(() => new Set())
+  const [birthdayTick, setBirthdayTick] = useState(() => Date.now())
+  useEffect(() => {
+    setSeenBirthdays(readSeenBirthdays())
+  }, [])
+  useEffect(() => {
+    // Na virada do dia (São Paulo) o card expira: recalcula a lista
+    const timer = setTimeout(() => setBirthdayTick(Date.now()), msUntilNextSaoPauloMidnight() + 500)
+    return () => clearTimeout(timer)
+  }, [birthdayTick])
+  const birthdayNotices = useMemo(
+    () => (user && isActive ? buildBirthdayNotices(allBirthdays, seenBirthdays, profile?.id, new Date(birthdayTick)) : []),
+    [user, isActive, allBirthdays, seenBirthdays, profile?.id, birthdayTick]
+  )
+  const hasUnseenBirthday = birthdayNotices.some((n) => !n.isRead)
   // Total de leitores ativos: só o admin vê "N de T" na janela de visualizações
   const [totalReaders, setTotalReaders] = useState<number | undefined>(undefined)
   const isAdminProfile = profile?.role === "admin"
@@ -582,13 +600,25 @@ export default function Home() {
 
   // Recados já lidos (só vale para quem está logado) ficam agrupados; os não lidos ganham destaque
   // Rascunhos e recados recém-publicados (30s) ficam fora do grupo para o admin conferir
+  const muralItems: any[] = [...birthdayNotices, ...(announcements as any[])]
   const { visible: unreadAnnouncements, read: readAnnouncements } = groupAnnouncements(
-    announcements as any[],
+    muralItems,
     !!user,
     new Set(Object.keys(pinnedUntil).filter((id) => pinnedUntil[id] > nowTick))
   )
 
-  const renderAnnouncement = (ann: any) => (
+  const renderAnnouncement = (ann: any) =>
+    ann.kind === "birthday" ? (
+      <BirthdayNoticeCard
+        key={ann.id}
+        id={ann.id}
+        fullName={ann.member.fullName}
+        avatarUrl={ann.member.avatarUrl}
+        isOwn={ann.isOwn}
+        isRead={ann.isRead}
+        onConfirm={(id) => setSeenBirthdays(saveSeenBirthday(id))}
+      />
+    ) : (
                   <AnnouncementCard
       key={ann.id}
       {...ann}
@@ -643,6 +673,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col relative">
+      {hasUnseenBirthday && <Confetti />}
       {/* Camada de Background Isolada (Festa Junina em Junho + Fundo da Página) */}
       <div className="fixed inset-0 z-0 pointer-events-none" style={{ isolation: 'isolate' }}>
         <div className="absolute inset-0 bg-stone-50/30" />
@@ -765,12 +796,12 @@ export default function Home() {
           )}
 
           {/* Sessão 1: Mural de Recados (oculto quando não há recados; admin mantém o botão de adicionar) */}
-          {(announcements.length > 0 || profile?.role === "admin") && (
+          {(muralItems.length > 0 || profile?.role === "admin") && (
           <section className="space-y-4">
-            {announcements.length > 0 && <SectionTitle>Mural de Recados</SectionTitle>}
+            {muralItems.length > 0 && <SectionTitle>Mural de Recados</SectionTitle>}
             
             <div className="space-y-2">
-              {announcements.length === 0 ? null : (
+              {muralItems.length === 0 ? null : (
                 <>
                   {unreadAnnouncements.map(renderAnnouncement)}
                   {readAnnouncements.length >= 2 ? (
@@ -911,24 +942,6 @@ export default function Home() {
               </div>
             </DrawerContent>
           </Drawer>
-
-          {/* Seção: Aniversariantes do Mês */}
-          <section>
-            <BirthdayCard 
-              currentMonth={currentDate}
-              members={allBirthdays.filter(m => {
-                if (!m.birthDate) return false
-                const birthMonth = new Date(m.birthDate).getUTCMonth()
-                return birthMonth === currentDate.getMonth()
-              }).map(m => ({
-                id: m.id,
-                fullName: m.fullName,
-                birthDate: m.birthDate,
-                avatarUrl: m.avatarUrl ?? undefined,
-                isClaimed: !!m.isActive
-              }))}
-            />
-          </section>
 
           {/* Sessão Interativa: Seletor de Mês */}
           <section className="flex flex-col items-center gap-4 py-2">

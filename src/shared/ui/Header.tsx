@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu"
-import { LogOut, User, Users, UserCircle, Download, ArrowLeft, BarChart3 } from "lucide-react"
+import { LogOut, User, Users, UserCircle, Download, ArrowLeft, BarChart3, Cake } from "lucide-react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 
@@ -181,6 +181,14 @@ export function Header({
                     <Link href="/perfil" className="flex items-center w-full">
                       <User className="mr-2 h-4 w-4" />
                       <span>Meu Perfil</span>
+                    </Link>
+                  }
+                />
+                <DropdownMenuItem
+                  render={
+                    <Link href="/aniversarios" className="flex items-center w-full">
+                      <Cake className="mr-2 h-4 w-4" />
+                      <span>Lista de Aniversários</span>
                     </Link>
                   }
                 />
