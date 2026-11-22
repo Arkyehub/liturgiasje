@@ -283,7 +283,7 @@ export function MyScheduleWidget({
     <div className="w-full">
       {/* Faixa marrom com saudação; o cartão invade a faixa */}
       <div className="rounded-b-[28px] bg-[#322113] px-4 pb-16 pt-5 text-white">
-        <p className="text-[15px] capitalize text-[#E8D9BC]">{format(now, "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
+        <p className="text-[15px] text-[#E8D9BC]">{(() => { const t = format(now, "EEEE, d 'de' MMMM", { locale: ptBR }); return t.charAt(0).toUpperCase() + t.slice(1) })()}</p>
         <h2 className="mt-1 text-[32px] font-black leading-tight tracking-tight">
           {greeting(now.getHours())}{firstName ? `, ${firstName}` : ""}
         </h2>

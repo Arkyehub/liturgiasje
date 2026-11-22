@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Loader2 } from "lucide-react"
+import { Loader2, X } from "lucide-react"
 import { Button } from "@/shared/ui/button"
 import { cn } from "@/shared/lib/utils"
 import {
@@ -52,31 +52,44 @@ export function LiturgySheet({ dateKey, dateLabel, open, onOpenChange, color, pr
 
   return (
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-[90%] sm:max-w-xl h-full bg-stone-50/95 backdrop-blur-md p-0 flex flex-col border-l border-stone-200" showCloseButton={true}>
+        <SheetContent side="right" className="!inset-0 !h-dvh !w-screen !max-w-none gap-0 rounded-none border-0 bg-[#FAF5E6] p-0 flex flex-col" showCloseButton={false}>
           {(() => {
-            const headerColors: Record<string, string> = {
-              Verde: "bg-emerald-600 text-white",
-              Roxo: "bg-purple-600 text-white",
-              Vermelho: "bg-red-600 text-white",
-              Rosa: "bg-pink-500 text-white",
-              Branco: "bg-stone-200 text-stone-800",
+            const liturgicalDots: Record<string, string> = {
+              Verde: "bg-emerald-500",
+              Roxo: "bg-purple-500",
+              Vermelho: "bg-red-500",
+              Rosa: "bg-pink-400",
+              Branco: "bg-stone-100",
             }
-            const currentHeaderColor = localColor ? (headerColors[localColor] || "bg-stone-200 text-stone-800") : "bg-stone-200 text-stone-800"
-            const isWhiteHeader = localColor === "Branco"
-            
+            const dot = localColor ? (liturgicalDots[localColor] || "bg-[#E8B21E]") : "bg-[#E8B21E]"
+
             return (
-              <SheetHeader className={cn("text-center px-6 py-6 shrink-0 flex flex-col relative", currentHeaderColor)}>
-                <SheetTitle className={cn("font-black text-lg tracking-tight leading-snug pr-8 text-left", isWhiteHeader ? "text-stone-800" : "text-white")}>
+              <SheetHeader className="relative flex shrink-0 flex-col gap-0 bg-[#322113] px-5 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))] text-left">
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#E8B21E]">Liturgia diária</span>
+                  {localColor && (
+                    <span className="ml-1 flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-[#FFF8E8]">
+                      <span className={cn("h-2.5 w-2.5 rounded-full ring-1 ring-white/40", dot)} />
+                      {localColor}
+                    </span>
+                  )}
+                  <SheetClose render={
+                    <button type="button" aria-label="Fechar leituras" className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-[#FFF8E8] transition-transform active:scale-95">
+                      <X className="h-5 w-5" />
+                    </button>
+                  } />
+                </div>
+                <SheetTitle className="text-left text-[22px] font-black leading-snug tracking-tight text-white">
                   {liturgyData?.liturgia || "Liturgia Diária"}
                 </SheetTitle>
-                <SheetDescription className={cn("text-xs font-semibold mt-1 text-left opacity-90", isWhiteHeader ? "text-stone-500" : "text-white/90")}>
+                <SheetDescription className="mt-1 text-left text-sm font-semibold text-[#E8C76A]">
                   {dateLabel}
                 </SheetDescription>
               </SheetHeader>
             )
           })()}
 
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="mx-auto w-full max-w-2xl flex-1 overflow-y-auto px-4 py-5">
             {isLoadingLiturgy ? (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <Loader2 className="h-8 w-8 animate-spin text-stone-400" />
@@ -86,8 +99,8 @@ export function LiturgySheet({ dateKey, dateLabel, open, onOpenChange, color, pr
               <div className="space-y-6 text-stone-800 pb-10 font-serif">
                 {/* Oração da Coleta */}
                 {liturgyData.oracoes?.coleta && (
-                  <div className="bg-white p-5 rounded-[24px] border border-stone-200/40 shadow-xs space-y-2">
-                    <h4 className="text-[15px] font-black uppercase text-[#0f5499] tracking-wider mb-1">Coleta</h4>
+                  <div className="bg-white p-5 rounded-[24px] border border-[#E9DFCB] shadow-xs space-y-2">
+                    <h4 className="text-[15px] font-black uppercase text-[#322113] tracking-wider mb-1">Coleta</h4>
                     <p className="text-[17px] leading-relaxed text-stone-700 whitespace-pre-line">
                       {LiturgyService.cleanVersesText(liturgyData.oracoes.coleta)}
                     </p>
@@ -96,9 +109,9 @@ export function LiturgySheet({ dateKey, dateLabel, open, onOpenChange, color, pr
 
                 {/* Primeira Leitura */}
                 {liturgyData.leituras?.primeiraLeitura?.map((l, i) => (
-                  <div key={i} className="bg-white p-6 rounded-[24px] border border-stone-200/40 shadow-xs space-y-3">
-                    <div className="flex justify-between items-baseline border-b border-stone-100 pb-2">
-                      <h4 className="text-[17px] font-black text-[#0f5499]">1ª Leitura</h4>
+                  <div key={i} className="bg-white p-6 rounded-[24px] border border-[#E9DFCB] shadow-xs space-y-3">
+                    <div className="flex justify-between items-baseline border-b border-[#EFE6D2] pb-2">
+                      <h4 className="text-[17px] font-black text-[#322113]">1ª Leitura</h4>
                       <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider">{l.referencia}</span>
                     </div>
                     <h5 className="text-[15px] font-bold text-stone-800 italic leading-snug">{l.titulo}</h5>
@@ -110,9 +123,9 @@ export function LiturgySheet({ dateKey, dateLabel, open, onOpenChange, color, pr
 
                 {/* Salmo Responsorial */}
                 {liturgyData.leituras?.salmo?.map((s, i) => (
-                  <div key={i} className="bg-white p-6 rounded-[24px] border border-stone-200/40 shadow-xs space-y-3">
-                    <div className="flex justify-between items-baseline border-b border-stone-100 pb-2">
-                      <h4 className="text-[17px] font-black text-[#0f5499]">Salmo Responsorial</h4>
+                  <div key={i} className="bg-white p-6 rounded-[24px] border border-[#E9DFCB] shadow-xs space-y-3">
+                    <div className="flex justify-between items-baseline border-b border-[#EFE6D2] pb-2">
+                      <h4 className="text-[17px] font-black text-[#322113]">Salmo Responsorial</h4>
                       <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider">{s.referencia}</span>
                     </div>
                     <div className="text-[17px] leading-snug">
@@ -145,9 +158,9 @@ export function LiturgySheet({ dateKey, dateLabel, open, onOpenChange, color, pr
 
                 {/* Segunda Leitura */}
                 {liturgyData.leituras?.segundaLeitura?.map((l, i) => (
-                  <div key={i} className="bg-white p-6 rounded-[24px] border border-stone-200/40 shadow-xs space-y-3">
-                    <div className="flex justify-between items-baseline border-b border-stone-100 pb-2">
-                      <h4 className="text-[17px] font-black text-[#0f5499]">2ª Leitura</h4>
+                  <div key={i} className="bg-white p-6 rounded-[24px] border border-[#E9DFCB] shadow-xs space-y-3">
+                    <div className="flex justify-between items-baseline border-b border-[#EFE6D2] pb-2">
+                      <h4 className="text-[17px] font-black text-[#322113]">2ª Leitura</h4>
                       <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider">{l.referencia}</span>
                     </div>
                     <h5 className="text-[15px] font-bold text-stone-800 italic leading-snug">{l.titulo}</h5>
@@ -159,9 +172,9 @@ export function LiturgySheet({ dateKey, dateLabel, open, onOpenChange, color, pr
 
                 {/* Evangelho */}
                 {liturgyData.leituras?.evangelho?.map((l, i) => (
-                  <div key={i} className="bg-white p-6 rounded-[24px] border border-stone-200/40 shadow-xs space-y-3">
-                    <div className="flex justify-between items-baseline border-b border-stone-100 pb-2">
-                      <h4 className="text-[17px] font-black text-red-700">Evangelho</h4>
+                  <div key={i} className="bg-white p-6 rounded-[24px] border border-[#E9DFCB] shadow-xs space-y-3">
+                    <div className="flex justify-between items-baseline border-b border-[#EFE6D2] pb-2">
+                      <h4 className="text-[17px] font-black text-[#A23F06]">Evangelho</h4>
                       <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider">{l.referencia}</span>
                     </div>
                     <h5 className="text-[15px] font-bold text-stone-800 italic leading-snug">{l.titulo}</h5>
@@ -178,9 +191,9 @@ export function LiturgySheet({ dateKey, dateLabel, open, onOpenChange, color, pr
             )}
           </div>
 
-          <SheetFooter className="px-6 py-4 shrink-0 border-t border-stone-200/50 bg-stone-50">
+          <SheetFooter className="shrink-0 border-t border-[#E9DFCB] bg-[#FAF5E6] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
             <SheetClose render={
-              <Button className="w-full bg-[#1b1816] text-white hover:bg-stone-800 font-black h-12 rounded-2xl shadow-sm transition-all text-sm uppercase tracking-wider">
+              <Button className="w-full mx-auto max-w-2xl bg-[#322113] text-[#FFF8E8] hover:bg-[#3d2a1a] font-black h-12 rounded-2xl shadow-sm transition-all text-sm uppercase tracking-wider">
                 Fechar Leituras
               </Button>
             } />
