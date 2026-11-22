@@ -26,6 +26,10 @@ interface HeaderProps {
   centerLogo?: boolean
 }
 
+const menuItemClass =
+  "flex min-h-12 cursor-pointer items-center rounded-2xl px-2 py-2 text-[15px] font-bold text-[#241A10] focus:bg-[#FBF1D2] focus:text-[#241A10]"
+const menuIconClass = "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F4EEDD] text-[#322113]"
+
 export function Header({
   user,
   onSignIn,
@@ -164,30 +168,44 @@ export function Header({
                 </div>
               </DropdownMenuTrigger>
 
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent
+                align="end"
+                sideOffset={8}
+                className="w-[17rem] rounded-[22px] border border-[#E9DFCB] bg-[#FFFDF8] p-2 shadow-[0_12px_32px_rgba(50,33,19,0.18)] ring-0"
+              >
                 <DropdownMenuGroup>
-                  <DropdownMenuLabel>
-                    <div className="flex flex-col">
-                      <span className="truncate">{user?.fullName || "Usuário"}</span>
-                      <span className="text-xs font-normal text-stone-500 capitalize">
-                        {user?.role === "admin" ? "Administrador" : "Leitor"}
-                      </span>
+                  <DropdownMenuLabel className="px-2 pb-3 pt-2">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-11 w-11 border-2 border-[#E8B21E]">
+                        <AvatarImage src={user?.avatarUrl ?? undefined} />
+                        <AvatarFallback className="bg-stone-100 text-stone-600">
+                          <UserCircle className="h-6 w-6" />
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex min-w-0 flex-col items-start gap-1">
+                        <span className="max-w-full truncate text-[16px] font-extrabold leading-tight text-[#241A10]">{user?.fullName || "Usuário"}</span>
+                        <span className="rounded-full bg-[#FDF1D6] px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-[#7A4F00]">
+                          {user?.role === "admin" ? "Administrador" : "Leitor"}
+                        </span>
+                      </div>
                     </div>
                   </DropdownMenuLabel>
                 </DropdownMenuGroup>
-                <DropdownMenuSeparator />
+                <DropdownMenuSeparator className="mx-1 my-1 bg-[#EFE6D2]" />
                 <DropdownMenuItem
+                  className={menuItemClass}
                   render={
-                    <Link href="/perfil" className="flex items-center w-full">
-                      <User className="mr-2 h-4 w-4" />
+                    <Link href="/perfil" className="flex w-full items-center gap-3">
+                      <span className={menuIconClass}><User className="h-[18px] w-[18px]" /></span>
                       <span>Meu Perfil</span>
                     </Link>
                   }
                 />
                 <DropdownMenuItem
+                  className={menuItemClass}
                   render={
-                    <Link href="/aniversarios" className="flex items-center w-full">
-                      <Cake className="mr-2 h-4 w-4" />
+                    <Link href="/aniversarios" className="flex w-full items-center gap-3">
+                      <span className={menuIconClass}><Cake className="h-[18px] w-[18px]" /></span>
                       <span>Lista de Aniversários</span>
                     </Link>
                   }
@@ -195,18 +213,21 @@ export function Header({
 
                 {user?.role === "admin" && (
                   <>
+                    <DropdownMenuSeparator className="mx-1 my-1 bg-[#EFE6D2]" />
                     <DropdownMenuItem
+                      className={menuItemClass}
                       render={
-                        <Link href="/admin/membros" className="flex items-center w-full">
-                          <Users className="mr-2 h-4 w-4" />
+                        <Link href="/admin/membros" className="flex w-full items-center gap-3">
+                          <span className={menuIconClass}><Users className="h-[18px] w-[18px]" /></span>
                           <span>Gestão de Membros</span>
                         </Link>
                       }
                     />
                     <DropdownMenuItem
+                      className={menuItemClass}
                       render={
-                        <Link href="/admin/analise" className="flex items-center w-full">
-                          <BarChart3 className="mr-2 h-4 w-4" />
+                        <Link href="/admin/analise" className="flex w-full items-center gap-3">
+                          <span className={menuIconClass}><BarChart3 className="h-[18px] w-[18px]" /></span>
                           <span>Análise de Usuários</span>
                         </Link>
                       }
@@ -214,12 +235,14 @@ export function Header({
                   </>
                 )}
 
-                <DropdownMenuSeparator />
+                <DropdownMenuSeparator className="mx-1 my-1 bg-[#EFE6D2]" />
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
+                  className="flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl px-2 py-2 text-[15px] font-bold text-[#A23F06] focus:bg-[#FDEBDD] focus:text-[#A23F06]"
                   onClick={() => onSignOut?.()}
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FDEBDD] text-[#A23F06]">
+                    <LogOut className="h-[18px] w-[18px]" />
+                  </span>
                   <span>Sair</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
