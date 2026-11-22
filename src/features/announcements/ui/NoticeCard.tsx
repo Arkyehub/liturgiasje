@@ -7,11 +7,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover"
 import { Calendar } from "@/shared/ui/calendar"
 import { Switch } from "@/shared/ui/switch"
 import { UserAvatar } from "@/shared/ui/UserAvatar"
-import { Check, ChevronLeft, ChevronRight, Clock, Download, Maximize2, Megaphone, Pause, Pencil, Play, Share2, Trash2 } from "lucide-react"
+import { Check, ChevronLeft, ChevronRight, Clock, Download, Eye, Maximize2, Megaphone, Pause, Pencil, Play, Share2, Trash2 } from "lucide-react"
 import { format, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn, getFileType, getFileViewerUrl } from "@/shared/lib/utils"
-import { getAvatarColor, getInitials } from "@/shared/lib/avatar-utils"
 import type { AnnouncementProps } from "./AnnouncementCard"
 
 const BROWN = "#322113"
@@ -145,6 +144,7 @@ export function NoticeCard({
   onDelete,
   onEdit,
   isPublished = true,
+  totalReaders,
 }: AnnouncementProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [activeImageIndex, setActiveImageIndex] = useState<number | null>(null)
@@ -167,8 +167,8 @@ export function NoticeCard({
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank")
   }
 
-  const expiryLabel = expiresAt && isValid(new Date(expiresAt)) ? format(new Date(expiresAt), "dd/MM", { locale: ptBR }) : "Sem validade"
-  const sampleViewers = viewers.slice(0, 3)
+  const hasExpiry = !!expiresAt && isValid(new Date(expiresAt))
+  const expiryLabel = hasExpiry ? format(new Date(expiresAt as string), "dd/MM", { locale: ptBR }) : ""
 
   return (
     <article
@@ -180,94 +180,86 @@ export function NoticeCard({
       )}
     >
       {isAdmin && (
-        <div className={cn("flex flex-col gap-2.5 border-b border-[#E9DFCB] px-4 py-3", isPublished ? "bg-[#FBF7EE]" : "bg-[#FFF8E6]")}>
-          <div className="flex items-center justify-between">
-            <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-extrabold tracking-wider", isPublished ? "bg-[#E6F3EB] text-[#1E6B43]" : "bg-[#FFF3D1] text-[#6B3F00]")}>
-              {isPublished ? "PUBLICADO" : "RASCUNHO"}
-            </span>
-            <label className="flex items-center gap-2 text-xs font-bold text-[#6B5D50]">
-              {isPublished ? "No ar" : "Fora do ar"}
-              <Switch checked={isPublished} onCheckedChange={(val) => onUpdate?.(id, { isPublished: val })} />
-            </label>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {isPublished ? (
-              <Popover>
-                <PopoverTrigger render={
-                  <button type="button" className={cn(chipBtn, "pl-2")}>
-                    {sampleViewers.length > 0 && (
-                      <span className="flex">
-                        {sampleViewers.map((v, i) => {
-                          const { bg, text } = getAvatarColor(v.name)
-                          return (
-                            <span key={i} className={cn("flex h-6 w-6 items-center justify-center rounded-full border-2 border-white text-[9px] font-extrabold", bg, text, i > 0 && "-ml-2")}>
-                              {getInitials(v.name)}
-                            </span>
-                          )
-                        })}
-                      </span>
-                    )}
-                    {viewers.length} {viewers.length === 1 ? "viu" : "viram"}
-                  </button>
-                } />
-                <PopoverContent className="w-80 p-0" align="start">
-                  <div className="border-b border-stone-100 bg-stone-50/50 px-3 py-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">Visualizado por ({viewers.length})</span>
-                  </div>
-                  <div className="max-h-[250px] overflow-auto p-1.5">
-                    {viewers.length === 0 ? (
-                      <p className="px-3 py-4 text-center text-[10px] text-stone-400">Ninguém visualizou ainda</p>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-1">
-                        {viewers.map((viewer, idx) => (
-                          <div key={idx} className="flex items-center gap-2.5 rounded-md border border-transparent px-2 py-2 hover:border-stone-100 hover:bg-stone-50">
-                            <UserAvatar name={viewer.name} src={viewer.avatarUrl} isClaimed={viewer.isClaimed} className="h-7 w-7 shrink-0" />
-                            <div className="flex min-w-0 flex-col">
-                              <span className="truncate text-[11px] font-black leading-tight text-stone-800" title={viewer.name}>{viewer.name}</span>
-                              <span className="text-[10px] font-bold leading-tight text-stone-400">
-                                {isValid(new Date(viewer.at)) ? format(new Date(viewer.at), "dd/MM HH:mm", { locale: ptBR }) : "--/-- --:--"}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </PopoverContent>
-              </Popover>
-            ) : (
-              <span className="text-[13px] text-[#6B5D50]">Só você vê este rascunho</span>
-            )}
+        <div className={cn("flex items-center gap-2 border-b border-[#E9DFCB] px-3.5 py-2.5", isPublished ? "bg-[#FBF7EE]" : "bg-[#FFF8E6]")}>
+          <span className={cn("shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-extrabold leading-none tracking-wider", isPublished ? "bg-[#E6F3EB] text-[#1E6B43]" : "bg-[#FFF3D1] text-[#6B3F00]")}>
+            {isPublished ? "PUBLICADO" : "RASCUNHO"}
+          </span>
+          <Switch aria-label={isPublished ? "Publicado: desligar para virar rascunho" : "Rascunho: ligar para publicar"} checked={isPublished} onCheckedChange={(val) => onUpdate?.(id, { isPublished: val })} />
+          <span className="flex-1" />
+          {isPublished && (
             <Popover>
               <PopoverTrigger render={
-                <button type="button" className={chipBtn}>
-                  <Clock className="h-[15px] w-[15px]" />
-                  {expiresAt && isValid(new Date(expiresAt)) ? `Sai em ${expiryLabel}` : expiryLabel}
+                <button
+                  type="button"
+                  aria-label={`${viewers.length} ${viewers.length === 1 ? "viu" : "viram"}`}
+                  className={cn(chipBtn, "h-8 px-2.5 text-[12.5px] data-[popup-open]:border-[#322113] data-[popup-open]:bg-[#322113] data-[popup-open]:text-[#FAF5E6]")}
+                >
+                  <Eye className="h-4 w-4" />
+                  {viewers.length}
                 </button>
               } />
-              <PopoverContent className="flex w-auto flex-col p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={expiresAt ? new Date(expiresAt) : undefined}
-                  onSelect={(date) => onUpdate?.(id, { expiresAt: date?.toISOString() })}
-                  initialFocus
-                  locale={ptBR}
-                />
-                {expiresAt && (
-                  <div className="border-t border-stone-100 p-1">
-                    <button
-                      type="button"
-                      onClick={() => onUpdate?.(id, { expiresAt: null })}
-                      className="flex h-10 w-full items-center justify-center gap-2 rounded-md text-[11px] font-bold text-red-500 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                      REMOVER DATA
-                    </button>
+              <PopoverContent className="w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-[22px] border border-[#E9DFCB] bg-[#FFFDF8] p-0" align="end">
+                <div className="border-b border-[#E9DFCB] bg-white px-[18px] pb-3.5 pt-4">
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="flex-1 text-[17px] font-extrabold text-[#241A10]">Visualizado por</h2>
+                    <span className="rounded-full bg-[#E6F3EB] px-2.5 py-1 text-xs font-extrabold leading-none text-[#1E6B43]">
+                      {totalReaders ? `${Math.min(viewers.length, totalReaders)} de ${totalReaders}` : viewers.length}
+                    </span>
                   </div>
-                )}
+                  {totalReaders ? (
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#EFE6D2]" role="progressbar" aria-valuemin={0} aria-valuemax={totalReaders} aria-valuenow={Math.min(viewers.length, totalReaders)} aria-label="Leitores que já viram">
+                      <div className="h-full rounded-full bg-[#1E6B43]" style={{ width: `${Math.min(100, Math.round((viewers.length / totalReaders) * 100))}%` }} />
+                    </div>
+                  ) : null}
+                </div>
+                <ul className="max-h-[340px] overflow-y-auto py-1.5">
+                  {viewers.length === 0 ? (
+                    <li className="px-[18px] py-4 text-center text-xs text-[#8A7B6A]">Ninguém visualizou ainda</li>
+                  ) : (
+                    viewers.map((viewer, idx) => (
+                      <li key={idx} className="flex items-center gap-2.5 px-[18px] py-[5px]">
+                        <UserAvatar name={viewer.name} src={viewer.avatarUrl} isClaimed={viewer.isClaimed} className="h-[30px] w-[30px] shrink-0" />
+                        <span className="min-w-0 flex-1 truncate text-sm font-bold text-[#241A10]" title={viewer.name}>{viewer.name}</span>
+                      </li>
+                    ))
+                  )}
+                </ul>
               </PopoverContent>
             </Popover>
-          </div>
+          )}
+          <Popover>
+            <PopoverTrigger render={
+              <button
+                type="button"
+                aria-label={hasExpiry ? `Validade: ${expiryLabel}` : "Sem validade"}
+                className={cn(chipBtn, "h-8 px-2.5 text-[12.5px]")}
+              >
+                <Clock className="h-4 w-4" />
+                {hasExpiry ? expiryLabel : <span aria-hidden="true" className="-mt-px text-xl font-bold leading-none">∞</span>}
+              </button>
+            } />
+            <PopoverContent className="flex w-auto flex-col p-0" align="end">
+              <Calendar
+                mode="single"
+                selected={expiresAt ? new Date(expiresAt) : undefined}
+                onSelect={(date) => onUpdate?.(id, { expiresAt: date?.toISOString() })}
+                initialFocus
+                locale={ptBR}
+              />
+              {expiresAt && (
+                <div className="border-t border-stone-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => onUpdate?.(id, { expiresAt: null })}
+                    className="flex h-10 w-full items-center justify-center gap-2 rounded-md text-[11px] font-bold text-red-500 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    REMOVER DATA
+                  </button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
       )}
 

@@ -136,6 +136,8 @@ export interface AnnouncementProps {
   onAcceptSwap?: (slotId: string, announcementId: string) => void
   isPublished?: boolean
   currentUserId?: string
+  /** Total de leitores ativos (para "N de T" na janela de visualizações). */
+  totalReaders?: number
 }
 
 function SwapAnnouncementCard({

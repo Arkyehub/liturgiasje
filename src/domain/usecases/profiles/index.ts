@@ -84,3 +84,10 @@ export class ListBirthdays {
     return this.repository.listBirthdays()
   }
 }
+
+export class CountActiveReaders {
+  constructor(private readonly repository: ProfileRepository) {}
+  async execute(): Promise<number> {
+    return this.repository.countActiveReaders()
+  }
+}

@@ -13,4 +13,5 @@ export interface ProfileRepository {
   claim(profileId: string, authUserId: string): Promise<Profile>
   uploadAvatar(id: string, file: Blob): Promise<string>
   listBirthdays(): Promise<BirthdayInfo[]>
+  countActiveReaders(): Promise<number>
 }

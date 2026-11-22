@@ -10,7 +10,8 @@ import {
   ListArchivedProfiles,
   ClaimProfile, 
   UploadAvatar, 
-  ListBirthdays 
+  ListBirthdays,
+  CountActiveReaders
 } from "@/domain/usecases/profiles"
 import { 
   ListUnavailableByProfile, 
@@ -35,6 +36,7 @@ export const makeListArchivedProfiles = () => new ListArchivedProfiles(profileRe
 export const makeClaimProfile = () => new ClaimProfile(profileRepository)
 export const makeUploadAvatar = () => new UploadAvatar(profileRepository)
 export const makeListBirthdays = () => new ListBirthdays(profileRepository)
+export const makeCountActiveReaders = () => new CountActiveReaders(profileRepository)
 
 export const makeListUnavailableByProfile = () => new ListUnavailableByProfile(unavailableRepository)
 export const makeToggleUnavailableDate = () => new ToggleUnavailableDate(unavailableRepository)

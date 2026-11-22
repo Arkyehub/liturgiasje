@@ -100,3 +100,44 @@ describe("AnnouncementCard — rascunho com anel laranja", () => {
     expect(ringOf()).not.toHaveClass("border-orange-500")
   })
 })
+
+describe("AnnouncementCard — barra compacta do admin", () => {
+  const viewers = [
+    { name: "Mariana Costa", at: "2026-11-22T12:00:00Z" },
+    { name: "Felipe Soares", at: "2026-11-21T20:00:00Z" },
+  ]
+
+  it("sem validade mostra ∞ e com validade mostra só a data", () => {
+    const { rerender } = render(<AnnouncementCard {...base} isAdmin isRead viewers={viewers} />)
+    expect(screen.getByRole("button", { name: "Sem validade" })).toHaveTextContent("∞")
+    rerender(<AnnouncementCard {...base} isAdmin isRead viewers={viewers} expiresAt="2026-11-30T12:00:00" />)
+    const btn = screen.getByRole("button", { name: "Validade: 30/11" })
+    expect(btn).toHaveTextContent("30/11")
+    expect(btn).not.toHaveTextContent(/sai em/i)
+    expect(screen.queryByText(/No ar|Fora do ar/)).not.toBeInTheDocument()
+  })
+
+  it("janela de quem viu: só nomes, com N de T e sem data/hora", async () => {
+    render(<AnnouncementCard {...base} isAdmin isRead viewers={viewers} totalReaders={14} />)
+    await userEvent.click(screen.getByRole("button", { name: "2 viram" }))
+    expect(await screen.findByText("Visualizado por")).toBeInTheDocument()
+    expect(screen.getByText("2 de 14")).toBeInTheDocument()
+    expect(screen.getByText("Mariana Costa")).toBeInTheDocument()
+    expect(screen.getByText("Felipe Soares")).toBeInTheDocument()
+    expect(screen.queryByText(/\d{2}\/\d{2}/)).not.toBeInTheDocument()
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "2")
+  })
+
+  it("sem total conhecido mostra só a contagem, sem barra", async () => {
+    render(<AnnouncementCard {...base} isAdmin isRead viewers={viewers} />)
+    await userEvent.click(screen.getByRole("button", { name: "2 viram" }))
+    expect(await screen.findByText("Visualizado por")).toBeInTheDocument()
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument()
+  })
+
+  it("rascunho não tem botão de visualizações", () => {
+    render(<AnnouncementCard {...base} isAdmin isPublished={false} viewers={[]} />)
+    expect(screen.queryByRole("button", { name: /viu|viram/ })).not.toBeInTheDocument()
+    expect(screen.getByText("RASCUNHO")).toBeInTheDocument()
+  })
+})

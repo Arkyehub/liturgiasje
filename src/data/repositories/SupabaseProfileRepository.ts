@@ -189,4 +189,11 @@ export class SupabaseProfileRepository implements ProfileRepository {
       isActive: !!p.auth_user_id
     }))
   }
+
+  /** Leitores com conta ativa (não arquivados): base para "N de T visualizaram". */
+  async countActiveReaders(): Promise<number> {
+    const { count, error } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).is('archived_at', null).not('auth_user_id', 'is', null)
+    if (error) throw error
+    return count ?? 0
+  }
 }

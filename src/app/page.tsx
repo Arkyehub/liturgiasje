@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { AnnouncementCard } from "@/features/announcements/ui/AnnouncementCard"
 import { ScheduleCard } from "@/features/schedule/ui/ScheduleCard"
 import { hasAnyMassPreference } from "@/features/profile/lib/massPreferences"
+import { makeCountActiveReaders } from "@/main/factories/usecases/profiles"
 import { groupAnnouncements, PUBLISH_PIN_MS } from "@/features/announcements/lib/groupAnnouncements"
 import { ReadAnnouncementsGroup } from "@/features/announcements/ui/ReadAnnouncementsGroup"
 import { MassSummaryGrid } from "@/features/schedule/ui/MassSummaryGrid"
@@ -156,6 +157,15 @@ export default function Home() {
     pendingCreatePinRef.current = null
     created.forEach((a) => pinAnnouncement(a.id))
   }, [announcements, pinAnnouncement])
+  // Total de leitores ativos: só o admin vê "N de T" na janela de visualizações
+  const [totalReaders, setTotalReaders] = useState<number | undefined>(undefined)
+  const isAdminProfile = profile?.role === "admin"
+  useEffect(() => {
+    if (!isAdminProfile) return
+    let cancelled = false
+    makeCountActiveReaders().execute().then((n) => { if (!cancelled && n > 0) setTotalReaders(n) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [isAdminProfile])
   const [isConfirmingPending, setIsConfirmingPending] = useState(false)
 
   // Lista de escalas do usuário logado que não foram confirmadas
@@ -585,6 +595,7 @@ export default function Home() {
       createdAt={ann.createdAt}
       authorId={ann.createdBy}
       currentUserId={profile?.id}
+      totalReaders={totalReaders}
       isAdmin={profile?.role === "admin"}
       isLoggedIn={!!user}
       onRead={async (id) => {
