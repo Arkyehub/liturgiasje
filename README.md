@@ -63,8 +63,9 @@ Os disparos diários rodam no `pg_cron` do Supabase (não há `vercel.json`):
 | Job | Horário (BRT) | Destino |
 | --- | --- | --- |
 | lembretes de escala | 13:00 | `GET /api/cron/reminders` com `Authorization: Bearer $CRON_SECRET` |
-| aniversários | 08:00 | `/api/cron/birthdays` (idem) e a Edge Function `birthday-notifications` |
-| folheto semanal | sexta 15:00 | Edge Function `update-leaflet` |
+| aniversários | 08:00 | `GET /api/cron/birthdays` (idem), job `aniversarios-next` |
+
+O folheto não tem job: `/folheto` abre direto o link permanente da Arquidiocese. As Edge Functions `birthday-notifications` e `update-leaflet` foram desativadas (código em `docs/edge-functions-backup/`).
 
 Atenção: o `pg_cron` marca "succeeded" mesmo quando a rota responde 401. Para saber o resultado real, consulte `net._http_response`.
 
