@@ -706,9 +706,9 @@ export default function Home() {
         </div>
       </div>
 
-      <main className="relative z-10 flex-1 overflow-hidden flex flex-col">
+      <main className="relative z-10 flex-1 overflow-x-clip flex flex-col">
         {/* Tarja de Próxima Escala (Colada ao Header) */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-8 pb-20">
+        <div className="flex-1 overflow-x-clip px-4 py-6 space-y-8 pb-20">
           {user && profile && (
             <div className="-mx-4 -mt-6 animate-in fade-in slide-in-from-top-4 duration-500">
               <MyScheduleWidget
