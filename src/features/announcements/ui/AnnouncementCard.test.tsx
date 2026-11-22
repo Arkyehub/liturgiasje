@@ -59,6 +59,7 @@ describe("AnnouncementCard — visual novo do mural", () => {
     expect(onRead).toHaveBeenCalledWith("a1")
     rerender(<AnnouncementCard {...base} isRead={true} onRead={onRead} />)
     expect(screen.queryByText("NOVO")).not.toBeInTheDocument()
+    expect(screen.getByText("VISTO")).toBeInTheDocument()
   })
 
   it("admin tem WhatsApp, Editar e Excluir sempre visíveis, mesmo recolhido", async () => {
@@ -139,5 +140,22 @@ describe("AnnouncementCard — barra compacta do admin", () => {
     render(<AnnouncementCard {...base} isAdmin isPublished={false} viewers={[]} />)
     expect(screen.queryByRole("button", { name: /viu|viram/ })).not.toBeInTheDocument()
     expect(screen.getByText("RASCUNHO")).toBeInTheDocument()
+  })
+})
+
+describe("AnnouncementCard — meta sutil e tag VISTO", () => {
+  it("não lido tem NOVO e não tem VISTO; sem login nenhum dos dois", () => {
+    const { unmount } = render(<AnnouncementCard {...base} isRead={false} />)
+    expect(screen.getByText("NOVO")).toBeInTheDocument()
+    expect(screen.queryByText("VISTO")).not.toBeInTheDocument()
+    unmount()
+    render(<AnnouncementCard {...base} isLoggedIn={false} isRead />)
+    expect(screen.queryByText("VISTO")).not.toBeInTheDocument()
+  })
+
+  it("autor e data ficam numa linha discreta, sem a palavra 'Visualizado'", () => {
+    render(<AnnouncementCard {...base} isRead authorName="Leonardo Vitorino" createdAt="2026-11-21T14:57:00" />)
+    expect(screen.getByText("Leonardo Vitorino · 21/11, 14:57")).toBeInTheDocument()
+    expect(screen.queryByText(/Visualizado/)).not.toBeInTheDocument()
   })
 })

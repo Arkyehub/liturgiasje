@@ -158,8 +158,9 @@ export function NoticeCard({
   const audios = audioUrls.filter(Boolean) as string[]
   const pdfs = pdfUrls.filter(Boolean) as string[]
 
-  const dateText = createdAt && isValid(new Date(createdAt)) ? format(new Date(createdAt), "dd/MM 'às' HH:mm", { locale: ptBR }) : ""
-  const meta = [isRead ? "Visualizado" : null, authorName || "Administração", dateText || null].filter(Boolean).join(" · ")
+  const dateText = createdAt && isValid(new Date(createdAt)) ? format(new Date(createdAt), "dd/MM, HH:mm", { locale: ptBR }) : ""
+  const meta = [authorName || "Administração", dateText || null].filter(Boolean).join(" · ")
+  const isSeen = !!isLoggedIn && !!isRead
 
   const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -288,10 +289,13 @@ export function NoticeCard({
               )}
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className={cn("font-extrabold leading-tight text-[#241A10]", isRead ? "line-clamp-1 text-[15px] text-[#4A3D31]" : "line-clamp-2 text-[17px]")}>{title}</span>
-                <span className="text-xs text-[#6B5D50]">{meta}</span>
+                <span className="truncate text-[11px] font-medium text-[#7D6E5D]">{meta}</span>
               </span>
               {isNew && (
                 <span className="shrink-0 rounded-full bg-[#322113] px-2.5 py-1 text-[11px] font-extrabold tracking-wider text-[#FFF8E8]">NOVO</span>
+              )}
+              {isSeen && (
+                <span className="shrink-0 rounded-full bg-[#E6F2EA] px-2.5 py-1 text-[11px] font-extrabold tracking-wider text-[#1E6B43]">VISTO</span>
               )}
             </div>
           </AccordionTrigger>
