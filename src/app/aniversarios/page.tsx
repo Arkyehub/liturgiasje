@@ -133,10 +133,6 @@ export default function BirthdaysPage() {
               </section>
             )
           })}
-
-          {groups.length > 0 && (
-            <p className="px-4 pt-2 text-center text-xs text-[#7D6E5D]">Só dia e mês aparecem aqui. O ano de nascimento fica guardado.</p>
-          )}
         </div>
       </main>
     </div>
