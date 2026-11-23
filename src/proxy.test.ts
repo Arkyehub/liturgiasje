@@ -1,3 +1,4 @@
+/** @jest-environment node */
 import { config } from './proxy'
 
 jest.mock('@/shared/api/supabaseMiddleware', () => ({ updateSession: jest.fn() }))

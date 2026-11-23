@@ -1,7 +1,15 @@
-import { type NextRequest } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { updateSession } from '@/shared/api/supabaseMiddleware'
+import { canonicalRedirectUrl } from '@/shared/lib/canonicalHost'
 
 export async function proxy(request: NextRequest) {
+  // Em Production, domínios alternativos vão para o oficial antes de qualquer login (cookie PKCE é por domínio)
+  const canonical = canonicalRedirectUrl(
+    process.env.VERCEL_ENV,
+    request.headers.get('x-forwarded-host') ?? request.headers.get('host'),
+    request.nextUrl.pathname + request.nextUrl.search,
+  )
+  if (canonical) return NextResponse.redirect(canonical, 308)
   return await updateSession(request)
 }
 

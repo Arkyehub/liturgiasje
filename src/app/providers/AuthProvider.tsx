@@ -5,6 +5,7 @@ import { supabase } from "@/shared/api/supabase"
 import { User, AuthChangeEvent, Session } from "@supabase/supabase-js"
 import { makeGetProfileByAuthId } from "@/main/factories/usecases/profiles"
 import { Profile } from "@/domain/models/Profile"
+import { canonicalRedirectUrl } from "@/shared/lib/canonicalHost"
 
 interface AuthContextType {
   user: User | null
@@ -128,6 +129,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.id, fetchProfile])
 
   const signInWithGoogle = async () => {
+    // Em Production, não inicia o login fora do domínio oficial: o cookie PKCE ficaria no domínio errado
+    const canonical = canonicalRedirectUrl(
+      process.env.NEXT_PUBLIC_VERCEL_ENV,
+      window.location.host,
+      window.location.pathname + window.location.search,
+    )
+    if (canonical) {
+      window.location.assign(canonical)
+      return
+    }
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
