@@ -162,7 +162,8 @@ test("a failed month read shows an error with 'Tentar novamente' instead of an e
   await userEvent.click(screen.getByRole("button", { name: "Tentar novamente" }))
   expect(await screen.findByRole("alertdialog")).toBeInTheDocument()
   expect(screen.queryByRole("alert")).not.toBeInTheDocument()
-  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeEnabled()
+  // O aviso é um diálogo modal: a página fica fora da árvore de acessibilidade enquanto ele está aberto.
+  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/, hidden: true })).toBeEnabled()
   expect(execute).toHaveBeenCalledTimes(2)
   ;(console.error as jest.Mock).mockRestore()
 })
