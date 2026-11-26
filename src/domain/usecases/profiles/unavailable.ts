@@ -20,3 +20,10 @@ export class ListUnavailableByDate {
     return this.repository.listManyByDate(date)
   }
 }
+
+export class ListUnavailableForRange {
+  constructor(private readonly repository: UnavailableRepository) {}
+  async execute(fromDate: string, toDate: string): Promise<Record<string, string[]>> {
+    return this.repository.listForRange(fromDate, toDate)
+  }
+}

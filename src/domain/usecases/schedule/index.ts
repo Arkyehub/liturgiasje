@@ -1,5 +1,5 @@
 import { ScheduleRepository } from "../../repositories/ScheduleRepository"
-import { MemberReading, Mass, ScheduleSlot, SwapRequest, CreateMassData, CreateSlotData, ScheduleBatchEntry, RemovedMass } from "../../models/Schedule"
+import { MemberReading, Mass, ScheduleSlot, SwapRequest, CreateMassData, CreateSlotData, ScheduleBatchEntry, RemovedMass, SlotHistoryRow } from "../../models/Schedule"
 
 export class ListSchedulesForMonth {
   constructor(private readonly scheduleRepository: ScheduleRepository) {}
@@ -33,6 +33,13 @@ export class ListMemberReadings {
   constructor(private readonly scheduleRepository: ScheduleRepository) {}
   async execute(profileId: string): Promise<MemberReading[]> {
     return this.scheduleRepository.listReadingsByProfile(profileId)
+  }
+}
+
+export class ListSlotHistory {
+  constructor(private readonly scheduleRepository: ScheduleRepository) {}
+  async execute(fromDate: string, toDate: string): Promise<SlotHistoryRow[]> {
+    return this.scheduleRepository.listSlotHistory(fromDate, toDate)
   }
 }
 

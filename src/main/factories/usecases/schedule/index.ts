@@ -1,4 +1,4 @@
-import { DeleteMasses, SaveScheduleBatch, ListSchedulesForMonth, ConfirmScheduleSlot, RequestScheduleSwap, CancelScheduleSwap, GetProfilesUsage, CreateMassWithSlots, PublishScheduleMonth, UpdateMass, ListAllSwaps, DeleteMass, AcceptScheduleSwap, CheckMassExists, UpdateMassesStatus, ListOccupiedDatesForMonth, ListUpcomingSchedulesForUser, ListMemberReadings } from "@/domain/usecases/schedule"
+import { DeleteMasses, SaveScheduleBatch, ListSchedulesForMonth, ConfirmScheduleSlot, RequestScheduleSwap, CancelScheduleSwap, GetProfilesUsage, CreateMassWithSlots, PublishScheduleMonth, UpdateMass, ListAllSwaps, DeleteMass, AcceptScheduleSwap, CheckMassExists, UpdateMassesStatus, ListOccupiedDatesForMonth, ListUpcomingSchedulesForUser, ListMemberReadings, ListSlotHistory } from "@/domain/usecases/schedule"
 import { SupabaseScheduleRepository } from "@/data/repositories/SupabaseScheduleRepository"
 
 const repository = new SupabaseScheduleRepository()
@@ -20,6 +20,8 @@ export const makeListOccupiedDatesForMonth = () => new ListOccupiedDatesForMonth
 export const makeListUpcomingSchedulesForUser = () => new ListUpcomingSchedulesForUser(repository)
 
 export const makeListMemberReadings = () => new ListMemberReadings(repository)
+
+export const makeListSlotHistory = () => new ListSlotHistory(repository)
 
 export const makeSaveScheduleBatch = () => new SaveScheduleBatch(repository)
 

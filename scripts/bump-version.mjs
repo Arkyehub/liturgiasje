@@ -20,8 +20,8 @@ function bumpVersion() {
     const currentVersionStr = match[1];
     const [major, minor] = currentVersionStr.split('.').map(Number);
     
-    // Incrementa a parte minor
-    const nextVersion = `${major}.${minor + 1}`;
+    // Incrementa a parte minor, mantendo 2 dígitos a partir da série 2 ("2.01" → "2.02" → ... → "2.10")
+    const nextVersion = `${major}.${String(minor + 1).padStart(2, '0')}`;
 
     const newContent = content.replace(
       `export const APP_VERSION = "${currentVersionStr}";`,
@@ -33,8 +33,8 @@ function bumpVersion() {
     // 2. Atualizar package.json
     if (fs.existsSync(packageJsonPath)) {
       const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      // Converte "1.22" para "1.22.0" para seguir o semver do package.json
-      pkg.version = `${nextVersion}.0`;
+      // Semver não aceita zero à esquerda: "2.01" vira "2.1.0" no package.json
+      pkg.version = `${major}.${minor + 1}.0`;
       fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n');
       console.log(`package.json atualizado para a versão ${pkg.version}`);
     }
@@ -42,7 +42,7 @@ function bumpVersion() {
     console.log(JSON.stringify({
       oldVersion: currentVersionStr,
       newVersion: nextVersion,
-      packageVersion: `${nextVersion}.0`
+      packageVersion: `${major}.${minor + 1}.0`
     }));
   } catch (error) {
     console.error("Erro ao processar versão:", error);
