@@ -11,6 +11,7 @@ import { NotebookList } from "@/features/planning/ui/NotebookList"
 import { PublishedNotice } from "@/features/planning/ui/PublishedNotice"
 import { PlanningHeader } from "@/features/planning/ui/PlanningHeader"
 import { PlanningFooter } from "@/features/planning/ui/PlanningFooter"
+import { MassSheet } from "@/features/planning/ui/MassSheet"
 
 function Loading({ text }: { text: string }) {
   return (
@@ -24,6 +25,10 @@ function Loading({ text }: { text: string }) {
 function PlanningScreen() {
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const planning = usePlanning(month)
+  // "new" = criando; string = chave da missa em edição; null = fechado.
+  const [sheet, setSheet] = useState<"new" | string | null>(null)
+  const editing = sheet && sheet !== "new" ? planning.masses.find((m) => m.key === sheet && !m.readOnly) : undefined
+  const sheetOpen = sheet === "new" || !!editing
   const monthName = format(month, "MMMM", { locale: ptBR })
   const monthLabel = `${monthName.charAt(0).toUpperCase()}${monthName.slice(1)} ${format(month, "yyyy")}`
 
@@ -38,6 +43,7 @@ function PlanningScreen() {
           onPrevMonth={() => setMonth((m) => addMonths(m, -1))}
           onNextMonth={() => setMonth((m) => addMonths(m, 1))}
           onCreateDefaults={planning.createDefaults}
+          onAddMass={() => setSheet("new")}
           actionsDisabled={planning.loading || planning.error}
         />
         {planning.loading ? (
@@ -57,9 +63,30 @@ function PlanningScreen() {
             </button>
           </div>
         ) : (
-          <NotebookList masses={planning.masses} />
+          <NotebookList masses={planning.masses} onSelectMass={setSheet} />
         )}
       </main>
+
+      {sheetOpen && (
+        <MassSheet
+          key={editing?.key ?? "new"}
+          month={month}
+          mass={editing}
+          existing={planning.masses.filter((m) => m.key !== editing?.key).map((m) => ({ date: m.date, time: m.time }))}
+          onSave={(saved) => {
+            if (editing) {
+              const [m] = saved
+              planning.updateMass(editing.key, { date: m.date, time: m.time, description: m.description, slots: m.slots })
+            } else {
+              // addMass pode renomear a chave; não dependemos dela depois.
+              saved.forEach(planning.addMass)
+            }
+            setSheet(null)
+          }}
+          onRemove={editing ? () => { planning.removeMass(editing.key); setSheet(null) } : undefined}
+          onClose={() => setSheet(null)}
+        />
+      )}
 
       <PlanningFooter emptySlots={planning.summary.empty} />
 
