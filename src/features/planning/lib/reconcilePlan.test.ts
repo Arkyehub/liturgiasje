@@ -127,16 +127,26 @@ describe("reconcilePlan", () => {
     ])
   })
 
-  it("removedMasses só ficam se a real com esse id existe e não é publicada", () => {
-    const keep = mass({ key: "k", id: "k" })
-    const gone = mass({ key: "g", id: "g" })
-    const pub = mass({ key: "p", id: "p" })
+  it("removedMasses só ficam se a real existe, não é publicada e tem a mesma revisão; a removida não volta a masses", () => {
+    const keep = mass({ key: "k", id: "k", scheduleRevision: 1 })
+    const gone = mass({ key: "g", id: "g", scheduleRevision: 1 })
+    const pub = mass({ key: "p", id: "p", scheduleRevision: 1 })
     const out = reconcilePlan(state([], [keep, gone, pub]), [
-      real("k", "2026-12-06", "07:00"),
+      real("k", "2026-12-06", "07:00", 1),
       real("p", "2026-12-07", "07:00", 1, true),
     ])
     expect(out.removedMasses.map((m) => m.id)).toEqual(["k"])
+    expect(out.masses.map((m) => m.id)).toEqual(["p"])
     expect(out.notices).toEqual([])
+  })
+
+  it("remoção com revisão real diferente cai: a real volta ao plano com aviso changed", () => {
+    const removed = mass({ key: "k", id: "k", scheduleRevision: 1, date: "2026-12-13" })
+    const out = reconcilePlan(state([], [removed]), [real("k", "2026-12-13", "07:00", 2)])
+    expect(out.removedMasses).toEqual([])
+    expect(out.masses.map((m) => m.id)).toEqual(["k"])
+    expect(out.masses[0].scheduleRevision).toBe(2)
+    expect(out.notices).toEqual([{ kind: "changed", dates: ["2026-12-13"] }])
   })
 
   it("nunca devolve duas missas com a mesma key e ordena por data e hora", () => {

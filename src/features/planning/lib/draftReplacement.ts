@@ -1,13 +1,26 @@
 import type { PlanMass } from "./types"
 
 /**
- * Rascunhos reais (não publicados) que salvar substituiria: datas cobertas pelo plano cujo `id` o plano não contém.
- * Publicadas nunca entram; rascunhos de datas que o plano não cobre ficam intocados.
+ * Rascunhos reais (não publicados) que salvar substituiria, em datas cobertas por missas EDITÁVEIS do plano:
+ * os que o plano não contém, e os que o plano contém mas mudaram (`scheduleRevision` diferente) desde que foi aberto.
+ * Publicadas nunca entram; datas só com missa publicada no plano não contam; rascunhos de datas não cobertas ficam intocados.
+ * `removed`: missas que o plano removeu de propósito; seus ids não entram em `replaced` (o lote as apaga por conta própria).
  */
-export function computeDraftReplacement(plan: PlanMass[], realNow: PlanMass[]): { replaced: PlanMass[]; dates: string[] } {
-  const coveredDates = new Set(plan.map((m) => m.date))
-  const planIds = new Set(plan.flatMap((m) => (m.id ? [m.id] : [])))
-  const replaced = realNow.filter((m) => !m.wasPublished && coveredDates.has(m.date) && !(m.id && planIds.has(m.id)))
+export function computeDraftReplacement(
+  plan: PlanMass[],
+  realNow: PlanMass[],
+  removed: PlanMass[] = [],
+): { replaced: PlanMass[]; dates: string[] } {
+  const coveredDates = new Set(plan.filter((m) => !m.wasPublished).map((m) => m.date))
+  const planRevisions = new Map<string, number | undefined>()
+  for (const m of plan) if (m.id) planRevisions.set(m.id, m.scheduleRevision)
+  const removedIds = new Set(removed.flatMap((m) => (m.id ? [m.id] : [])))
+  const replaced = realNow.filter((m) => {
+    if (m.wasPublished || !coveredDates.has(m.date)) return false
+    if (m.id && removedIds.has(m.id)) return false
+    if (m.id && planRevisions.has(m.id)) return planRevisions.get(m.id) !== m.scheduleRevision
+    return true
+  })
   const dates = [...new Set(replaced.map((m) => m.date))].sort()
   return { replaced, dates }
 }

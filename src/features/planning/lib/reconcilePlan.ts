@@ -57,8 +57,23 @@ export function reconcilePlan(
     else keptStored.push(s)
   }
 
-  // Reais entram, exceto os rascunhos cuja versão guardada foi mantida.
-  const realIncluded = real.filter((r) => r.wasPublished || !r.id || !keptIds.has(r.id))
+  // Remoção guardada só vale se o rascunho real ainda existe, não é publicado e a revisão é a mesma;
+  // se a revisão difere, vale a versão real (a remoção cai e a missa real volta ao plano com aviso).
+  const removedSeen = new Set<string>()
+  const removedMasses = (stored?.removedMasses ?? []).filter((m) => {
+    if (!m.id || removedSeen.has(m.id)) return false
+    const r = realById.get(m.id)
+    if (!r || r.wasPublished) return false
+    if (r.scheduleRevision !== m.scheduleRevision) {
+      noticeDates.changed.add(r.date)
+      return false
+    }
+    removedSeen.add(m.id)
+    return true
+  })
+
+  // Reais entram, exceto rascunhos cuja versão guardada foi mantida ou que o usuário removeu.
+  const realIncluded = real.filter((r) => r.wasPublished || !r.id || !(keptIds.has(r.id) || removedSeen.has(r.id)))
   const taken = new Set(realIncluded.map((r) => r.key))
   const storedUnique = keptStored.map((s) => {
     let key = s.key
@@ -67,15 +82,6 @@ export function reconcilePlan(
     return key === s.key ? s : { ...s, key }
   })
   const masses = [...realIncluded, ...storedUnique].sort(byDateTime)
-
-  const removedSeen = new Set<string>()
-  const removedMasses = (stored?.removedMasses ?? []).filter((m) => {
-    if (!m.id || removedSeen.has(m.id)) return false
-    const r = realById.get(m.id)
-    if (!r || r.wasPublished) return false
-    removedSeen.add(m.id)
-    return true
-  })
 
   const notices: ReconcileNotice[] = []
   for (const kind of KIND_ORDER) {

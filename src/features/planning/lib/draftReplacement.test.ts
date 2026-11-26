@@ -18,7 +18,7 @@ const real = (id: string, date: string, time: string, rev = 1, published = false
 
 describe("computeDraftReplacement", () => {
   it("inclui rascunhos reais de datas cobertas pelo plano cujo id não está no plano", () => {
-    const plan = [mass({ key: "n1" }), mass({ key: "m1", id: "m1", time: "09:00" })]
+    const plan = [mass({ key: "n1" }), mass({ key: "m1", id: "m1", scheduleRevision: 1, time: "09:00" })]
     const now = [real("m1", "2026-12-06", "09:00"), real("m2", "2026-12-06", "19:00")]
     const out = computeDraftReplacement(plan, now)
     expect(out.replaced.map((m) => m.id)).toEqual(["m2"])
@@ -33,6 +33,31 @@ describe("computeDraftReplacement", () => {
   it("nunca inclui publicadas", () => {
     const out = computeDraftReplacement([mass()], [real("p1", "2026-12-06", "19:00", 1, true)])
     expect(out.replaced).toEqual([])
+  })
+
+  it("data coberta só por missa publicada do plano não conta", () => {
+    const plan = [mass({ key: "p", id: "p1", date: "2026-12-06", wasPublished: true, readOnly: true })]
+    const out = computeDraftReplacement(plan, [real("d1", "2026-12-06", "19:00")])
+    expect(out).toEqual({ replaced: [], dates: [] })
+  })
+
+  it("inclui missa do plano que mudou por fora (revisão diferente) e não a que não mudou", () => {
+    const plan = [
+      mass({ key: "m1", id: "m1", scheduleRevision: 1, time: "07:00" }),
+      mass({ key: "m2", id: "m2", scheduleRevision: 1, time: "09:00" }),
+    ]
+    const now = [real("m1", "2026-12-06", "07:00", 2), real("m2", "2026-12-06", "09:00", 1)]
+    const out = computeDraftReplacement(plan, now)
+    expect(out.replaced.map((m) => m.id)).toEqual(["m1"])
+    expect(out.dates).toEqual(["2026-12-06"])
+  })
+
+  it("ids removidos pelo plano não entram em replaced", () => {
+    const plan = [mass({ key: "n1" })]
+    const removed = [mass({ key: "r", id: "r1", scheduleRevision: 1 })]
+    const now = [real("r1", "2026-12-06", "19:00", 1), real("x1", "2026-12-06", "21:00", 1)]
+    expect(computeDraftReplacement(plan, now, removed).replaced.map((m) => m.id)).toEqual(["x1"])
+    expect(computeDraftReplacement(plan, now).replaced.map((m) => m.id)).toEqual(["r1", "x1"])
   })
 
   it("dates ordenadas e sem repetição", () => {
