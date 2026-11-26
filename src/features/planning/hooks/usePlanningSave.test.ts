@@ -81,7 +81,7 @@ function setup(masses: Mass[], profiles: Profile[] = [profile("a"), profile("b")
   ;(makeConcludePlan as jest.Mock).mockReturnValue({ execute: conclude })
 }
 
-function usePage(month: Date, overrides: { planId?: string | null; enabled?: boolean } = {}) {
+function usePage(month: Date, overrides: { planId?: string | null; enabled?: boolean; reload?: () => void; onConcluded?: () => void | Promise<void> } = {}) {
   const planning = usePlanning({ kind: "mine", month })
   const save = usePlanningSave({
     month,
@@ -93,7 +93,8 @@ function usePage(month: Date, overrides: { planId?: string | null; enabled?: boo
     enabled: overrides.enabled ?? planning.mode === "edit",
     loading: planning.loading,
     error: planning.error,
-    reload: planning.retry,
+    reload: overrides.reload ?? planning.retry,
+    onConcluded: overrides.onConcluded,
   })
   return { planning, save }
 }
@@ -157,7 +158,7 @@ test("without real drafts to replace, prepareSave needs no confirmation and save
   expect(entries[0]).toMatchObject({ massId: "m1", massData: { expectedRevision: 3, date: "2026-12-06", time: "07:00:00" } })
   expect(entries[0].slots.map((s: { profileId: string }) => s.profileId)).toEqual(filled)
   expect(toast.success).toHaveBeenCalledWith("Rascunho salvo.")
-  await waitFor(() => expect(listMonth).toHaveBeenCalledTimes(3)) // abertura + prepareSave + recarga
+  await waitFor(() => expect(listMonth).toHaveBeenCalledTimes(4)) // abertura + prepareSave + releitura do salvar + recarga
 })
 
 test("prepareSave reads the real masses now and reports the drafts that saving would replace", async () => {
@@ -385,7 +386,7 @@ test("after saving, the plan is concluded with its id and session and the month 
   expect(conclude).toHaveBeenCalledTimes(1)
   expect(conclude).toHaveBeenCalledWith("plan-1", "sessao-teste")
   expect(conclude.mock.invocationCallOrder[0]).toBeGreaterThan(saveBatch.mock.invocationCallOrder[0])
-  await waitFor(() => expect(listMonth).toHaveBeenCalledTimes(3))
+  await waitFor(() => expect(listMonth).toHaveBeenCalledTimes(4))
 })
 
 test("without a planId nothing is concluded", async () => {
@@ -407,7 +408,7 @@ test("a ConcludePlan failure is retried twice more and never reported as a save 
   expect(conclude).toHaveBeenCalledTimes(3)
   expect(toast.error).not.toHaveBeenCalled()
   expect(toast.success).toHaveBeenCalledWith("Rascunho salvo.")
-  await waitFor(() => expect(listMonth).toHaveBeenCalledTimes(3))
+  await waitFor(() => expect(listMonth).toHaveBeenCalledTimes(4))
   errors.mockRestore()
 })
 
@@ -436,7 +437,7 @@ test("a schedule_conflict shows the scheduleErrorMessage text, keeps the plan in
   expect(result.current.planning.masses).toEqual(before)
   expect(result.current.planning.phase).toBe("suggested")
   expect(result.current.save.saving).toBe(false)
-  expect(listMonth).toHaveBeenCalledTimes(2) // abertura + prepareSave; sem recarga
+  expect(listMonth).toHaveBeenCalledTimes(3) // abertura + prepareSave + releitura do salvar; sem recarga
   expect(errors).toHaveBeenCalled()
 })
 
@@ -518,4 +519,106 @@ test("previewText builds the WhatsApp text with the names of the whole month, ar
   expect(text).toContain("*PRÉVIA – Escala de Dezembro/2026 (não publicada)*")
   expect(text).toContain("C - Leitora Arquivada")
   expect(text).toContain("1L - ---")
+})
+
+async function loadWith(overrides: Parameters<typeof usePage>[1]) {
+  const hook = renderHook(() => usePage(DEC, overrides))
+  await waitFor(() => expect(hook.result.current.planning.loading).toBe(false))
+  return hook
+}
+
+const PUBLISHED_ELSEWHERE = "Algumas missas foram publicadas fora do planejamento. Atualizando…"
+
+test("a plan mass published by someone else is detected at prepare time: nothing is written, the month reloads", async () => {
+  setup([draft()])
+  const reload = jest.fn()
+  const { result } = await loadWith({ reload })
+  listMonth.mockResolvedValue([{ ...draft(), isPublished: true }])
+  let prep = { needsConfirm: true }
+  await act(async () => {
+    prep = await result.current.save.prepareSave()
+  })
+  expect(prep.needsConfirm).toBe(false)
+  expect(toast.error).toHaveBeenCalledWith(PUBLISHED_ELSEWHERE)
+  expect(reload).toHaveBeenCalledTimes(1)
+  expect(result.current.save.replacement).toBeNull()
+  let ok = true
+  await act(async () => {
+    ok = await result.current.save.saveDraft()
+  })
+  expect(ok).toBe(false)
+  expect(saveBatch).not.toHaveBeenCalled()
+  expect(conclude).not.toHaveBeenCalled()
+})
+
+test("a plan mass published after prepareSave is caught again at saveDraft: no batch, no conclude, month reloads", async () => {
+  setup([draft()])
+  const reload = jest.fn()
+  const { result } = await loadWith({ reload })
+  await act(async () => {
+    await result.current.save.prepareSave()
+  })
+  expect(reload).not.toHaveBeenCalled()
+  listMonth.mockResolvedValue([{ ...draft(), isPublished: true }])
+  let ok = true
+  await act(async () => {
+    ok = await result.current.save.saveDraft()
+  })
+  expect(ok).toBe(false)
+  expect(saveBatch).not.toHaveBeenCalled()
+  expect(conclude).not.toHaveBeenCalled()
+  expect(toast.error).toHaveBeenCalledWith(PUBLISHED_ELSEWHERE)
+  expect(reload).toHaveBeenCalledTimes(1)
+  expect(result.current.save.saving).toBe(false)
+  // O instantâneo foi descartado: salvar de novo sem preparar não grava.
+  await act(async () => {
+    ok = await result.current.save.saveDraft()
+  })
+  expect(ok).toBe(false)
+  expect(saveBatch).not.toHaveBeenCalled()
+})
+
+test("masses already published in the plan (read-only) do not trigger the published-elsewhere stop", async () => {
+  setup([draft(), published()])
+  const reload = jest.fn()
+  const { result } = await loadWith({ reload })
+  expect(await saveOk(result)).toBe(true)
+  expect(saveBatch).toHaveBeenCalledTimes(1)
+  expect(toast.error).not.toHaveBeenCalled()
+})
+
+test("onConcluded runs after ConcludePlan succeeds and before reload", async () => {
+  setup([draft()])
+  const order: string[] = []
+  const onConcluded = jest.fn(async () => {
+    order.push("onConcluded")
+  })
+  const reload = jest.fn(() => {
+    order.push("reload")
+  })
+  const { result } = await loadWith({ reload, onConcluded })
+  conclude.mockImplementation(async () => {
+    order.push("conclude")
+  })
+  expect(await saveOk(result)).toBe(true)
+  expect(order).toEqual(["conclude", "onConcluded", "reload"])
+})
+
+test("onConcluded is not called when the batch fails or when ConcludePlan keeps failing", async () => {
+  setup([draft()])
+  const errors = quietErrors()
+  const onConcluded = jest.fn()
+  const reload = jest.fn()
+  const { result } = await loadWith({ reload, onConcluded })
+  saveBatch.mockRejectedValue(new Error("falha"))
+  expect(await saveOk(result)).toBe(false)
+  expect(onConcluded).not.toHaveBeenCalled()
+  expect(conclude).not.toHaveBeenCalled()
+  saveBatch.mockResolvedValue(undefined)
+  conclude.mockRejectedValue(new Error("rede"))
+  expect(await saveOk(result)).toBe(true)
+  expect(conclude).toHaveBeenCalledTimes(3)
+  expect(onConcluded).not.toHaveBeenCalled()
+  expect(reload).toHaveBeenCalledTimes(1)
+  errors.mockRestore()
 })

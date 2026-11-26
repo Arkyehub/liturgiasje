@@ -462,6 +462,19 @@ describe("usePlanSync - reserva perdida e conflitos", () => {
   })
 })
 
+describe("usePlanSync - plan_not_found", () => {
+  it("plan_not_found ao gravar vira error com mensagem clara e não repete", async () => {
+    const { result } = await mountEdit(1)
+    mockUc.save.mockRejectedValue(new PlanError("plan_not_found"))
+    act(() => result.current.save({ v: 1 }))
+    await tick(60000)
+    expect(mockUc.save).toHaveBeenCalledTimes(1)
+    expect(result.current.mode).toBe("error")
+    expect(result.current.error).toBe("Planejamento não encontrado.")
+    expect(result.current.status).toBe("idle")
+  })
+})
+
 describe("usePlanSync - leitura de outro plano", () => {
   it("repete a leitura a cada 20 s e só atualiza plan se a revisão mudou", async () => {
     mockUc.get.mockResolvedValue(plan(3))
@@ -862,5 +875,70 @@ describe("usePlanSync - troca de alvo", () => {
     await tick(120000)
     expect(mockUc.heartbeat).not.toHaveBeenCalled()
     expect(mockUc.release).not.toHaveBeenCalled()
+  })
+})
+
+describe("usePlanSync - markConcluded", () => {
+  it("vira concluded, relê o documento e não envia mais nada nem libera a reserva", async () => {
+    const { result, unmount } = await mountEdit(1)
+    mockUc.get.mockResolvedValue(plan(5, { status: "concluido", concludedAt: "2026-11-26T12:00:00Z" }))
+    await act(async () => {
+      await result.current.markConcluded()
+    })
+    expect(mockUc.get).toHaveBeenCalledWith("plan-1")
+    expect(result.current.mode).toBe("concluded")
+    expect(result.current.plan?.revision).toBe(5)
+    expect(result.current.plan?.status).toBe("concluido")
+    expect(result.current.status).toBe("idle")
+
+    act(() => result.current.save({ v: 1 }))
+    await tick(120000)
+    expect(mockUc.save).not.toHaveBeenCalled()
+    expect(mockUc.heartbeat).not.toHaveBeenCalled()
+    expect(mockUc.release).not.toHaveBeenCalled()
+    unmount()
+    await flush()
+    expect(mockUc.release).not.toHaveBeenCalled()
+  })
+
+  it("mata a fila: gravação pendente não é enviada depois", async () => {
+    const { result } = await mountEdit(1)
+    const slow = deferred<number>()
+    mockUc.save.mockReturnValue(slow.promise)
+    act(() => result.current.save({ v: 1 }))
+    await flush()
+    act(() => result.current.save({ v: 2 }))
+    await act(async () => {
+      await result.current.markConcluded()
+    })
+    await act(async () => {
+      slow.resolve(2)
+    })
+    await tick(60000)
+    expect(mockUc.save).toHaveBeenCalledTimes(1)
+    expect(result.current.mode).toBe("concluded")
+    expect(result.current.status).toBe("idle")
+  })
+
+  it("falha ao reler ainda conclui, mantendo o documento anterior", async () => {
+    const { result } = await mountEdit(1)
+    mockUc.get.mockRejectedValue(new Error("rede"))
+    await act(async () => {
+      await result.current.markConcluded()
+    })
+    expect(result.current.mode).toBe("concluded")
+    expect(result.current.plan?.revision).toBe(1)
+  })
+
+  it("fora do modo edit não faz nada", async () => {
+    mockUc.get.mockResolvedValue(plan(9, { id: "plan-1", isMine: false }))
+    const { result } = renderHook(() => usePlanSync(OTHER))
+    await flush()
+    mockUc.get.mockClear()
+    await act(async () => {
+      await result.current.markConcluded()
+    })
+    expect(mockUc.get).not.toHaveBeenCalled()
+    expect(result.current.mode).toBe("readonly")
   })
 })

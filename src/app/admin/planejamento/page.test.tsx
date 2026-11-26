@@ -13,7 +13,7 @@ import { makeListProfiles, makeListUnavailableForRange } from "@/main/factories/
 import type { Mass } from "@/domain/models/Schedule"
 import type { Profile } from "@/domain/models/Profile"
 import type { PlanListItem } from "@/domain/models/SchedulePlan"
-import { resetSync, setSync, planDoc, syncReopen, syncRetrySave } from "@/features/planning/hooks/planSyncTestDouble"
+import { resetSync, setSync, planDoc, syncReopen, syncRetrySave, syncMarkConcluded } from "@/features/planning/hooks/planSyncTestDouble"
 import { serializePlanState } from "@/features/planning/lib/planState"
 import { massToPlan } from "@/features/planning/hooks/usePlanning"
 
@@ -334,10 +334,11 @@ test("after the lamp the page shows one line per role with the summary; 'Sugerir
 const sonner = () => (jest.requireMock("sonner") as { toast: Record<string, jest.Mock> }).toast
 
 async function suggestDefaults() {
-  await openPage()
+  const view = await openPage()
   await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
   await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
   await userEvent.click(screen.getByRole("button", { name: "Sugerir escala" }))
+  return view
 }
 
 test("'Prévia' opens WhatsApp with the encoded preview text", async () => {
@@ -385,7 +386,7 @@ test("'Salvar como rascunho' without published masses saves the batch once, no c
   expect(updateStatus).not.toHaveBeenCalled()
   expect(sonner().success).toHaveBeenCalledWith("Rascunho salvo.")
   expect(conclude).toHaveBeenCalledWith("plan-1", "sessao-teste")
-  await waitFor(() => expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(3)) // abertura + leitura do salvar + recarga
+  await waitFor(() => expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(4)) // abertura + leitura do salvar + releitura antes de gravar + recarga
   expect(await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")).toBeInTheDocument()
 })
 
@@ -402,7 +403,7 @@ test("a schedule conflict shows its message and keeps the suggestion and the edi
   const after = within(screen.getByRole("list", { name: "Vagas sugeridas" })).getAllByRole("listitem").map((li) => li.textContent)
   expect(after).toEqual(before)
   expect(screen.getByRole("button", { name: "Salvar como rascunho" })).toBeEnabled()
-  expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(2) // abertura + leitura do salvar; sem recarga
+  expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(3) // abertura + leitura do salvar + releitura antes de gravar; sem recarga
   expect(conclude).not.toHaveBeenCalled()
   ;(console.error as jest.Mock).mockRestore()
 })
@@ -490,6 +491,23 @@ test("'Trocar planejamento' while the replacement dialog is open is ignored and 
   expect(screen.queryByRole("heading", { name: "Qual mês você vai planejar?" })).not.toBeInTheDocument()
   expect(screen.getByText("Dezembro 2026")).toBeInTheDocument()
   expect(saveBatch).not.toHaveBeenCalled()
+})
+
+test("the replacement dialog closes and resets when the plan leaves edit mode, writing nothing", async () => {
+  asAdmin()
+  setupWithStrayDraft()
+  const view = await suggestDefaults()
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  await screen.findByRole("alertdialog")
+  setSync({ mode: "readonly", lostChanges: 1, holderLastSeen: "2026-11-26T11:00:00Z" })
+  view.rerender(<PlanejamentoPage />)
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument())
+  expect(saveBatch).not.toHaveBeenCalled()
+  // Voltando a editar, o aviso não reaparece sozinho.
+  setSync({ mode: "edit" })
+  view.rerender(<PlanejamentoPage />)
+  await act(async () => {})
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
 })
 
 test("going back to the chooser never asks to discard: the plan is saved as you go", async () => {
@@ -624,6 +642,18 @@ test("'Trocar planejamento' waits while a save is in flight", async () => {
   await userEvent.click(button)
   expect(screen.queryByRole("heading", { name: "Qual mês você vai planejar?" })).not.toBeInTheDocument()
   expect(screen.getByText("Salvando…")).toBeInTheDocument()
+})
+
+test("'Trocar planejamento' stays disabled while the last save failed (leaving would drop the unsent change)", async () => {
+  asAdmin()
+  setup()
+  setSync({ status: "failed" })
+  await openMine()
+  const button = screen.getByRole("button", { name: "Trocar planejamento" })
+  expect(button).toBeDisabled()
+  await userEvent.click(button)
+  expect(screen.queryByRole("heading", { name: "Qual mês você vai planejar?" })).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /tentar de novo/i })).toBeInTheDocument()
 })
 
 test("a plan open on another device shows the banner with Editar, which reopens it, and locks the editing controls", async () => {
@@ -762,9 +792,12 @@ test("after 'Salvar como rascunho' the plan reopens as concluded with the Reabri
   expect(screen.queryByText("SOMENTE LEITURA")).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
   await waitFor(() => expect(conclude).toHaveBeenCalledTimes(1))
+  // a sincronização é avisada de que o servidor concluiu (sem isso ela seguiria em "edit")
+  await waitFor(() => expect(syncMarkConcluded).toHaveBeenCalledTimes(1))
+  expect(syncMarkConcluded.mock.invocationCallOrder[0]).toBeGreaterThan(conclude.mock.invocationCallOrder[0])
   // a recarga reabre o plano; o servidor agora o devolve concluído
   setSync({ mode: "concluded", plan: planDoc({ status: "concluido", concludedAt: "2026-11-26T12:00:00Z" }) })
-  await waitFor(() => expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(3))
+  await waitFor(() => expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(4))
   expect(await screen.findByText("Planejamento concluído")).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Reabrir" })).toBeInTheDocument()
 })

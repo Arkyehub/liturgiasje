@@ -70,6 +70,8 @@ export interface UsePlanningResult {
   syncError: string | null
   retrySave(): void
   reopen(): Promise<void>
+  /** O servidor concluiu o planejamento (depois de salvar): a sincronização passa a `concluded` sem liberar a reserva. */
+  markConcluded(): Promise<void>
   syncPlan: PlanDocument | null
 }
 
@@ -400,6 +402,7 @@ export function usePlanning(target: PlanTarget | null): UsePlanningResult {
     syncError: sync.error,
     retrySave: sync.retrySave,
     reopen: sync.reopen,
+    markConcluded: sync.markConcluded,
     syncPlan: sync.plan,
   }
 }

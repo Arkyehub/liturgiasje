@@ -37,6 +37,11 @@ export interface UsePlanSyncResult {
   reopen(): Promise<void>
   /** Libera a reserva (melhor esforço). */
   release(): void
+  /**
+   * O servidor concluiu o planejamento (e já limpou a reserva): mata a fila, para o heartbeat, NÃO chama
+   * ReleasePlan, relê o documento e passa a `concluded`.
+   */
+  markConcluded(): Promise<void>
 }
 
 const SESSION_KEY = "planejamento:session"
@@ -249,6 +254,7 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
         case "plan_revision_conflict":
           dropToReadonly(gen, true)
           return "stop"
+        case "plan_not_found":
         case "plan_expired":
           killQueue()
           holdingRef.current = false
@@ -359,6 +365,28 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
   const release = useCallback(() => {
     releaseNow()
   }, [releaseNow])
+
+  const markConcluded = useCallback(async () => {
+    const planId = planRef.current?.id
+    if (modeRef.current !== "edit" || !planId) return
+    const gen = genRef.current
+    // Sem ReleasePlan: o servidor já limpou a reserva ao concluir. Nada mais é gravado nem batido.
+    holdingRef.current = false
+    killQueue()
+    setStatus("idle")
+    let doc: PlanDocument | null = null
+    try {
+      doc = await makeGetPlan().execute(planId)
+    } catch {
+      // mantém o documento anterior
+    }
+    if (gen !== genRef.current) return
+    if (doc) {
+      revisionRef.current = doc.revision
+      setPlan(doc)
+    }
+    setMode("concluded")
+  }, [killQueue, setMode, setPlan])
 
   const reopen = useCallback(async () => {
     const t = targetRef.current
@@ -483,7 +511,7 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
   }, [mode, setPlan])
 
   return useMemo(
-    () => ({ mode, plan, holderLastSeen, status, lostChanges, error, sessionId, save, retrySave, reopen, release }),
-    [mode, plan, holderLastSeen, status, lostChanges, error, sessionId, save, retrySave, reopen, release]
+    () => ({ mode, plan, holderLastSeen, status, lostChanges, error, sessionId, save, retrySave, reopen, release, markConcluded }),
+    [mode, plan, holderLastSeen, status, lostChanges, error, sessionId, save, retrySave, reopen, release, markConcluded]
   )
 }

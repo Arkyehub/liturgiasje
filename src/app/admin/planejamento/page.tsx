@@ -68,6 +68,7 @@ function PlanningScreen() {
     loading: planning.loading || month === null,
     error: planning.error,
     reload: planning.retry,
+    onConcluded: planning.markConcluded,
   })
   // Enquanto grava, o plano em memória fica congelado: a recarga depois de gravar descartaria edições feitas agora.
   const { setBusy } = planning
@@ -81,6 +82,14 @@ function PlanningScreen() {
   useEffect(() => {
     setConfirmReplace(false)
   }, [key])
+  // A confirmação de substituição só faz sentido em edição: se a reserva foi perdida (ou o plano concluído) ela é descartada.
+  const { cancelSave } = save
+  const inEdit = planning.mode === "edit"
+  useEffect(() => {
+    if (inEdit) return
+    setConfirmReplace(false)
+    cancelSave()
+  }, [inEdit, cancelSave])
   // O aviso informativo de publicadas é mostrado uma vez por planejamento aberto.
   const [ackedKey, setAckedKey] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -118,7 +127,7 @@ function PlanningScreen() {
     setAckedKey(null)
     setTarget(null)
   }
-  const leaveBlocked = save.saving || preparing || confirmReplace || planning.syncStatus === "saving"
+  const leaveBlocked = save.saving || preparing || confirmReplace || planning.syncStatus === "saving" || planning.syncStatus === "failed"
 
   let bannerReason: ReadOnlyReason | null = null
   if (!planning.loading && (planning.mode === "edit" || planning.mode === "readonly" || planning.mode === "concluded")) {

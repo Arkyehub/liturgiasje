@@ -10,6 +10,7 @@ export const syncSave = jest.fn()
 export const syncRetrySave = jest.fn()
 export const syncReopen = jest.fn().mockResolvedValue(undefined)
 export const syncRelease = jest.fn()
+export const syncMarkConcluded = jest.fn().mockResolvedValue(undefined)
 
 export const planDoc = (extra: Partial<PlanDocument> = {}): PlanDocument => ({
   id: "plan-1",
@@ -41,6 +42,7 @@ const base = (): UsePlanSyncResult => ({
   retrySave: syncRetrySave,
   reopen: syncReopen,
   release: syncRelease,
+  markConcluded: syncMarkConcluded,
 })
 
 let current: UsePlanSyncResult = base()
@@ -54,6 +56,7 @@ export function resetSync() {
   syncRetrySave.mockClear()
   syncReopen.mockClear()
   syncRelease.mockClear()
+  syncMarkConcluded.mockClear()
   current = base()
 }
 

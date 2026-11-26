@@ -26,6 +26,8 @@ interface UsePlanningSaveArgs {
   error: boolean
   /** Recarrega o mês (ids e revisões novos depois de gravar). */
   reload(): void
+  /** Chamado depois que ConcludePlan deu certo e ANTES de `reload()` (a sincronização sai do modo de edição). */
+  onConcluded?: () => void | Promise<void>
 }
 
 export interface UsePlanningSaveResult {
@@ -60,6 +62,17 @@ interface Prepared {
   listed: PlanMass[]
   dates: string[]
   ids: string
+  /** Alguma missa editável do plano foi publicada por outra pessoa depois que o plano foi aberto. */
+  publishedElsewhere: boolean
+}
+
+/**
+ * Salvar despublicaria (`update_mass_with_slots` grava `is_published = false`) uma missa que o plano ainda
+ * trata como rascunho: nada pode ser gravado; a reconciliação deixa a missa publicada real vencer.
+ */
+function hasPublishedElsewhere(masses: PlanMass[], realNow: PlanMass[]): boolean {
+  const realById = new Map(realNow.flatMap((m) => (m.id ? [[m.id, m] as const] : [])))
+  return masses.some((m) => !m.readOnly && !!m.id && realById.get(m.id)?.wasPublished === true)
 }
 
 function compare(masses: PlanMass[], removedMasses: PlanMass[], realNow: PlanMass[], monthKey: string): Prepared {
@@ -78,13 +91,14 @@ function compare(masses: PlanMass[], removedMasses: PlanMass[], realNow: PlanMas
   const listed = [...replacedAll, ...changed]
   const dates = [...new Set(listed.map((m) => m.date))].sort()
   const ids = JSON.stringify([listed.map((m) => `${m.id}:${m.scheduleRevision}`).sort(), removedReal.map((m) => `${m.id}:${m.scheduleRevision}`).sort(), dates])
-  return { monthKey, realNow, replaced, removedReal, listed, dates, ids }
+  return { monthKey, realNow, replaced, removedReal, listed, dates, ids, publishedElsewhere: hasPublishedElsewhere(masses, realNow) }
 }
 
 const CHANGED = "O planejamento mudou; confira e salve de novo."
+const PUBLISHED_ELSEWHERE = "Algumas missas foram publicadas fora do planejamento. Atualizando…"
 
 export function usePlanningSave({
-  month, masses, removedMasses, readerNames, planId, session, enabled, loading, error, reload,
+  month, masses, removedMasses, readerNames, planId, session, enabled, loading, error, reload, onConcluded,
 }: UsePlanningSaveArgs): UsePlanningSaveResult {
   const ready = enabled && !loading && !error
   const monthKey = format(month, "yyyy-MM")
@@ -103,6 +117,13 @@ export function usePlanningSave({
       // O mês mudou durante a leitura: o resultado não vale mais.
       if (monthKeyRef.current !== key) return { needsConfirm: false }
       const prepared = compare(masses, removedMasses, real.map(massToPlan), key)
+      if (prepared.publishedElsewhere) {
+        preparedRef.current = null
+        setReplacement(null)
+        toast.error(PUBLISHED_ELSEWHERE)
+        reload()
+        return { needsConfirm: false }
+      }
       preparedRef.current = prepared
       const needsConfirm = prepared.listed.length > 0
       setReplacement(needsConfirm ? { count: prepared.listed.length, dates: prepared.dates } : null)
@@ -114,7 +135,7 @@ export function usePlanningSave({
       toast.error(scheduleErrorMessage(err, READ_FALLBACK))
       throw err
     }
-  }, [ready, month, monthKey, masses, removedMasses])
+  }, [ready, month, monthKey, masses, removedMasses, reload])
 
   const cancelSave = useCallback(() => {
     preparedRef.current = null
@@ -136,6 +157,23 @@ export function usePlanningSave({
     savingRef.current = true
     setSaving(true)
     try {
+      // Leitura nova: alguém pode ter publicado uma missa do plano enquanto a confirmação estava aberta.
+      let fresh: PlanMass[]
+      try {
+        fresh = (await makeListSchedulesForMonth().execute(startOfMonth(month), true)).map(massToPlan)
+      } catch (err) {
+        console.error("[Planejamento] Falha ao reler as missas reais:", err)
+        toast.error(scheduleErrorMessage(err, READ_FALLBACK))
+        return false
+      }
+      if (monthKeyRef.current !== monthKey) return false
+      if (hasPublishedElsewhere(masses, fresh)) {
+        preparedRef.current = null
+        setReplacement(null)
+        toast.error(PUBLISHED_ELSEWHERE)
+        reload()
+        return false
+      }
       const { entries } = planToBatch(refreshRevisions(masses, prepared.realNow), removedMasses)
       const removed: RemovedMass[] = [...prepared.removedReal, ...prepared.replaced].flatMap((m) =>
         m.id ? [{ id: m.id, expectedRevision: m.scheduleRevision }] : [],
@@ -145,14 +183,23 @@ export function usePlanningSave({
       setReplacement(null)
       toast.success("Rascunho salvo.")
       // O lote já está gravado: falha ao concluir não é erro de salvar.
+      let concluded = false
       if (planId) {
-        for (let attempt = 0; attempt < CONCLUDE_ATTEMPTS; attempt++) {
+        for (let attempt = 0; attempt < CONCLUDE_ATTEMPTS && !concluded; attempt++) {
           try {
             await makeConcludePlan().execute(planId, session)
-            break
+            concluded = true
           } catch (err) {
             console.error("[Planejamento] Falha ao concluir o planejamento:", err)
           }
+        }
+      }
+      if (concluded) {
+        // O servidor limpou a reserva: a sincronização precisa saber antes da recarga, senão segue em "edit".
+        try {
+          await onConcluded?.()
+        } catch (err) {
+          console.error("[Planejamento] Falha ao atualizar o estado concluído:", err)
         }
       }
       reload()
@@ -165,7 +212,7 @@ export function usePlanningSave({
       savingRef.current = false
       setSaving(false)
     }
-  }, [ready, monthKey, masses, removedMasses, planId, session, reload])
+  }, [ready, month, monthKey, masses, removedMasses, planId, session, reload, onConcluded])
 
   const previewText = useCallback(() => {
     const names: PlanReader[] = Object.entries(readerNames).map(([id, fullName]) => ({ id, fullName, createdAt: "", dayPreferences: {} }))
