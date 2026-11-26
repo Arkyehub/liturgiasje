@@ -2,7 +2,12 @@ import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import PlanejamentoPage from "./page"
 import { useAuth } from "@/shared/hooks/useAuth"
-import { makeListSchedulesForMonth, makeListSlotHistory } from "@/main/factories/usecases/schedule"
+import {
+  makeListSchedulesForMonth,
+  makeListSlotHistory,
+  makeSaveScheduleBatch,
+  makeUpdateMassesStatus,
+} from "@/main/factories/usecases/schedule"
 import { makeListProfiles, makeListUnavailableForRange } from "@/main/factories/usecases/profiles"
 import type { Mass } from "@/domain/models/Schedule"
 import type { Profile } from "@/domain/models/Profile"
@@ -13,6 +18,8 @@ jest.mock("@/shared/hooks/useAuth", () => ({ useAuth: jest.fn() }))
 jest.mock("@/main/factories/usecases/schedule", () => ({
   makeListSchedulesForMonth: jest.fn(),
   makeListSlotHistory: jest.fn(),
+  makeSaveScheduleBatch: jest.fn(),
+  makeUpdateMassesStatus: jest.fn(),
 }))
 jest.mock("@/main/factories/usecases/profiles", () => ({
   makeListProfiles: jest.fn(),
@@ -39,7 +46,14 @@ const publishedMass = (id: string, time: string): Mass => ({
   slots: [{ id: `s-${id}`, massId: id, role: "C", profileId: "a", isConfirmed: false, isSwapRequested: false, createdAt: "2026-11-01" }],
 })
 
+let saveBatch: jest.Mock
+let updateStatus: jest.Mock
+
 function setup(masses: Mass[] = []) {
+  saveBatch = jest.fn().mockResolvedValue(undefined)
+  updateStatus = jest.fn().mockResolvedValue(undefined)
+  ;(makeSaveScheduleBatch as jest.Mock).mockReturnValue({ execute: saveBatch })
+  ;(makeUpdateMassesStatus as jest.Mock).mockReturnValue({ execute: updateStatus })
   ;(makeListSchedulesForMonth as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue(masses) })
   ;(makeListSlotHistory as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([]) })
   ;(makeListProfiles as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue([profile("a"), profile("b")]) })
@@ -47,7 +61,7 @@ function setup(masses: Mass[] = []) {
 }
 
 beforeEach(() => {
-  push.mockClear()
+  jest.clearAllMocks()
   // Só o relógio é falso: a página abre no mês atual (dezembro de 2026).
   jest.useFakeTimers({
     now: new Date(2026, 11, 10, 12),
@@ -188,5 +202,158 @@ test("after the lamp the page shows one line per role with the summary; 'Sugerir
   await userEvent.click(screen.getByRole("button", { name: /Sugerir de novo/ }))
   expect(within(firstLine()).getByRole("button", { name: "Destravar leitor" })).toHaveAttribute("aria-pressed", "true")
   expect(within(firstLine()).getByRole("button", { name: /^Leitor [ab]/ })).toHaveTextContent(name as string)
-  expect(screen.getByRole("button", { name: "Salvar como rascunho" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "Salvar como rascunho" })).toBeEnabled()
+})
+
+// ---------------------------------------------------------------------------
+// Task 11: Detalhar, Prévia e Salvar como rascunho
+// ---------------------------------------------------------------------------
+
+const sonner = () => (jest.requireMock("sonner") as { toast: Record<string, jest.Mock> }).toast
+
+async function suggestDefaults() {
+  render(<PlanejamentoPage />)
+  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
+  await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
+  await userEvent.click(screen.getByRole("button", { name: "Sugerir escala" }))
+}
+
+async function suggestPublished() {
+  render(<PlanejamentoPage />)
+  const notice = await screen.findByRole("alertdialog")
+  await userEvent.click(within(notice).getByRole("button", { name: "Incluir no planejamento" }))
+  await userEvent.click(screen.getByRole("button", { name: "Sugerir escala" }))
+}
+
+test("'Prévia' opens WhatsApp with the encoded preview text", async () => {
+  asAdmin()
+  setup()
+  const open = jest.spyOn(window, "open").mockImplementation(() => null)
+  await suggestDefaults()
+  await userEvent.click(screen.getByRole("button", { name: "Prévia pelo WhatsApp" }))
+  expect(open).toHaveBeenCalledTimes(1)
+  const [url, target] = open.mock.calls[0]
+  expect(target).toBe("_blank")
+  expect(String(url).startsWith("https://wa.me/?text=")).toBe(true)
+  const text = decodeURIComponent(String(url).slice("https://wa.me/?text=".length))
+  expect(text).toContain("*PRÉVIA – Escala de Dezembro/2026 (não publicada)*")
+  expect(text).toContain("⚠️ = fora da preferência do leitor")
+  expect(String(url)).not.toContain(" ")
+  open.mockRestore()
+})
+
+test("'Detalhar' opens the month balance and the back button returns to the suggestions", async () => {
+  asAdmin()
+  setup()
+  await suggestDefaults()
+  await userEvent.click(screen.getByRole("button", { name: "Detalhar" }))
+  const detail = screen.getByRole("dialog")
+  expect(within(detail).getByRole("heading", { name: "Equilíbrio do mês" })).toBeInTheDocument()
+  expect(within(detail).getByText("Dezembro 2026 · 82 vagas para 2 leitores")).toBeInTheDocument()
+  expect(within(within(detail).getByRole("list", { name: "Equilíbrio por leitor" })).getAllByRole("listitem")).toHaveLength(2)
+  await userEvent.click(within(detail).getByRole("button", { name: "Voltar às sugestões" }))
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  expect(screen.getByRole("list", { name: "Vagas sugeridas" })).toBeInTheDocument()
+})
+
+test("'Salvar como rascunho' without published masses saves the batch once, no confirmation, and reloads the month", async () => {
+  asAdmin()
+  setup()
+  await suggestDefaults()
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  await waitFor(() => expect(saveBatch).toHaveBeenCalledTimes(1))
+  const [entries, removed] = saveBatch.mock.calls[0]
+  expect(entries).toHaveLength(25)
+  expect(removed).toEqual([])
+  expect(updateStatus).not.toHaveBeenCalled()
+  expect(sonner().success).toHaveBeenCalledWith("Rascunho salvo.")
+  await waitFor(() => expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(2))
+  expect(await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")).toBeInTheDocument()
+})
+
+test("with included published masses, saving asks first; cancel writes nothing; confirm unpublishes BEFORE saving", async () => {
+  asAdmin()
+  setup([publishedMass("m1", "07:00:00"), publishedMass("m2", "09:00:00")])
+  await suggestPublished()
+
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  let confirm = screen.getByRole("alertdialog")
+  expect(within(confirm).getByText(/os leitores deixam de ver essas 2 missas/)).toBeInTheDocument()
+  expect(within(confirm).getByText(/lembretes automáticos param até você republicar/)).toBeInTheDocument()
+  await userEvent.click(within(confirm).getByRole("button", { name: "Cancelar" }))
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  expect(updateStatus).not.toHaveBeenCalled()
+  expect(saveBatch).not.toHaveBeenCalled()
+
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  confirm = screen.getByRole("alertdialog")
+  await userEvent.click(within(confirm).getByRole("button", { name: "Voltar a rascunho e salvar" }))
+  await waitFor(() => expect(saveBatch).toHaveBeenCalledTimes(1))
+  expect(updateStatus).toHaveBeenCalledTimes(1)
+  expect(updateStatus).toHaveBeenCalledWith(["m1", "m2"], false)
+  expect(updateStatus.mock.invocationCallOrder[0]).toBeLessThan(saveBatch.mock.invocationCallOrder[0])
+})
+
+test("a schedule conflict shows its message and keeps the suggestion and the edits on screen", async () => {
+  asAdmin()
+  setup()
+  jest.spyOn(console, "error").mockImplementation(() => {})
+  await suggestDefaults()
+  const before = within(screen.getByRole("list", { name: "Vagas sugeridas" })).getAllByRole("listitem").map((li) => li.textContent)
+  saveBatch.mockRejectedValueOnce({ message: "schedule_conflict" })
+
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  await waitFor(() => expect(sonner().error).toHaveBeenCalledWith("A escala foi alterada. Atualize a página e tente novamente."))
+  const after = within(screen.getByRole("list", { name: "Vagas sugeridas" })).getAllByRole("listitem").map((li) => li.textContent)
+  expect(after).toEqual(before)
+  expect(screen.getByRole("button", { name: "Salvar como rascunho" })).toBeEnabled()
+  expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(1)
+  ;(console.error as jest.Mock).mockRestore()
+})
+
+test("a failure after unpublishing says the masses stayed as draft and saving again works without re-asking", async () => {
+  asAdmin()
+  setup([publishedMass("m1", "07:00:00")])
+  jest.spyOn(console, "error").mockImplementation(() => {})
+  await suggestPublished()
+  saveBatch.mockRejectedValueOnce(new Error("network"))
+
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  await userEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Voltar a rascunho e salvar" }))
+  expect(await screen.findByRole("alert")).toHaveTextContent("As missas ficaram em rascunho; salve novamente ou republique.")
+  expect(screen.getByRole("list", { name: "Vagas sugeridas" })).toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  await waitFor(() => expect(saveBatch).toHaveBeenCalledTimes(2))
+  expect(updateStatus).toHaveBeenCalledTimes(1)
+  ;(console.error as jest.Mock).mockRestore()
+})
+
+test("changing month with unsaved changes asks before discarding them", async () => {
+  asAdmin()
+  setup()
+  render(<PlanejamentoPage />)
+  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
+
+  // sem mudanças: troca direto
+  await userEvent.click(screen.getByRole("button", { name: "Próximo mês" }))
+  expect(screen.getByText("Janeiro 2027")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Mês anterior" }))
+  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
+
+  await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
+  await userEvent.click(screen.getByRole("button", { name: "Próximo mês" }))
+  let confirm = screen.getByRole("alertdialog")
+  expect(within(confirm).getByText(/não foram salvas/)).toBeInTheDocument()
+  await userEvent.click(within(confirm).getByRole("button", { name: "Continuar planejando" }))
+  expect(screen.getByText("Dezembro 2026")).toBeInTheDocument()
+  expect(screen.getByText("25 missas · 82 vagas · 2 leitores aptos")).toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole("button", { name: "Mês anterior" }))
+  confirm = screen.getByRole("alertdialog")
+  await userEvent.click(within(confirm).getByRole("button", { name: "Descartar e trocar de mês" }))
+  expect(screen.getByText("Novembro 2026")).toBeInTheDocument()
+  expect(saveBatch).not.toHaveBeenCalled()
 })

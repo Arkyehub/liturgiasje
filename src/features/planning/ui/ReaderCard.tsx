@@ -30,13 +30,14 @@ const ROLE_LABEL: Record<RoleCode, string> = {
   L: "Leitura",
   P: "Preces",
 }
-const GROUP_LABEL: Record<RoleGroup, string> = { C: "Comentarista", R: "Leitura", P: "Preces" }
+export const GROUP_LABEL: Record<RoleGroup, string> = { C: "Comentarista", R: "Leitura", P: "Preces" }
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
 const dayMonth = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
-function targetLabel(target: number): string {
+/** Meta fracionária exibida arredondada: "3 a 4". */
+export function targetLabel(target: number): string {
   if (!Number.isFinite(target) || target <= 0) return "—"
   const lo = Math.floor(target)
   const hi = Math.ceil(target)

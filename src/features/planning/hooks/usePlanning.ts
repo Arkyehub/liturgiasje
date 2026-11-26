@@ -166,7 +166,9 @@ export function usePlanning(month: Date): UsePlanningResult {
     }
   }, [monthKey, monthStart, attempt])
 
+  // Também serve de recarga depois de salvar: volta a "carregando" para não editar dados velhos.
   const retry = useCallback(() => {
+    setLoadedKey(null)
     setErrorKey(null)
     setAttempt((a) => a + 1)
   }, [])

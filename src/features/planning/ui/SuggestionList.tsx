@@ -20,8 +20,10 @@ interface SuggestionListProps {
   onSetReader: (massKey: string, slotIndex: number, profileId: string) => void
   onToggleLock: (massKey: string, slotIndex: number) => void
   onSuggestAgain: () => void
-  /** Task 11. Sem callback, o botão fica desabilitado. */
+  /** Sem callback, o botão fica desabilitado. */
   onSave?: () => void
+  /** Gravação em andamento: o botão mostra "Salvando...". */
+  saving?: boolean
   onDetail?: () => void
   onPreview?: () => void
 }
@@ -54,6 +56,7 @@ export function SuggestionList({
   onSave,
   onDetail,
   onPreview,
+  saving = false,
 }: SuggestionListProps) {
   const [filter, setFilter] = useState<Filter>("all")
   const [picking, setPicking] = useState<SlotRef | null>(null)
@@ -162,9 +165,10 @@ export function SuggestionList({
             type="button"
             onClick={onSave}
             disabled={!onSave}
+            aria-busy={saving}
             className="h-[52px] flex-1 rounded-2xl bg-green-700 text-[15px] font-bold text-white transition-transform active:scale-95 disabled:opacity-60 disabled:active:scale-100"
           >
-            Salvar como rascunho
+            {saving ? "Salvando..." : "Salvar como rascunho"}
           </button>
         </div>
       </div>

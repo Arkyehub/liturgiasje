@@ -14,6 +14,9 @@ import { PlanningFooter } from "@/features/planning/ui/PlanningFooter"
 import { otherMassTimes } from "@/features/planning/lib/massConflicts"
 import { MassSheet } from "@/features/planning/ui/MassSheet"
 import { SuggestionList } from "@/features/planning/ui/SuggestionList"
+import { BalanceDetail } from "@/features/planning/ui/BalanceDetail"
+import { ConfirmDialog } from "@/features/planning/ui/ConfirmDialog"
+import { usePlanningSave } from "@/features/planning/hooks/usePlanningSave"
 
 function Loading({ text }: { text: string }) {
   return (
@@ -24,15 +27,42 @@ function Loading({ text }: { text: string }) {
   )
 }
 
+type Confirm = { kind: "unpublish" } | { kind: "month"; delta: number }
+
 function PlanningScreen() {
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const planning = usePlanning(month)
+  const save = usePlanningSave({
+    month,
+    masses: planning.masses,
+    removedMasses: planning.removedMasses,
+    readerNames: planning.readerNames,
+    loading: planning.loading,
+    error: planning.error,
+    reload: planning.retry,
+  })
+  const [confirm, setConfirm] = useState<Confirm | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
   // "new" = criando; string = chave da missa em edição; null = fechado.
   const [sheet, setSheet] = useState<"new" | string | null>(null)
   const editing = sheet && sheet !== "new" ? planning.masses.find((m) => m.key === sheet && !m.readOnly) : undefined
   const sheetOpen = sheet === "new" || !!editing
   const monthName = format(month, "MMMM", { locale: ptBR })
   const monthLabel = `${monthName.charAt(0).toUpperCase()}${monthName.slice(1)} ${format(month, "yyyy")}`
+
+  // Trocar de mês descarta o planejamento em memória: com mudanças não salvas, pergunta antes.
+  const changeMonth = (delta: number) => {
+    if (save.saving) return
+    if (save.dirty) setConfirm({ kind: "month", delta })
+    else setMonth((m) => addMonths(m, delta))
+  }
+  // Missas publicadas incluídas: os leitores deixam de vê-las, então confirma antes de gravar.
+  const requestSave = () => {
+    if (save.unpublishCount > 0) setConfirm({ kind: "unpublish" })
+    else void save.saveDraft()
+  }
+  const openPreview = () => window.open(`https://wa.me/?text=${encodeURIComponent(save.previewText())}`, "_blank")
+  const unpublishOne = save.unpublishCount === 1
 
   return (
     <div className="min-h-screen bg-white pb-28 font-sans text-stone-900">
@@ -42,8 +72,8 @@ function PlanningScreen() {
           massCount={planning.masses.length}
           slotCount={planning.summary.totalSlots}
           readerCount={planning.readers.length}
-          onPrevMonth={() => setMonth((m) => addMonths(m, -1))}
-          onNextMonth={() => setMonth((m) => addMonths(m, 1))}
+          onPrevMonth={() => changeMonth(-1)}
+          onNextMonth={() => changeMonth(1)}
           onCreateDefaults={planning.createDefaults}
           onAddMass={() => setSheet("new")}
           actionsDisabled={planning.loading || planning.error}
@@ -65,18 +95,29 @@ function PlanningScreen() {
             </button>
           </div>
         ) : planning.phase === "suggested" ? (
-          <SuggestionList
-            masses={planning.masses}
-            readers={planning.readers}
-            readerNames={planning.readerNames}
-            stats={planning.stats}
-            unavailable={planning.unavailable}
-            summary={planning.summary}
-            monthName={monthName}
-            onSetReader={planning.setSlotReader}
-            onToggleLock={planning.toggleLock}
-            onSuggestAgain={planning.runLamp}
-          />
+          <>
+            {save.leftAsDraft && (
+              <p role="alert" className="mx-4 mb-2.5 rounded-2xl border border-red-100 bg-red-50 px-3 py-2.5 text-[13px] font-semibold text-red-700">
+                As missas ficaram em rascunho; salve novamente ou republique.
+              </p>
+            )}
+            <SuggestionList
+              masses={planning.masses}
+              readers={planning.readers}
+              readerNames={planning.readerNames}
+              stats={planning.stats}
+              unavailable={planning.unavailable}
+              summary={planning.summary}
+              monthName={monthName}
+              onSetReader={planning.setSlotReader}
+              onToggleLock={planning.toggleLock}
+              onSuggestAgain={planning.runLamp}
+              saving={save.saving}
+              onSave={save.saving ? undefined : requestSave}
+              onDetail={() => setDetailOpen(true)}
+              onPreview={openPreview}
+            />
+          </>
         ) : (
           <NotebookList masses={planning.masses} onSelectMass={setSheet} />
         )}
@@ -105,6 +146,48 @@ function PlanningScreen() {
 
       {planning.phase === "planning" && (
         <PlanningFooter emptySlots={planning.summary.empty} onLamp={planning.loading || planning.error ? undefined : planning.runLamp} />
+      )}
+
+      {detailOpen && planning.phase === "suggested" && (
+        <BalanceDetail
+          masses={planning.masses}
+          readers={planning.readers}
+          stats={planning.stats}
+          unavailable={planning.unavailable}
+          monthLabel={monthLabel}
+          onClose={() => setDetailOpen(false)}
+        />
+      )}
+
+      {confirm?.kind === "unpublish" && (
+        <ConfirmDialog
+          title={unpublishOne ? "Voltar a missa a rascunho?" : "Voltar as missas a rascunho?"}
+          message={`Ao salvar, os leitores deixam de ver ${unpublishOne ? "essa missa" : `essas ${save.unpublishCount} missas`} e os lembretes automáticos param até você republicar.`}
+          confirmLabel="Voltar a rascunho e salvar"
+          cancelLabel="Cancelar"
+          onConfirm={() => {
+            setConfirm(null)
+            void save.saveDraft()
+          }}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+
+      {confirm?.kind === "month" && (
+        <ConfirmDialog
+          title="Descartar alterações?"
+          message="As mudanças deste mês não foram salvas. Trocar de mês descarta a sugestão, as escolhas à mão e as missas criadas, editadas ou removidas."
+          confirmLabel="Descartar e trocar de mês"
+          cancelLabel="Continuar planejando"
+          tone="danger"
+          onConfirm={() => {
+            const { delta } = confirm
+            setConfirm(null)
+            setDetailOpen(false)
+            setMonth((m) => addMonths(m, delta))
+          }}
+          onCancel={() => setConfirm(null)}
+        />
       )}
 
       {!planning.loading && planning.publishedCount > 0 && planning.publishedDecision === "pending" && (
