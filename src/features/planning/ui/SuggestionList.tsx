@@ -26,6 +26,8 @@ interface SuggestionListProps {
   saving?: boolean
   onDetail?: () => void
   onPreview?: () => void
+  /** Planejamento somente leitura: sem trocar leitor, travar nem sugerir de novo. */
+  readOnly?: boolean
 }
 
 type Filter = "all" | "warning" | "locked"
@@ -57,6 +59,7 @@ export function SuggestionList({
   onDetail,
   onPreview,
   saving = false,
+  readOnly = false,
 }: SuggestionListProps) {
   const [filter, setFilter] = useState<Filter>("all")
   const [picking, setPicking] = useState<SlotRef | null>(null)
@@ -145,6 +148,7 @@ export function SuggestionList({
                 onPick={() => setPicking(ref)}
                 onView={() => setViewing(ref)}
                 onToggleLock={() => onToggleLock(ref.massKey, ref.slotIndex)}
+                readOnly={readOnly}
               />
             )
           })}
@@ -156,7 +160,8 @@ export function SuggestionList({
           <button
             type="button"
             onClick={onSuggestAgain}
-            className="flex h-[52px] items-center gap-1.5 rounded-2xl border border-stone-200 px-4 text-sm font-bold text-stone-900 transition-transform active:scale-95"
+            disabled={readOnly}
+            className="flex h-[52px] items-center gap-1.5 rounded-2xl border border-stone-200 px-4 text-sm font-bold text-stone-900 transition-transform active:scale-95 disabled:opacity-50 disabled:active:scale-100"
           >
             <Lightbulb aria-hidden="true" className="h-[18px] w-[18px] text-amber-600" />
             Sugerir de novo

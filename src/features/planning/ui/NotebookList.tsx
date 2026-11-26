@@ -6,7 +6,7 @@ const WEEKDAYS = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"]
 
 interface NotebookListProps {
   masses: PlanMass[]
-  /** Toque numa linha editável (Task 9 abre a folha de edição). */
+  /** Toque numa linha editável abre a edição. Sem callback (somente leitura) as linhas ficam desativadas. */
   onSelectMass?: (key: string) => void
 }
 
@@ -50,7 +50,7 @@ export function NotebookList({ masses, onSelectMass }: NotebookListProps) {
               </div>
               <button
                 type="button"
-                disabled={mass.readOnly}
+                disabled={mass.readOnly || !onSelectMass}
                 aria-label={`Missa de ${dd}/${mm} às ${mass.time}${mass.readOnly ? " (publicada, somente leitura)" : ""}`}
                 onClick={() => onSelectMass?.(mass.key)}
                 className="flex min-h-11 min-w-0 flex-1 items-center gap-3 py-1.5 pl-3 pr-4 text-left text-stone-900 transition-colors active:bg-stone-100 disabled:cursor-default disabled:active:bg-transparent"

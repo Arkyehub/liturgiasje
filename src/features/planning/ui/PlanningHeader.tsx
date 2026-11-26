@@ -1,14 +1,16 @@
 "use client"
 
-import { CalendarDays, ChevronLeft, ChevronRight, Plus } from "lucide-react"
+import { CalendarDays, Plus } from "lucide-react"
 
 interface PlanningHeaderProps {
   monthLabel: string // ex.: "Dezembro 2026"
   massCount: number
   slotCount: number
   readerCount: number
-  onPrevMonth: () => void
-  onNextMonth: () => void
+  /** Volta à lista de planejamentos. */
+  onChangePlan: () => void
+  /** Impede trocar agora (gravando ou preparando a gravação). */
+  changeDisabled?: boolean
   onCreateDefaults: () => void
   onAddMass?: () => void
   /** Desabilita as ações que criam missas (carregando ou leitura com erro). */
@@ -25,8 +27,8 @@ export function PlanningHeader({
   massCount,
   slotCount,
   readerCount,
-  onPrevMonth,
-  onNextMonth,
+  onChangePlan,
+  changeDisabled = false,
   onCreateDefaults,
   onAddMass,
   actionsDisabled = false,
@@ -34,18 +36,20 @@ export function PlanningHeader({
   return (
     <header className="flex flex-col gap-2 px-4 pb-2 pt-4">
       <h1 className="text-xl font-black tracking-tight text-stone-900">Planejamento de Escala</h1>
-      <div className="flex items-center justify-between">
-        <button type="button" aria-label="Mês anterior" onClick={onPrevMonth} className="flex h-11 w-11 items-center justify-center rounded-full active:bg-stone-100">
-          <ChevronLeft className="h-5 w-5 text-stone-900" />
-        </button>
-        <div className="flex flex-col items-center">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col">
           <span className="text-[22px] font-black tracking-tight text-stone-900">{monthLabel}</span>
           <span className="text-xs text-stone-600">
             {`${plural(massCount, "missa", "missas")} · ${plural(slotCount, "vaga", "vagas")} · ${plural(readerCount, "leitor apto", "leitores aptos")}`}
           </span>
         </div>
-        <button type="button" aria-label="Próximo mês" onClick={onNextMonth} className="flex h-11 w-11 items-center justify-center rounded-full active:bg-stone-100">
-          <ChevronRight className="h-5 w-5 text-stone-900" />
+        <button
+          type="button"
+          onClick={onChangePlan}
+          disabled={changeDisabled}
+          className="min-h-11 shrink-0 rounded-2xl border border-stone-200 bg-white px-4 text-sm font-bold text-stone-700 transition-transform active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+        >
+          Trocar planejamento
         </button>
       </div>
       <div className="flex justify-center gap-4">
