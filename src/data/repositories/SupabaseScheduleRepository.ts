@@ -1,5 +1,5 @@
 import { supabase } from "@/shared/api/supabase"
-import { MemberReading, Mass, ScheduleSlot, SwapRequest, CreateMassData, CreateSlotData, ScheduleBatchEntry, RemovedMass } from "@/domain/models/Schedule"
+import { MemberReading, Mass, ScheduleSlot, SwapRequest, CreateMassData, CreateSlotData, ScheduleBatchEntry, RemovedMass, SlotHistoryRow } from "@/domain/models/Schedule"
 import { ScheduleRepository } from "@/domain/repositories/ScheduleRepository"
 import { startOfMonth, endOfMonth, format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -287,6 +287,31 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
         } as MemberReading
       })
       .sort((a, b) => (a.date === b.date ? b.time.localeCompare(a.time) : b.date.localeCompare(a.date)))
+  }
+
+  async listSlotHistory(fromDate: string, toDate: string): Promise<SlotHistoryRow[]> {
+    const { data, error } = await supabase
+      .from('schedule_slots')
+      // select('*') de propósito: original_profile_id não existe em todos os bancos (ex.: Production);
+      // nomear a coluna faria a consulta falhar. Linha sem a coluna => originalProfileId: null.
+      .select('*, mass:masses!inner(date, is_published)')
+      .eq('mass.is_published', true)
+      .gte('mass.date', fromDate)
+      .lte('mass.date', toDate)
+
+    if (error) throw error
+
+    return (data || [])
+      .filter((slot: any) => !!slot.profile_id)
+      .map((slot: any) => {
+        const mass = Array.isArray(slot.mass) ? slot.mass[0] : slot.mass
+        return {
+          date: mass.date,
+          role: slot.role,
+          profileId: slot.profile_id,
+          originalProfileId: slot.original_profile_id ?? null
+        } as SlotHistoryRow
+      })
   }
 
   async listUpcomingForUser(profileId: string): Promise<Mass[]> {

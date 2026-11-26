@@ -16,7 +16,8 @@ import {
 import { 
   ListUnavailableByProfile, 
   ToggleUnavailableDate, 
-  ListUnavailableByDate 
+  ListUnavailableByDate,
+  ListUnavailableForRange
 } from "@/domain/usecases/profiles/unavailable"
 import { SupabaseProfileRepository } from "@/data/repositories/SupabaseProfileRepository"
 import { SupabaseUnavailableRepository } from "@/data/repositories/SupabaseUnavailableRepository"
@@ -41,3 +42,4 @@ export const makeCountActiveReaders = () => new CountActiveReaders(profileReposi
 export const makeListUnavailableByProfile = () => new ListUnavailableByProfile(unavailableRepository)
 export const makeToggleUnavailableDate = () => new ToggleUnavailableDate(unavailableRepository)
 export const makeListUnavailableByDate = () => new ListUnavailableByDate(unavailableRepository)
+export const makeListUnavailableForRange = () => new ListUnavailableForRange(unavailableRepository)

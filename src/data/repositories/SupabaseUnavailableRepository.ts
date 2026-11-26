@@ -14,6 +14,14 @@ export class SupabaseUnavailableRepository implements UnavailableRepository {
     return data.map(d => d.profile_id)
   }
 
+  async listForRange(fromDate: string, toDate: string): Promise<Record<string, string[]>> {
+    const { data, error } = await supabase.from('unavailable_dates').select('date, profile_id').gte('date', fromDate).lte('date', toDate)
+    if (error) throw error
+    const byDate: Record<string, string[]> = {}
+    for (const row of data || []) (byDate[row.date] ||= []).push(row.profile_id)
+    return byDate
+  }
+
   async toggleDate(profileId: string, date: string): Promise<{ action: 'added' | 'removed' }> {
     const { data, error: checkError } = await supabase.from('unavailable_dates').select('id').eq('profile_id', profileId).eq('date', date).maybeSingle()
     if (checkError) throw checkError
