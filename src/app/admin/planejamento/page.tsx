@@ -13,6 +13,7 @@ import { PlanningHeader } from "@/features/planning/ui/PlanningHeader"
 import { PlanningFooter } from "@/features/planning/ui/PlanningFooter"
 import { otherMassTimes } from "@/features/planning/lib/massConflicts"
 import { MassSheet } from "@/features/planning/ui/MassSheet"
+import { SuggestionList } from "@/features/planning/ui/SuggestionList"
 
 function Loading({ text }: { text: string }) {
   return (
@@ -63,6 +64,19 @@ function PlanningScreen() {
               Tentar novamente
             </button>
           </div>
+        ) : planning.phase === "suggested" ? (
+          <SuggestionList
+            masses={planning.masses}
+            readers={planning.readers}
+            readerNames={planning.readerNames}
+            stats={planning.stats}
+            unavailable={planning.unavailable}
+            summary={planning.summary}
+            monthName={monthName}
+            onSetReader={planning.setSlotReader}
+            onToggleLock={planning.toggleLock}
+            onSuggestAgain={planning.runLamp}
+          />
         ) : (
           <NotebookList masses={planning.masses} onSelectMass={setSheet} />
         )}
@@ -89,7 +103,9 @@ function PlanningScreen() {
         />
       )}
 
-      <PlanningFooter emptySlots={planning.summary.empty} />
+      {planning.phase === "planning" && (
+        <PlanningFooter emptySlots={planning.summary.empty} onLamp={planning.loading || planning.error ? undefined : planning.runLamp} />
+      )}
 
       {!planning.loading && planning.publishedCount > 0 && planning.publishedDecision === "pending" && (
         <PublishedNotice

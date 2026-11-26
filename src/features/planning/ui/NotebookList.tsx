@@ -10,7 +10,7 @@ interface NotebookListProps {
   onSelectMass?: (key: string) => void
 }
 
-function weekdayOf(date: string): string {
+export function weekdayOf(date: string): string {
   return WEEKDAYS[new Date(`${date}T00:00:00`).getDay()]
 }
 

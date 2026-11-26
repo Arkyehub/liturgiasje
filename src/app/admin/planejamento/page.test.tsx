@@ -18,7 +18,7 @@ jest.mock("@/main/factories/usecases/profiles", () => ({
   makeListProfiles: jest.fn(),
   makeListUnavailableForRange: jest.fn(),
 }))
-jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn() } }))
+jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() } }))
 jest.mock("lucide-react", () => new Proxy({ __esModule: true }, { get: (t, p) => (p in t ? (t as Record<string | symbol, unknown>)[p] : () => <i />) }))
 
 const asAdmin = () =>
@@ -151,4 +151,42 @@ test("a failed month read shows an error with 'Tentar novamente' instead of an e
   expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeEnabled()
   expect(execute).toHaveBeenCalledTimes(2)
   ;(console.error as jest.Mock).mockRestore()
+})
+
+test("the lamp on an empty month asks to create the masses first and keeps the notebook view", async () => {
+  const { toast } = jest.requireMock("sonner") as { toast: Record<string, jest.Mock> }
+  asAdmin()
+  setup()
+  render(<PlanejamentoPage />)
+  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
+  await userEvent.click(screen.getByRole("button", { name: "Sugerir escala" }))
+  expect(toast.info).toHaveBeenCalledWith("Crie as missas do mês primeiro")
+  expect(screen.queryByRole("list", { name: "Vagas sugeridas" })).not.toBeInTheDocument()
+  expect(screen.getByText(/Nenhuma missa neste mês/)).toBeInTheDocument()
+})
+
+test("after the lamp the page shows one line per role with the summary; 'Sugerir de novo' keeps a manual lock", async () => {
+  asAdmin()
+  setup()
+  render(<PlanejamentoPage />)
+  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
+  await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
+  await userEvent.click(screen.getByRole("button", { name: "Sugerir escala" }))
+
+  const list = screen.getByRole("list", { name: "Vagas sugeridas" })
+  expect(within(list).getAllByRole("listitem")).toHaveLength(82)
+  expect(screen.queryByRole("list", { name: "Missas do mês" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Sugerir escala" })).not.toBeInTheDocument()
+  // 2 leitores: as missas de domingo (4 funções) ficam com 2 vagas vazias cada
+  expect(screen.getByRole("status")).toHaveTextContent(/\d+ de 82 vagas preenchidas · \d+ fora da preferência · \d+ sem leitor/)
+
+  // 🔒 na 1ª vaga (terça 01/12, C): "Sugerir de novo" mantém o leitor travado
+  const firstLine = () => within(screen.getByRole("list", { name: "Vagas sugeridas" })).getAllByRole("listitem")[0]
+  const name = within(firstLine()).getByRole("button", { name: /^Leitor [ab]/ }).textContent
+  await userEvent.click(within(firstLine()).getByRole("button", { name: "Travar leitor" }))
+  expect(within(firstLine()).getByRole("button", { name: "Destravar leitor" })).toHaveAttribute("aria-pressed", "true")
+  await userEvent.click(screen.getByRole("button", { name: /Sugerir de novo/ }))
+  expect(within(firstLine()).getByRole("button", { name: "Destravar leitor" })).toHaveAttribute("aria-pressed", "true")
+  expect(within(firstLine()).getByRole("button", { name: /^Leitor [ab]/ })).toHaveTextContent(name as string)
+  expect(screen.getByRole("button", { name: "Salvar como rascunho" })).toBeDisabled()
 })

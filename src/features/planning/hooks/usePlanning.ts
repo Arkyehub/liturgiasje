@@ -9,14 +9,20 @@ import { makeListProfiles, makeListUnavailableForRange } from "@/main/factories/
 import { eligibleReaders, type PlanMass, type PlanReader, type PlanSlot, type PlanSummary, type ReaderStats, type RoleCode } from "../lib/types"
 import { buildDefaultMasses } from "../lib/defaultMasses"
 import { computeReaderStats } from "../lib/readerStats"
-import { summarizePlan } from "../lib/suggestSchedule"
+import { suggestSchedule, summarizePlan } from "../lib/suggestSchedule"
+import { isOutsidePreference } from "../lib/slotPreference"
 
 /** pending = aviso ainda não respondido; included = voltam a rascunho ao salvar; kept = somente leitura. */
 export type PublishedDecision = "pending" | "included" | "kept"
 
+/** planning = montando as missas; suggested = a lâmpada já rodou (lista por função). */
+export type PlanningPhase = "planning" | "suggested"
+
 export interface UsePlanningResult {
   masses: PlanMass[]
   readers: PlanReader[]
+  /** Nome de TODOS os perfis (inclusive arquivados/sem conta) para exibir vagas já gravadas. */
+  readerNames: Record<string, string>
   stats: Record<string, ReaderStats>
   unavailable: Record<string, string[]>
   summary: PlanSummary
@@ -36,6 +42,12 @@ export interface UsePlanningResult {
   removeMass(key: string): void
   acceptPublished(): void
   declinePublished(): void
+  phase: PlanningPhase
+  /** Lâmpada / "Sugerir de novo": preenche as vagas livres; travadas e somente leitura ficam. */
+  runLamp(): void
+  /** Troca manual: define o leitor e TRAVA a vaga. Ignora escolhas que quebram regras duras. */
+  setSlotReader(massKey: string, slotIndex: number, profileId: string): void
+  toggleLock(massKey: string, slotIndex: number): void
 }
 
 const ROLE_ORDER: Record<string, number> = { C: 0, "1L": 1, "2L": 2, L: 3, P: 4 }
@@ -95,6 +107,8 @@ export function usePlanning(month: Date): UsePlanningResult {
   const [plan, setPlan] = useState<PlanMass[]>([])
   const [removedMasses, setRemovedMasses] = useState<PlanMass[]>([])
   const [readers, setReaders] = useState<PlanReader[]>([])
+  const [readerNames, setReaderNames] = useState<Record<string, string>>({})
+  const [suggested, setSuggested] = useState(false)
   const [history, setHistory] = useState<SlotHistoryRow[]>([])
   const [unavailable, setUnavailable] = useState<Record<string, string[]>>({})
   const [publishedDecision, setPublishedDecision] = useState<PublishedDecision>("pending")
@@ -112,11 +126,14 @@ export function usePlanning(month: Date): UsePlanningResult {
     const settle = (
       monthMasses: PlanMass[],
       nextReaders: PlanReader[],
+      names: Record<string, string>,
       historyRows: SlotHistoryRow[],
       unavailableMap: Record<string, string[]>,
     ) => {
       setPlan(monthMasses)
       setReaders(nextReaders)
+      setReaderNames(names)
+      setSuggested(false)
       setHistory(historyRows)
       setUnavailable(unavailableMap)
       setRemovedMasses([])
@@ -130,7 +147,8 @@ export function usePlanning(month: Date): UsePlanningResult {
     ])
       .then(([monthMasses, profiles, historyRows, unavailableMap]) => {
         if (cancelled) return
-        settle(monthMasses.map(massToPlan).sort(byDateTime), eligibleReaders(profiles), historyRows, unavailableMap)
+        const names = Object.fromEntries(profiles.map((p) => [p.id, p.fullName]))
+        settle(monthMasses.map(massToPlan).sort(byDateTime), eligibleReaders(profiles), names, historyRows, unavailableMap)
         setErrorKey(null)
         setLoadedKey(monthKey)
       })
@@ -139,7 +157,7 @@ export function usePlanning(month: Date): UsePlanningResult {
         console.error("[Planejamento] Falha ao carregar o mês:", error)
         toast.error("Não foi possível carregar o planejamento deste mês.")
         // Sem dados confiáveis: nada de lista vazia "planejável".
-        settle([], [], [], {})
+        settle([], [], {}, [], {})
         setLoadedKey(null)
         setErrorKey(monthKey)
       })
@@ -203,9 +221,58 @@ export function usePlanning(month: Date): UsePlanningResult {
     setPublishedDecision("kept")
   }, [])
 
+  const phase: PlanningPhase = ready && suggested ? "suggested" : "planning"
+
+  const runLamp = useCallback(() => {
+    if (!ready) return
+    if (plan.length === 0) {
+      toast.info("Crie as missas do mês primeiro")
+      return
+    }
+    if (readers.length === 0) {
+      toast.warning("Nenhum leitor apto (ativo e com conta vinculada): as vagas ficaram sem leitor.")
+    }
+    setPlan((prev) => suggestSchedule({ masses: prev, readers, stats, unavailable }))
+    setSuggested(true)
+  }, [ready, plan.length, readers, stats, unavailable])
+
+  const setSlotReader = useCallback(
+    (massKey: string, slotIndex: number, profileId: string) => {
+      if (!ready) return
+      const reader = readers.find((r) => r.id === profileId)
+      if (!reader) return // arquivado, sem conta ou desconhecido
+      setPlan((prev) =>
+        prev.map((m) => {
+          const slot = m.slots[slotIndex]
+          if (m.key !== massKey || m.readOnly || !slot) return m
+          if (unavailable[m.date]?.includes(profileId)) return m
+          if (m.slots.some((s, i) => i !== slotIndex && s.profileId === profileId)) return m
+          const { warning: _w, reason: _r, ...rest } = slot
+          void _w
+          void _r
+          const next: PlanSlot = { ...rest, profileId, locked: true, reason: "Escolhido à mão" }
+          if (isOutsidePreference(reader, m)) next.warning = "outside-preference"
+          return { ...m, slots: m.slots.map((s, i) => (i === slotIndex ? next : s)) }
+        }),
+      )
+    },
+    [ready, readers, unavailable],
+  )
+
+  const toggleLock = useCallback((massKey: string, slotIndex: number) => {
+    setPlan((prev) =>
+      prev.map((m) => {
+        const slot = m.slots[slotIndex]
+        if (m.key !== massKey || m.readOnly || !slot || slot.profileId === "") return m
+        return { ...m, slots: m.slots.map((s, i) => (i === slotIndex ? { ...s, locked: !s.locked } : s)) }
+      }),
+    )
+  }, [])
+
   return {
     masses,
     readers,
+    readerNames,
     stats,
     unavailable,
     summary,
@@ -221,5 +288,9 @@ export function usePlanning(month: Date): UsePlanningResult {
     removeMass,
     acceptPublished,
     declinePublished,
+    phase,
+    runLamp,
+    setSlotReader,
+    toggleLock,
   }
 }

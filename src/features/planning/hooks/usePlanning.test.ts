@@ -13,7 +13,7 @@ jest.mock("@/main/factories/usecases/profiles", () => ({
   makeListProfiles: jest.fn(),
   makeListUnavailableForRange: jest.fn(),
 }))
-jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn() } }))
+jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() } }))
 
 const DEC = new Date(2026, 11, 1)
 
@@ -250,4 +250,150 @@ test("editing a new mass's time and creating defaults again keeps keys unique; u
   )
   const after = result.current.masses.map((m) => m.key)
   expect(new Set(after).size).toBe(after.length)
+})
+
+// ---------------------------------------------------------------------------
+// Task 10: lâmpada, travas e troca manual
+// ---------------------------------------------------------------------------
+
+const draftSunday = () =>
+  mass("m1", "2026-12-06", "07:00:00", false, [slot("s1", "m1", "C", ""), slot("s2", "m1", "1L", "")])
+
+test("runLamp fills the empty slots with eligible readers and switches to phase 'suggested'", async () => {
+  // b está indisponível em 06/12: só sobra "a" para uma das vagas
+  setup([draftSunday()], [profile("a"), profile("b"), profile("c")])
+  const { result } = await load()
+  expect(result.current.phase).toBe("planning")
+  act(() => result.current.runLamp())
+  expect(result.current.phase).toBe("suggested")
+  const ids = result.current.masses[0].slots.map((s) => s.profileId)
+  expect(ids.every((id) => id === "a" || id === "c")).toBe(true)
+  expect(new Set(ids).size).toBe(2)
+  expect(result.current.summary).toMatchObject({ filled: 2, empty: 0 })
+})
+
+test("runLamp with no masses shows 'Crie as missas do mês primeiro' and does nothing", async () => {
+  const { toast } = jest.requireMock("sonner") as { toast: Record<string, jest.Mock> }
+  setup([])
+  const { result } = await load()
+  act(() => result.current.runLamp())
+  expect(toast.info).toHaveBeenCalledWith("Crie as missas do mês primeiro")
+  expect(result.current.phase).toBe("planning")
+  expect(result.current.masses).toEqual([])
+})
+
+test("runLamp is a no-op while loading", async () => {
+  setup([draftSunday()])
+  const { result } = renderHook(() => usePlanning(DEC))
+  act(() => result.current.runLamp())
+  expect(result.current.phase).toBe("planning")
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.phase).toBe("planning")
+  expect(result.current.summary.filled).toBe(0)
+})
+
+test("runLamp with no eligible readers warns and leaves the slots empty", async () => {
+  const { toast } = jest.requireMock("sonner") as { toast: Record<string, jest.Mock> }
+  setup([draftSunday()], [profile("x", { archivedAt: "2026-01-01" }), profile("y", { authUserId: null })])
+  const { result } = await load()
+  act(() => result.current.runLamp())
+  expect(toast.warning).toHaveBeenCalledWith(expect.stringMatching(/Nenhum leitor apto/))
+  expect(result.current.phase).toBe("suggested")
+  expect(result.current.masses[0].slots.map((s) => s.profileId)).toEqual(["", ""])
+})
+
+test("setSlotReader sets the reader and locks the slot; 'Sugerir de novo' keeps it until unlocked", async () => {
+  setup([mass("m1", "2026-12-08", "19:00:00", false, [slot("s1", "m1", "C", "")])])
+  const { result } = await load()
+  act(() => result.current.runLamp())
+  const suggested = result.current.masses[0].slots[0].profileId
+  const other = suggested === "a" ? "b" : "a"
+
+  act(() => result.current.setSlotReader("m1", 0, other))
+  expect(result.current.masses[0].slots[0]).toMatchObject({ profileId: other, locked: true })
+
+  act(() => result.current.runLamp())
+  expect(result.current.masses[0].slots[0]).toMatchObject({ profileId: other, locked: true })
+
+  act(() => result.current.toggleLock("m1", 0))
+  expect(result.current.masses[0].slots[0].locked).toBe(false)
+  act(() => result.current.runLamp())
+  expect(result.current.masses[0].slots[0].profileId).toBe(suggested)
+})
+
+test("setSlotReader never breaks hard rules: ineligible, unavailable, same mass, read-only", async () => {
+  setup(
+    [
+      mass("m1", "2026-12-06", "07:00:00", false, [slot("s1", "m1", "C", "a"), slot("s2", "m1", "1L", "")]),
+      mass("pub", "2026-12-08", "19:00:00", true, [slot("s3", "pub", "C", "")]),
+    ],
+    [profile("a"), profile("b"), profile("c"), profile("z", { archivedAt: "2026-01-01" })],
+  )
+  const { result } = await load()
+  act(() => result.current.setSlotReader("m1", 1, "z")) // arquivado
+  act(() => result.current.setSlotReader("m1", 1, "b")) // indisponível em 06/12
+  act(() => result.current.setSlotReader("m1", 1, "a")) // já está nesta missa
+  act(() => result.current.setSlotReader("pub", 0, "c")) // somente leitura
+  act(() => result.current.setSlotReader("m1", 9, "c")) // vaga inexistente
+  expect(result.current.masses[0].slots[1]).toEqual({ id: "s2", role: "1L", profileId: "", locked: false })
+  expect(result.current.masses[1].slots[0].profileId).toBe("")
+
+  act(() => result.current.setSlotReader("m1", 1, "c"))
+  expect(result.current.masses[0].slots[1]).toMatchObject({ profileId: "c", locked: true })
+})
+
+test("a manual choice is flagged outside-preference when the reader did not mark that day/time", async () => {
+  setup(
+    [mass("m1", "2026-12-06", "07:00:00", false, [slot("s1", "m1", "C", ""), slot("s2", "m1", "1L", "")])],
+    [
+      profile("a", { preferences: { day_preferences: { "6": ["07:00"] } } }),
+      profile("c", { preferences: { day_preferences: { "6": ["11:00"] } } }),
+    ],
+  )
+  const { result } = await load()
+  act(() => result.current.setSlotReader("m1", 0, "a"))
+  act(() => result.current.setSlotReader("m1", 1, "c"))
+  expect(result.current.masses[0].slots[0].warning).toBeUndefined()
+  expect(result.current.masses[0].slots[1].warning).toBe("outside-preference")
+  expect(result.current.summary.outsidePreference).toBe(1)
+})
+
+test("toggleLock flips an assigned slot; empty slots and read-only masses are untouched", async () => {
+  setup([
+    mass("m1", "2026-12-08", "19:00:00", false, [slot("s1", "m1", "C", "a"), slot("s2", "m1", "L", "")]),
+    mass("pub", "2026-12-11", "19:00:00", true, [slot("s3", "pub", "C", "a")]),
+  ])
+  const { result } = await load()
+  act(() => result.current.toggleLock("m1", 0))
+  expect(result.current.masses[0].slots[0].locked).toBe(false)
+  act(() => result.current.toggleLock("m1", 0))
+  expect(result.current.masses[0].slots[0].locked).toBe(true)
+  act(() => result.current.toggleLock("m1", 1))
+  expect(result.current.masses[0].slots[1].locked).toBe(false)
+  act(() => result.current.toggleLock("pub", 0))
+  expect(result.current.masses[1].slots[0].locked).toBe(true)
+})
+
+test("readerNames keeps the names of archived/unlinked readers already in a slot", async () => {
+  setup(
+    [mass("m1", "2026-12-08", "19:00:00", false, [slot("s1", "m1", "C", "z")])],
+    [profile("a"), profile("z", { fullName: "Zélia Arquivada", archivedAt: "2026-01-01" })],
+  )
+  const { result } = await load()
+  expect(result.current.readers.map((r) => r.id)).toEqual(["a"])
+  expect(result.current.readerNames).toMatchObject({ a: "Leitor a", z: "Zélia Arquivada" })
+  act(() => result.current.runLamp())
+  expect(result.current.masses[0].slots[0]).toMatchObject({ profileId: "z", locked: true })
+})
+
+test("switching month returns to phase 'planning'", async () => {
+  setup([draftSunday()])
+  const hook = renderHook(({ month }) => usePlanning(month), { initialProps: { month: DEC } })
+  await waitFor(() => expect(hook.result.current.loading).toBe(false))
+  act(() => hook.result.current.runLamp())
+  expect(hook.result.current.phase).toBe("suggested")
+  hook.rerender({ month: new Date(2027, 0, 1) })
+  expect(hook.result.current.phase).toBe("planning")
+  await waitFor(() => expect(hook.result.current.loading).toBe(false))
+  expect(hook.result.current.phase).toBe("planning")
 })
