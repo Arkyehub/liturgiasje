@@ -25,6 +25,11 @@ export interface UsePlanningResult {
   /** Missas já gravadas que o admin removeu do planejamento (para o lote de gravação). */
   removedMasses: PlanMass[]
   loading: boolean
+  /** A leitura do mês falhou: não há dados confiáveis, então nada pode ser planejado. */
+  error: boolean
+  /** Refaz as leituras do mês depois de uma falha. */
+  retry(): void
+  /** Inclui missas novas no plano; sem efeito enquanto carrega ou com erro. */
   createDefaults(): void
   addMass(m: PlanMass): void
   updateMass(key: string, patch: Partial<PlanMass>): void
@@ -65,6 +70,21 @@ export function massToPlan(mass: Mass): PlanMass {
   }
 }
 
+/**
+ * Garante chave única no plano: mantém a chave proposta se estiver livre,
+ * senão acrescenta um sufixo (~2, ~3...). Necessário porque missas novas usam
+ * `${date}_${time}` e a edição do horário não muda a chave.
+ */
+function withUniqueKeys(incoming: PlanMass[], existing: PlanMass[]): PlanMass[] {
+  const taken = new Set(existing.map((m) => m.key))
+  return incoming.map((m) => {
+    let key = m.key
+    for (let n = 2; taken.has(key); n++) key = `${m.key}~${n}`
+    taken.add(key)
+    return key === m.key ? m : { ...m, key }
+  })
+}
+
 export function usePlanning(month: Date): UsePlanningResult {
   // Chave estável: o efeito só recarrega quando o mês muda de fato.
   const monthKey = format(month, "yyyy-MM")
@@ -78,7 +98,12 @@ export function usePlanning(month: Date): UsePlanningResult {
   const [history, setHistory] = useState<SlotHistoryRow[]>([])
   const [unavailable, setUnavailable] = useState<Record<string, string[]>>({})
   const [publishedDecision, setPublishedDecision] = useState<PublishedDecision>("pending")
-  const loading = loadedKey !== monthKey
+  // Mês cuja leitura falhou (nulo = sem erro) e contador para "Tentar novamente".
+  const [errorKey, setErrorKey] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  const error = errorKey === monthKey
+  const loading = !error && loadedKey !== monthKey
+  const ready = !loading && !error
 
   useEffect(() => {
     let cancelled = false
@@ -96,7 +121,6 @@ export function usePlanning(month: Date): UsePlanningResult {
       setUnavailable(unavailableMap)
       setRemovedMasses([])
       setPublishedDecision("pending")
-      setLoadedKey(monthKey)
     }
     Promise.all([
       makeListSchedulesForMonth().execute(monthStart, true),
@@ -107,33 +131,49 @@ export function usePlanning(month: Date): UsePlanningResult {
       .then(([monthMasses, profiles, historyRows, unavailableMap]) => {
         if (cancelled) return
         settle(monthMasses.map(massToPlan).sort(byDateTime), eligibleReaders(profiles), historyRows, unavailableMap)
+        setErrorKey(null)
+        setLoadedKey(monthKey)
       })
       .catch((error) => {
         if (cancelled) return
         console.error("[Planejamento] Falha ao carregar o mês:", error)
         toast.error("Não foi possível carregar o planejamento deste mês.")
+        // Sem dados confiáveis: nada de lista vazia "planejável".
         settle([], [], [], {})
+        setLoadedKey(null)
+        setErrorKey(monthKey)
       })
     return () => {
       cancelled = true
     }
-  }, [monthKey, monthStart])
+  }, [monthKey, monthStart, attempt])
 
-  // Durante a troca de mês não exibe as missas do mês anterior.
-  const masses = useMemo(() => (loading ? [] : plan), [loading, plan])
+  const retry = useCallback(() => {
+    setErrorKey(null)
+    setAttempt((a) => a + 1)
+  }, [])
+
+  // Durante a troca de mês (ou com erro) não exibe missas de outro estado.
+  const masses = useMemo(() => (ready ? plan : []), [ready, plan])
   const stats = useMemo(() => computeReaderStats(readers, history, monthStart), [readers, history, monthStart])
   const summary = useMemo(() => summarizePlan(masses), [masses])
   const publishedCount = useMemo(() => masses.filter((m) => m.wasPublished).length, [masses])
 
   const createDefaults = useCallback(() => {
-    setPlan((prev) =>
-      [...prev, ...buildDefaultMasses(monthStart, prev.map((m) => ({ date: m.date, time: normalizeTime(m.time) })))].sort(byDateTime),
-    )
-  }, [monthStart])
+    if (!ready) return
+    setPlan((prev) => {
+      const defaults = buildDefaultMasses(monthStart, prev.map((m) => ({ date: m.date, time: normalizeTime(m.time) })))
+      return [...prev, ...withUniqueKeys(defaults, prev)].sort(byDateTime)
+    })
+  }, [monthStart, ready])
 
-  const addMass = useCallback((m: PlanMass) => {
-    setPlan((prev) => [...prev, m].sort(byDateTime))
-  }, [])
+  const addMass = useCallback(
+    (m: PlanMass) => {
+      if (!ready) return
+      setPlan((prev) => [...prev, ...withUniqueKeys([m], prev)].sort(byDateTime))
+    },
+    [ready],
+  )
 
   const updateMass = useCallback((key: string, patch: Partial<PlanMass>) => {
     setPlan((prev) =>
@@ -173,6 +213,8 @@ export function usePlanning(month: Date): UsePlanningResult {
     publishedDecision,
     removedMasses,
     loading,
+    error,
+    retry,
     createDefaults,
     addMass,
     updateMass,

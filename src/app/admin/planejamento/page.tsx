@@ -38,9 +38,24 @@ function PlanningScreen() {
           onPrevMonth={() => setMonth((m) => addMonths(m, -1))}
           onNextMonth={() => setMonth((m) => addMonths(m, 1))}
           onCreateDefaults={planning.createDefaults}
+          actionsDisabled={planning.loading || planning.error}
         />
         {planning.loading ? (
           <Loading text="Carregando o mês..." />
+        ) : planning.error ? (
+          <div role="alert" className="mx-4 mt-4 rounded-3xl border border-red-100 bg-red-50 p-5 text-center">
+            <p className="text-[15px] font-bold text-red-700">Não foi possível carregar este mês.</p>
+            <p className="mt-1 text-sm text-red-700/80">
+              Sem os dados reais do mês não dá para planejar sem risco de duplicar missas.
+            </p>
+            <button
+              type="button"
+              onClick={planning.retry}
+              className="mt-4 min-h-12 rounded-2xl bg-stone-800 px-5 text-[15px] font-bold text-white transition-transform active:scale-95"
+            >
+              Tentar novamente
+            </button>
+          </div>
         ) : (
           <NotebookList masses={planning.masses} />
         )}

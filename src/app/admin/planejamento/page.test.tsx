@@ -131,3 +131,24 @@ test("keeping published masses leaves them read-only with a 'publicada' mark", a
   const rows = within(screen.getByRole("list", { name: "Missas do mês" })).getAllByRole("button")
   rows.forEach((b) => expect(b).toBeDisabled())
 })
+
+test("a failed month read shows an error with 'Tentar novamente' instead of an empty, plannable month", async () => {
+  asAdmin()
+  setup([publishedMass("m1", "07:00:00")])
+  const execute = jest.fn().mockRejectedValueOnce(new Error("timeout")).mockResolvedValue([publishedMass("m1", "07:00:00")])
+  ;(makeListSchedulesForMonth as jest.Mock).mockReturnValue({ execute })
+  jest.spyOn(console, "error").mockImplementation(() => {})
+  render(<PlanejamentoPage />)
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível carregar este mês.")
+  expect(screen.queryByText(/Nenhuma missa neste mês/)).not.toBeInTheDocument()
+  expect(screen.queryByRole("list", { name: "Missas do mês" })).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeDisabled()
+
+  await userEvent.click(screen.getByRole("button", { name: "Tentar novamente" }))
+  expect(await screen.findByRole("alertdialog")).toBeInTheDocument()
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeEnabled()
+  expect(execute).toHaveBeenCalledTimes(2)
+  ;(console.error as jest.Mock).mockRestore()
+})

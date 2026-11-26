@@ -11,6 +11,8 @@ interface PlanningHeaderProps {
   onNextMonth: () => void
   onCreateDefaults: () => void
   onAddMass?: () => void
+  /** Desabilita as ações que criam missas (carregando ou leitura com erro). */
+  actionsDisabled?: boolean
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
@@ -27,6 +29,7 @@ export function PlanningHeader({
   onNextMonth,
   onCreateDefaults,
   onAddMass,
+  actionsDisabled = false,
 }: PlanningHeaderProps) {
   return (
     <header className="flex flex-col gap-2 px-4 pb-2 pt-4">
@@ -46,11 +49,11 @@ export function PlanningHeader({
         </button>
       </div>
       <div className="flex justify-center gap-4">
-        <button type="button" onClick={onCreateDefaults} className={linkClass}>
+        <button type="button" onClick={onCreateDefaults} disabled={actionsDisabled} className={linkClass}>
           <CalendarDays className="h-4 w-4" />
           Criar Missas Padrões no mês
         </button>
-        <button type="button" onClick={onAddMass} disabled={!onAddMass} aria-label="Adicionar missa" className={linkClass}>
+        <button type="button" onClick={onAddMass} disabled={actionsDisabled || !onAddMass} aria-label="Adicionar missa" className={linkClass}>
           <Plus className="h-4 w-4" />
           Missa
         </button>

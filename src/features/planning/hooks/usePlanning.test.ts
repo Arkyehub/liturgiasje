@@ -192,3 +192,62 @@ test("switching month reloads and resets the plan and the published decision", a
   expect(hook.result.current.publishedDecision).toBe("pending")
   expect(hook.result.current.publishedCount).toBe(0)
 })
+
+test("a failed read is an error state (not an empty month); createDefaults/addMass are no-ops; retry recovers", async () => {
+  setup([mass("m1", "2026-12-06", "07:00:00", false, [slot("s1", "m1", "C", "a")])])
+  listMonth.mockRejectedValueOnce(new Error("timeout"))
+  jest.spyOn(console, "error").mockImplementation(() => {})
+  const { result } = renderHook(() => usePlanning(DEC))
+
+  // enquanto carrega: sem efeito
+  expect(result.current.loading).toBe(true)
+  act(() => result.current.createDefaults())
+
+  await waitFor(() => expect(result.current.error).toBe(true))
+  expect(result.current.loading).toBe(false)
+  expect(result.current.masses).toEqual([])
+  act(() => result.current.createDefaults())
+  act(() =>
+    result.current.addMass({ key: "x", date: "2026-12-01", time: "19:00", description: "", wasPublished: false, readOnly: false, slots: [] }),
+  )
+  expect(result.current.masses).toEqual([])
+
+  act(() => result.current.retry())
+  expect(result.current.error).toBe(false)
+  expect(result.current.loading).toBe(true)
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).toBe(false)
+  expect(listMonth).toHaveBeenCalledTimes(2)
+  expect(result.current.masses.map((m) => m.key)).toEqual(["m1"])
+  ;(console.error as jest.Mock).mockRestore()
+})
+
+test("editing a new mass's time and creating defaults again keeps keys unique; update/remove touch one mass", async () => {
+  setup([])
+  const { result } = await load()
+  act(() => result.current.createDefaults())
+  act(() => result.current.updateMass("2026-12-06_07:00", { time: "08:00" }))
+  act(() => result.current.createDefaults())
+
+  const keys = result.current.masses.map((m) => m.key)
+  expect(result.current.masses).toHaveLength(26)
+  expect(new Set(keys).size).toBe(keys.length)
+  const sunday = result.current.masses.filter((m) => m.date === "2026-12-06")
+  expect(sunday.map((m) => m.time)).toEqual(["07:00", "08:00", "09:00", "11:00", "19:00"])
+  const recreated = sunday.find((m) => m.time === "07:00") as { key: string }
+  expect(recreated.key).not.toBe("2026-12-06_07:00")
+
+  act(() => result.current.updateMass("2026-12-06_07:00", { description: "editada" }))
+  expect(result.current.masses.filter((m) => m.description === "editada").map((m) => m.time)).toEqual(["08:00"])
+
+  act(() => result.current.removeMass("2026-12-06_07:00"))
+  expect(result.current.masses).toHaveLength(25)
+  expect(result.current.masses.filter((m) => m.date === "2026-12-06").map((m) => m.time)).toEqual(["07:00", "09:00", "11:00", "19:00"])
+
+  // addMass com chave já usada também recebe chave nova
+  act(() =>
+    result.current.addMass({ key: recreated.key, date: "2026-12-06", time: "10:00", description: "", wasPublished: false, readOnly: false, slots: [] }),
+  )
+  const after = result.current.masses.map((m) => m.key)
+  expect(new Set(after).size).toBe(after.length)
+})
