@@ -174,12 +174,13 @@ export function usePlanning(target: PlanTarget | null): UsePlanningResult {
   const syncSettled =
     sync.mode !== "idle" && sync.mode !== "loading" && (syncPlanOk || !["edit", "readonly", "concluded"].includes(sync.mode))
   const applied = baseline !== null && baseline.targetKey === targetKey && baseline.real === realMasses
-  const loading = !idle && !error && (loadedKey !== monthKey || !applied)
+  const loading = !idle && !error && (loadedKey !== monthKey || !applied || !syncSettled)
   const ready = !idle && !loading && !error
   const mode: SyncMode = idle ? "idle" : syncSettled ? sync.mode : "loading"
   // Gravando: o plano fica congelado. `ready` continua valendo para leitura; `editable` guarda as edições.
   const [busy, setBusy] = useState(false)
-  const editable = ready && mode === "edit" && !busy
+  // Gravação falhou: novas edições ficam travadas até "tentar de novo" (spec 5.4), senão o servidor ficaria atrás do local.
+  const editable = ready && mode === "edit" && sync.status !== "failed" && !busy
 
   useEffect(() => {
     if (!monthStart || !monthKey) return
@@ -412,7 +413,8 @@ export function usePlanning(target: PlanTarget | null): UsePlanningResult {
     mode,
     syncStatus: sync.status,
     lostChanges: sync.lostChanges,
-    notices,
+    // Avisos de reconciliação só no modo de edição: em leitura/concluído/outro o plano é só exibido.
+    notices: mode === "edit" ? notices : [],
     ownerName: sync.plan?.ownerName ?? null,
     holderLastSeen: sync.holderLastSeen,
     readOnly: mode !== "edit",

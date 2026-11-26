@@ -55,7 +55,6 @@ export function resetSync() {
   syncReopen.mockClear()
   syncRelease.mockClear()
   current = base()
-  forMonth.clear()
 }
 
 /** Troca só o documento (simula releitura do servidor); mantém o resto. */
@@ -63,16 +62,15 @@ export function setSyncPlan(plan: PlanDocument | null) {
   current = { ...current, plan }
 }
 
-const forMonth = new Map<string, UsePlanSyncResult & { __source?: UsePlanSyncResult }>()
+const planCopies = new WeakMap<PlanDocument, Map<string, PlanDocument>>()
 
-/** O documento acompanha o mês pedido (como o servidor faria); identidade estável por (estado, mês). */
+/** O documento acompanha o mês pedido (como o servidor faria); a mesma entrada devolve sempre o MESMO objeto. */
 export function usePlanSync(target: { kind: "mine"; month: string } | { kind: "other"; planId: string } | null): UsePlanSyncResult {
   if (!target) return { ...base(), mode: "idle", plan: null }
   if (target.kind !== "mine" || !current.plan) return current
-  const key = target.month
-  const cached = forMonth.get(key)
-  if (cached && cached.__source === current) return cached
-  const next = Object.assign({ ...current, plan: { ...current.plan, monthReference: key } }, { __source: current })
-  forMonth.set(key, next)
-  return next
+  let perMonth = planCopies.get(current.plan)
+  if (!perMonth) planCopies.set(current.plan, (perMonth = new Map()))
+  let doc = perMonth.get(target.month)
+  if (!doc) perMonth.set(target.month, (doc = { ...current.plan, monthReference: target.month }))
+  return doc === current.plan ? current : { ...current, plan: doc }
 }
