@@ -5,7 +5,7 @@ jest.mock('@/shared/api/supabase', () => ({ supabase: { rpc: jest.fn(), from: je
 
 const rpc = supabase.rpc as jest.Mock
 const repo = new SupabaseSchedulePlanRepository()
-const item = { id: 'p1', monthReference: '2026-12', ownerProfileId: 'o', ownerName: 'Ana', isMine: true, status: 'em_andamento', createdAt: 'a', updatedAt: 'b', expiresAt: 'c', copiedFromName: null, concludedAt: null, openElsewhere: false }
+const item = { id: 'p1', monthReference: '2026-12', ownerProfileId: 'o', ownerName: 'Ana', isMine: true, status: 'em_andamento', createdAt: 'a', updatedAt: 'b', expiresAt: 'c', copiedFromName: null, concludedAt: null, openElsewhere: false, hasContent: true }
 const doc = { ...item, revision: 3, state: { a: 1 } }
 
 beforeEach(() => jest.clearAllMocks())

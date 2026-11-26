@@ -25,6 +25,7 @@ export const planDoc = (extra: Partial<PlanDocument> = {}): PlanDocument => ({
   copiedFromName: null,
   concludedAt: null,
   openElsewhere: false,
+  hasContent: true,
   revision: 1,
   state: null,
   ...extra,

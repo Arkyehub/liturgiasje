@@ -33,6 +33,7 @@ function plan(over: Partial<PlanListItem>): PlanListItem {
     copiedFromName: null,
     concludedAt: null,
     openElsewhere: false,
+    hasContent: true,
     ...over
   }
 }
@@ -123,6 +124,26 @@ it("Duplicar com plano meu pede confirmação e só então sobrescreve", async (
   await userEvent.click(within(dialog).getByRole("button", { name: "Substituir" }))
   expect(mockCopy).toHaveBeenCalledWith("o1", "sess-1", true)
   await waitFor(() => expect(onOpenMine).toHaveBeenCalledWith(new Date(2026, 11, 1)))
+})
+
+it("Duplicar com plano meu SEM conteúdo não pede confirmação e copia sem sobrescrever", async () => {
+  const { onOpenMine } = setup([plan({ id: "mine", hasContent: false }), plan({ id: "o1", isMine: false })])
+  const dez = await screen.findByRole("region", { name: /Dezembro 2026/ })
+  await userEvent.click(within(dez).getByRole("button", { name: /Duplicar para mim/ }))
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  expect(mockCopy).toHaveBeenCalledWith("o1", "sess-1", false)
+  await waitFor(() => expect(onOpenMine).toHaveBeenCalledWith(new Date(2026, 11, 1)))
+})
+
+it("plano de outra pessoa sem conteúdo: Duplicar fica desabilitado e mostra 'sem conteúdo'", async () => {
+  setup([plan({ id: "o1", isMine: false, hasContent: false })])
+  const dez = await screen.findByRole("region", { name: /Dezembro 2026/ })
+  const button = within(dez).getByRole("button", { name: /Duplicar para mim/ })
+  expect(button).toBeDisabled()
+  expect(dez).toHaveTextContent("sem conteúdo")
+  await userEvent.click(button)
+  expect(mockCopy).not.toHaveBeenCalled()
+  expect(within(dez).getByRole("button", { name: /Ver/ })).toBeEnabled()
 })
 
 it("cancelar a confirmação de duplicar não copia", async () => {

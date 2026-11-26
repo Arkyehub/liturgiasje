@@ -67,7 +67,7 @@ let listPlans: jest.Mock
 const listItem = (extra: Partial<PlanListItem> = {}): PlanListItem => ({
   id: "o1", monthReference: "2026-12", ownerProfileId: "owner-2", ownerName: "Maria Teste", isMine: false, status: "em_andamento",
   createdAt: "2026-11-20T12:00:00Z", updatedAt: "2026-11-26T09:00:00Z", expiresAt: "2026-12-26T09:00:00Z",
-  copiedFromName: null, concludedAt: null, openElsewhere: false, ...extra,
+  copiedFromName: null, concludedAt: null, openElsewhere: false, hasContent: true, ...extra,
 })
 
 function setup(masses: Mass[] = [], plans: PlanListItem[] = []) {

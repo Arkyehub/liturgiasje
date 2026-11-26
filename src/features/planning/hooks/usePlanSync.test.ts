@@ -36,6 +36,7 @@ const plan = (revision = 1, extra: Partial<PlanDocument> = {}): PlanDocument => 
   copiedFromName: null,
   concludedAt: null,
   openElsewhere: false,
+  hasContent: true,
   revision,
   state: { masses: [] },
   ...extra,

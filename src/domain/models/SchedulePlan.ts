@@ -13,6 +13,8 @@ export interface PlanListItem {
   copiedFromName: string | null
   concludedAt: string | null
   openElsewhere: boolean
+  /** O plano já foi gravado ao menos uma vez (state não nulo): só então pode ser copiado. */
+  hasContent: boolean
 }
 
 export interface PlanDocument extends PlanListItem {

@@ -204,14 +204,17 @@ export function PlanChooser({ current, session, onOpenMine, onViewOther }: PlanC
                         Concluído por {other.ownerName} em {format(new Date(other.concludedAt), "dd/MM")}
                       </p>
                     )}
+                    {!other.hasContent && <p className="text-xs text-stone-500">sem conteúdo</p>}
                     <div className="flex flex-wrap gap-2">
                       <button type="button" disabled={busy} onClick={() => onViewOther(other)} className={outline}>
                         Ver
                       </button>
                       <button
                         type="button"
-                        disabled={busy}
-                        onClick={() => (mine ? setPending({ kind: "overwrite", source: other, month }) : void copy(other, month, false))}
+                        disabled={busy || !other.hasContent}
+                        onClick={() =>
+                          mine?.hasContent ? setPending({ kind: "overwrite", source: other, month }) : void copy(other, month, false)
+                        }
                         className={outline}
                       >
                         Duplicar para mim
