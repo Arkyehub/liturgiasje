@@ -8,7 +8,7 @@ import { Loader2 } from "lucide-react"
 import { useAuth } from "@/shared/hooks/useAuth"
 import { usePlanning } from "@/features/planning/hooks/usePlanning"
 import { NotebookList } from "@/features/planning/ui/NotebookList"
-import { PublishedNotice } from "@/features/planning/ui/PublishedNotice"
+import { LegacyPublishedNotice } from "@/features/planning/ui/PublishedNotice"
 import { MonthChooser } from "@/features/planning/ui/MonthChooser"
 import { PlanningHeader } from "@/features/planning/ui/PlanningHeader"
 import { PlanningFooter } from "@/features/planning/ui/PlanningFooter"
@@ -216,7 +216,7 @@ function PlanningScreen() {
       )}
 
       {!planning.loading && planning.publishedCount > 0 && planning.publishedDecision === "pending" && (
-        <PublishedNotice
+        <LegacyPublishedNotice
           count={planning.publishedCount}
           monthName={monthName}
           onInclude={planning.acceptPublished}
