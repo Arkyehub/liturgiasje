@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import PlanejamentoPage from "./page"
 import { useAuth } from "@/shared/hooks/useAuth"
@@ -357,4 +357,34 @@ test("changing month with unsaved changes asks before discarding them", async ()
   await userEvent.click(within(confirm).getByRole("button", { name: "Descartar e trocar de mês" }))
   expect(screen.getByText("Novembro 2026")).toBeInTheDocument()
   expect(saveBatch).not.toHaveBeenCalled()
+})
+
+test("while saving, the planning is inert and edits are ignored (no edit is lost to the reload)", async () => {
+  asAdmin()
+  setup()
+  let release: () => void = () => {}
+  saveBatch.mockReturnValue(new Promise<void>((resolve) => { release = resolve }))
+  await suggestDefaults()
+
+  const lines = () => within(screen.getByRole("list", { name: "Vagas sugeridas" })).getAllByRole("listitem")
+  const lockButtonName = () => within(lines()[0]).getAllByRole("button").map((b) => b.getAttribute("aria-label") ?? "")
+  expect(lockButtonName()).toContain("Travar leitor")
+
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  await waitFor(() => expect(saveBatch).toHaveBeenCalledTimes(1))
+  const main = screen.getByRole("main", { hidden: true })
+  expect(main).toHaveAttribute("inert")
+  expect(main).toHaveAttribute("aria-busy", "true")
+
+  // Mesmo que um clique chegue ao botão, o plano não muda.
+  const before = lines().map((li) => li.textContent)
+  const lock = within(lines()[0]).getByRole("button", { name: "Travar leitor", hidden: true })
+  act(() => lock.click())
+  act(() => within(screen.getByRole("list", { name: "Vagas sugeridas" })).getAllByRole("button", { name: "Travar leitor", hidden: true })[1].click())
+  expect(within(lines()[0]).getByRole("button", { name: "Travar leitor", hidden: true })).toHaveAttribute("aria-pressed", "false")
+  expect(lines().map((li) => li.textContent)).toEqual(before)
+
+  await act(async () => release())
+  await waitFor(() => expect(sonner().success).toHaveBeenCalledWith("Rascunho salvo."))
+  await waitFor(() => expect(screen.getByRole("main")).not.toHaveAttribute("inert"))
 })

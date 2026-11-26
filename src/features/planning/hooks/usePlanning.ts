@@ -49,6 +49,11 @@ export interface UsePlanningResult {
   /** Troca manual: define o leitor e TRAVA a vaga. Ignora escolhas que quebram regras duras. */
   setSlotReader(massKey: string, slotIndex: number, profileId: string): void
   toggleLock(massKey: string, slotIndex: number): void
+  /**
+   * Gravação em andamento: enquanto verdadeiro, nenhuma edição é aceita (a recarga depois de gravar
+   * descartaria o que fosse feito nesse intervalo).
+   */
+  setBusy(busy: boolean): void
 }
 
 const ymd = (d: Date) => format(d, "yyyy-MM-dd")
@@ -120,6 +125,9 @@ export function usePlanning(month: Date): UsePlanningResult {
   const error = errorKey === monthKey
   const loading = !error && loadedKey !== monthKey
   const ready = !loading && !error
+  // Gravando: o plano fica congelado. `ready` continua valendo para leitura; `editable` guarda as edições.
+  const [busy, setBusy] = useState(false)
+  const editable = ready && !busy
 
   useEffect(() => {
     let cancelled = false
@@ -182,37 +190,42 @@ export function usePlanning(month: Date): UsePlanningResult {
   const publishedCount = useMemo(() => masses.filter((m) => m.wasPublished).length, [masses])
 
   const createDefaults = useCallback(() => {
-    if (!ready) return
+    if (!editable) return
     setPlan((prev) => {
       const defaults = buildDefaultMasses(monthStart, prev.map((m) => ({ date: m.date, time: normalizeTime(m.time) })))
       return [...prev, ...withUniqueKeys(defaults, prev)].sort(byDateTime)
     })
-  }, [monthStart, ready])
+  }, [monthStart, editable])
 
   const addMass = useCallback(
     (m: PlanMass) => {
-      if (!ready) return
+      if (!editable) return
       setPlan((prev) => [...prev, ...withUniqueKeys([m], prev)].sort(byDateTime))
     },
-    [ready],
+    [editable],
   )
 
-  const updateMass = useCallback((key: string, patch: Partial<PlanMass>) => {
-    setPlan((prev) =>
-      prev
-        .map((m) => (m.key === key && !m.readOnly ? { ...m, ...patch, key: m.key } : m))
-        .sort(byDateTime),
-    )
-  }, [])
+  const updateMass = useCallback(
+    (key: string, patch: Partial<PlanMass>) => {
+      if (!editable) return
+      setPlan((prev) =>
+        prev
+          .map((m) => (m.key === key && !m.readOnly ? { ...m, ...patch, key: m.key } : m))
+          .sort(byDateTime),
+      )
+    },
+    [editable],
+  )
 
   const removeMass = useCallback(
     (key: string) => {
+      if (!editable) return
       const target = masses.find((m) => m.key === key)
       if (!target || target.readOnly) return
       setPlan((prev) => prev.filter((m) => m.key !== key))
       if (target.id) setRemovedMasses((r) => (r.some((x) => x.key === key) ? r : [...r, target]))
     },
-    [masses],
+    [editable, masses],
   )
 
   const acceptPublished = useCallback(() => {
@@ -228,7 +241,7 @@ export function usePlanning(month: Date): UsePlanningResult {
   const phase: PlanningPhase = ready && suggested ? "suggested" : "planning"
 
   const runLamp = useCallback(() => {
-    if (!ready) return
+    if (!editable) return
     if (plan.length === 0) {
       toast.info("Crie as missas do mês primeiro")
       return
@@ -238,11 +251,11 @@ export function usePlanning(month: Date): UsePlanningResult {
     }
     setPlan((prev) => suggestSchedule({ masses: prev, readers, stats, unavailable }))
     setSuggested(true)
-  }, [ready, plan.length, readers, stats, unavailable])
+  }, [editable, plan.length, readers, stats, unavailable])
 
   const setSlotReader = useCallback(
     (massKey: string, slotIndex: number, profileId: string) => {
-      if (!ready) return
+      if (!editable) return
       const reader = readers.find((r) => r.id === profileId)
       if (!reader) return // arquivado, sem conta ou desconhecido
       setPlan((prev) =>
@@ -260,18 +273,22 @@ export function usePlanning(month: Date): UsePlanningResult {
         }),
       )
     },
-    [ready, readers, unavailable],
+    [editable, readers, unavailable],
   )
 
-  const toggleLock = useCallback((massKey: string, slotIndex: number) => {
-    setPlan((prev) =>
-      prev.map((m) => {
-        const slot = m.slots[slotIndex]
-        if (m.key !== massKey || m.readOnly || !slot || slot.profileId === "" || slot.isSwapRequested) return m
-        return { ...m, slots: m.slots.map((s, i) => (i === slotIndex ? { ...s, locked: !s.locked } : s)) }
-      }),
-    )
-  }, [])
+  const toggleLock = useCallback(
+    (massKey: string, slotIndex: number) => {
+      if (!editable) return
+      setPlan((prev) =>
+        prev.map((m) => {
+          const slot = m.slots[slotIndex]
+          if (m.key !== massKey || m.readOnly || !slot || slot.profileId === "" || slot.isSwapRequested) return m
+          return { ...m, slots: m.slots.map((s, i) => (i === slotIndex ? { ...s, locked: !s.locked } : s)) }
+        }),
+      )
+    },
+    [editable],
+  )
 
   return {
     masses,
@@ -296,5 +313,6 @@ export function usePlanning(month: Date): UsePlanningResult {
     runLamp,
     setSlotReader,
     toggleLock,
+    setBusy,
   }
 }

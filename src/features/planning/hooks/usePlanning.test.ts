@@ -416,3 +416,33 @@ test("a slot with a pending swap request is carried into the plan, stays locked 
   act(() => result.current.runLamp())
   expect(result.current.masses[0].slots[0]).toMatchObject({ profileId: "a", locked: true, isSwapRequested: true })
 })
+
+test("while busy (saving) every edit is ignored; after busy ends edits work again", async () => {
+  setup([
+    mass("m1", "2026-12-08", "19:00:00", false, [slot("s1", "m1", "C", "a"), slot("s2", "m1", "L", "")]),
+    mass("m2", "2026-12-11", "19:00:00", false, [slot("s3", "m2", "C", "")]),
+  ])
+  const { result } = await load()
+  const before = JSON.stringify(result.current.masses)
+  const newMass = { key: "n", date: "2026-12-12", time: "19:00", description: "", wasPublished: false, readOnly: false, slots: [] }
+
+  act(() => result.current.setBusy(true))
+  act(() => {
+    result.current.updateMass("m1", { description: "X" })
+    result.current.removeMass("m2")
+    result.current.setSlotReader("m1", 1, "b")
+    result.current.toggleLock("m1", 0)
+    result.current.addMass(newMass)
+    result.current.createDefaults()
+    result.current.runLamp()
+  })
+  expect(JSON.stringify(result.current.masses)).toBe(before)
+  expect(result.current.removedMasses).toEqual([])
+  expect(result.current.phase).toBe("planning")
+
+  act(() => result.current.setBusy(false))
+  act(() => result.current.toggleLock("m1", 0))
+  expect(result.current.masses[0].slots[0].locked).toBe(false)
+  act(() => result.current.updateMass("m1", { description: "X" }))
+  expect(result.current.masses[0].description).toBe("X")
+})

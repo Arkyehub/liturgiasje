@@ -41,6 +41,11 @@ function PlanningScreen() {
     error: planning.error,
     reload: planning.retry,
   })
+  // Enquanto grava, o plano em memória fica congelado: a recarga depois de gravar descartaria edições feitas agora.
+  const { setBusy } = planning
+  useEffect(() => {
+    setBusy(save.saving)
+  }, [save.saving, setBusy])
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   // "new" = criando; string = chave da missa em edição; null = fechado.
@@ -66,7 +71,11 @@ function PlanningScreen() {
 
   return (
     <div className="min-h-screen bg-white pb-28 font-sans text-stone-900">
-      <main className="mx-auto max-w-md">
+      <main
+        inert={save.saving}
+        aria-busy={save.saving}
+        className={`mx-auto max-w-md transition-opacity ${save.saving ? "opacity-60" : ""}`}
+      >
         <PlanningHeader
           monthLabel={monthLabel}
           massCount={planning.masses.length}
