@@ -64,5 +64,8 @@ export function parsePlanState(raw: unknown): PlanState | null {
   if (typeof suggested !== "boolean") return null
   if (!Array.isArray(masses) || !masses.every(isMass)) return null
   if (!Array.isArray(removedMasses) || !removedMasses.every(isMass)) return null
+  // Uma missa não pode estar ao mesmo tempo no plano e na lista de removidas.
+  const removedIds = new Set(removedMasses.flatMap((m) => (m.id ? [m.id] : [])))
+  if (masses.some((m) => m.id && removedIds.has(m.id))) return null
   return { masses, removedMasses, suggested }
 }

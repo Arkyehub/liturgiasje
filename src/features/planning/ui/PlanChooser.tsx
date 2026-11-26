@@ -155,7 +155,7 @@ export function PlanChooser({ current, session, onOpenMine, onViewOther }: PlanC
                     {monthTitle(month)}
                   </h3>
                   {delta === 1 && (
-                    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-600">
+                    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-800">
                       Sugerido
                     </span>
                   )}

@@ -63,19 +63,6 @@ describe("planToBatch", () => {
     expect(r.removed).toEqual([{ id: "x", expectedRevision: 2 }])
   })
 
-  it("unpublishIds: publicadas, não readOnly e com id", () => {
-    const r = planToBatch(
-      [
-        mass({ id: "a", wasPublished: true }),
-        mass({ id: "b", wasPublished: true, readOnly: true }),
-        mass({ id: "c", wasPublished: false }),
-        mass({ wasPublished: true }),
-      ],
-      []
-    )
-    expect(r.unpublishIds).toEqual(["a"])
-  })
-
   it("isSwapRequested não vai para o lote: só id, função e leitor", () => {
     const m = mass({ id: "m1", slots: [{ id: UUID, role: "C", profileId: "p1", locked: true, isSwapRequested: true }] })
     expect(planToBatch([m], []).entries[0].slots).toEqual([{ id: UUID, role: "C", profileId: "p1" }])

@@ -6,7 +6,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i
 export function planToBatch(
   masses: PlanMass[],
   removed: PlanMass[]
-): { entries: ScheduleBatchEntry[]; removed: RemovedMass[]; unpublishIds: string[] } {
+): { entries: ScheduleBatchEntry[]; removed: RemovedMass[] } {
   const editable = masses.filter((m) => !m.readOnly)
 
   const entries: ScheduleBatchEntry[] = editable.map((m) => ({
@@ -29,7 +29,5 @@ export function planToBatch(
     .filter((m): m is PlanMass & { id: string } => !!m.id)
     .map((m) => ({ id: m.id, expectedRevision: m.scheduleRevision }))
 
-  const unpublishIds = editable.filter((m) => m.wasPublished && !!m.id).map((m) => m.id as string)
-
-  return { entries, removed: removedOut, unpublishIds }
+  return { entries, removed: removedOut }
 }

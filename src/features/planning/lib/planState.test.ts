@@ -67,6 +67,13 @@ describe("parsePlanState", () => {
     expect(parsePlanState({ ...ok, removedMasses: [{ key: 1 }] })).toBeNull()
   })
 
+  it("rejeita o mesmo id em masses e em removedMasses", () => {
+    const state = serializePlanState([mass({ key: "a", id: "m1" })], [mass({ key: "r", id: "m1" })], false)
+    expect(parsePlanState(JSON.parse(JSON.stringify(state)))).toBeNull()
+    const ok = serializePlanState([mass({ key: "a", id: "m1" })], [mass({ key: "r", id: "m2" })], false)
+    expect(parsePlanState(JSON.parse(JSON.stringify(ok)))).not.toBeNull()
+  })
+
   it("ida e volta preserva travas, avisos, motivos e troca pedida", () => {
     const m = mass({
       id: "m1",
