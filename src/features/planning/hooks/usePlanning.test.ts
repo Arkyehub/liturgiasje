@@ -4,6 +4,7 @@ import { makeListSchedulesForMonth, makeListSlotHistory } from "@/main/factories
 import { makeListProfiles, makeListUnavailableForRange } from "@/main/factories/usecases/profiles"
 import type { Mass } from "@/domain/models/Schedule"
 import type { Profile } from "@/domain/models/Profile"
+import { resetSync } from "./planSyncTestDouble"
 
 jest.mock("@/main/factories/usecases/schedule", () => ({
   makeListSchedulesForMonth: jest.fn(),
@@ -13,11 +14,16 @@ jest.mock("@/main/factories/usecases/profiles", () => ({
   makeListProfiles: jest.fn(),
   makeListUnavailableForRange: jest.fn(),
 }))
+jest.mock("./usePlanSync", () => jest.requireActual("./planSyncTestDouble"))
 jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() } }))
 
 const DEC = new Date(2026, 11, 1)
+const MINE = { kind: "mine" as const, month: DEC }
 
-beforeEach(() => jest.clearAllMocks())
+beforeEach(() => {
+  jest.clearAllMocks()
+  resetSync()
+})
 
 const profile = (id: string, extra: Partial<Profile> = {}): Profile => ({
   id,
@@ -68,7 +74,7 @@ function setup(masses: Mass[], profiles: Profile[] = [profile("a"), profile("b")
 }
 
 async function load(month = DEC) {
-  const hook = renderHook(() => usePlanning(month))
+  const hook = renderHook(() => usePlanning({ kind: "mine", month }))
   await waitFor(() => expect(hook.result.current.loading).toBe(false))
   return hook
 }
@@ -107,7 +113,7 @@ test("with month=null the hook is idle: no reads, nothing loading, every action 
 
 test("going from idle to a chosen month loads that month exactly like before", async () => {
   setup([])
-  const hook = renderHook(({ m }: { m: Date | null }) => usePlanning(m), { initialProps: { m: null as Date | null } })
+  const hook = renderHook(({ m }: { m: Date | null }) => usePlanning(m ? { kind: "mine", month: m } : null), { initialProps: { m: null as Date | null } })
   await act(async () => {})
   expect(listMonth).not.toHaveBeenCalled()
   hook.rerender({ m: DEC })
@@ -174,7 +180,7 @@ test("createDefaults does not duplicate an existing mass whose time came from Po
   expect(order).toEqual([...order].sort())
 })
 
-test("acceptPublished makes published masses editable; declinePublished keeps them read-only", async () => {
+test("acceptPublished/declinePublished only record the decision: published masses stay read-only and untouched", async () => {
   const published = [
     mass("m1", "2026-12-06", "07:00:00", true, [slot("s1", "m1", "C", "a")]),
     mass("m2", "2026-12-06", "09:00:00", true, [slot("s2", "m2", "C", "")]),
@@ -183,8 +189,13 @@ test("acceptPublished makes published masses editable; declinePublished keeps th
   const accepted = await load()
   expect(accepted.result.current.publishedDecision).toBe("pending")
   act(() => accepted.result.current.acceptPublished())
-  expect(accepted.result.current.masses.every((m) => !m.readOnly && m.wasPublished)).toBe(true)
   expect(accepted.result.current.publishedDecision).toBe("included")
+  expect(accepted.result.current.masses.every((m) => m.readOnly && m.wasPublished)).toBe(true)
+  act(() => accepted.result.current.updateMass("m1", { description: "x" }))
+  act(() => accepted.result.current.setSlotReader("m2", 0, "b"))
+  act(() => accepted.result.current.removeMass("m1"))
+  expect(accepted.result.current.masses.map((m) => [m.description, m.slots[0].profileId])).toEqual([["", "a"], ["", ""]])
+  expect(accepted.result.current.removedMasses).toEqual([])
   accepted.unmount()
 
   setup(published)
@@ -228,7 +239,7 @@ test("addMass, updateMass and removeMass edit the plan; read-only masses are unt
 
 test("switching month reloads and resets the plan and the published decision", async () => {
   setup([mass("m1", "2026-12-06", "07:00:00", true, [slot("s1", "m1", "C", "a")])])
-  const hook = renderHook(({ month }) => usePlanning(month), { initialProps: { month: DEC } })
+  const hook = renderHook(({ month }) => usePlanning({ kind: "mine", month }), { initialProps: { month: DEC } })
   await waitFor(() => expect(hook.result.current.loading).toBe(false))
   act(() => hook.result.current.declinePublished())
 
@@ -248,7 +259,7 @@ test("a failed read is an error state (not an empty month); createDefaults/addMa
   setup([mass("m1", "2026-12-06", "07:00:00", false, [slot("s1", "m1", "C", "a")])])
   listMonth.mockRejectedValueOnce(new Error("timeout"))
   jest.spyOn(console, "error").mockImplementation(() => {})
-  const { result } = renderHook(() => usePlanning(DEC))
+  const { result } = renderHook(() => usePlanning(MINE))
 
   // enquanto carrega: sem efeito
   expect(result.current.loading).toBe(true)
@@ -335,7 +346,7 @@ test("runLamp with no masses shows 'Crie as missas do mês primeiro' and does no
 
 test("runLamp is a no-op while loading", async () => {
   setup([draftSunday()])
-  const { result } = renderHook(() => usePlanning(DEC))
+  const { result } = renderHook(() => usePlanning(MINE))
   act(() => result.current.runLamp())
   expect(result.current.phase).toBe("planning")
   await waitFor(() => expect(result.current.loading).toBe(false))
@@ -439,7 +450,7 @@ test("readerNames keeps the names of archived/unlinked readers already in a slot
 
 test("switching month returns to phase 'planning'", async () => {
   setup([draftSunday()])
-  const hook = renderHook(({ month }) => usePlanning(month), { initialProps: { month: DEC } })
+  const hook = renderHook(({ month }) => usePlanning({ kind: "mine", month }), { initialProps: { month: DEC } })
   await waitFor(() => expect(hook.result.current.loading).toBe(false))
   act(() => hook.result.current.runLamp())
   expect(hook.result.current.phase).toBe("suggested")

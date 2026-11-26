@@ -36,7 +36,7 @@ type Confirm = { kind: "unpublish" } | { kind: "month"; delta: number }
 function PlanningScreen() {
   // Nenhum mês até o admin escolher: sem mês não há leitura nem aviso de missas publicadas.
   const [month, setMonth] = useState<Date | null>(null)
-  const planning = usePlanning(month)
+  const planning = usePlanning(month ? { kind: "mine", month } : null)
   const save = usePlanningSave({
     month: month ?? IDLE_MONTH,
     masses: planning.masses,

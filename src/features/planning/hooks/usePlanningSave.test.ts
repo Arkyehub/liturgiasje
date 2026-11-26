@@ -11,6 +11,7 @@ import { makeListProfiles, makeListUnavailableForRange } from "@/main/factories/
 import { toast } from "sonner"
 import type { Mass } from "@/domain/models/Schedule"
 import type { Profile } from "@/domain/models/Profile"
+import { resetSync } from "./planSyncTestDouble"
 
 jest.mock("@/main/factories/usecases/schedule", () => ({
   makeListSchedulesForMonth: jest.fn(),
@@ -22,6 +23,7 @@ jest.mock("@/main/factories/usecases/profiles", () => ({
   makeListProfiles: jest.fn(),
   makeListUnavailableForRange: jest.fn(),
 }))
+jest.mock("./usePlanSync", () => jest.requireActual("./planSyncTestDouble"))
 jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() } }))
 
 const DEC = new Date(2026, 11, 1)
@@ -75,7 +77,7 @@ function setup(masses: Mass[], profiles: Profile[] = [profile("a"), profile("b")
 }
 
 function usePage(month: Date) {
-  const planning = usePlanning(month)
+  const planning = usePlanning({ kind: "mine", month })
   const save = usePlanningSave({
     month,
     masses: planning.masses,
@@ -97,7 +99,10 @@ async function load(month = DEC) {
 const draft = () => mass("m1", "2026-12-06", "07:00:00", false, [slot("1", "m1", "C", ""), slot("2", "m1", "1L", "")])
 const published = () => mass("p1", "2026-12-06", "09:00:00", true, [slot("3", "p1", "C", "a")])
 
-beforeEach(() => jest.clearAllMocks())
+beforeEach(() => {
+  jest.clearAllMocks()
+  resetSync()
+})
 afterEach(() => jest.restoreAllMocks())
 
 /** Falhas de gravação são registradas no console; só nos testes de falha. */
@@ -111,14 +116,13 @@ test("dirty is false right after loading and becomes true after a change", async
   expect(result.current.save.dirty).toBe(true)
 })
 
-test("accepting published masses is an unsaved change (they only go back to draft on save)", async () => {
+test("accepting published masses changes nothing: they stay read-only, so there is nothing to save or unpublish", async () => {
   setup([published()])
   const { result } = await load()
+  act(() => result.current.planning.acceptPublished())
   expect(result.current.save.dirty).toBe(false)
   expect(result.current.save.unpublishCount).toBe(0)
-  act(() => result.current.planning.acceptPublished())
-  expect(result.current.save.dirty).toBe(true)
-  expect(result.current.save.unpublishCount).toBe(1)
+  expect(result.current.planning.masses[0]).toMatchObject({ id: "p1", wasPublished: true, readOnly: true })
 })
 
 test("saveDraft without published masses saves the batch once, never touches publication and reloads the month", async () => {
@@ -147,22 +151,6 @@ test("saveDraft without published masses saves the batch once, never touches pub
   expect(result.current.save.dirty).toBe(false)
 })
 
-test("with included published masses it unpublishes them (false) BEFORE saving and expects the bumped revision", async () => {
-  setup([published(), draft()])
-  const { result } = await load()
-  act(() => result.current.planning.acceptPublished())
-  await act(async () => {
-    await result.current.save.saveDraft()
-  })
-  expect(updateStatus).toHaveBeenCalledTimes(1)
-  expect(updateStatus).toHaveBeenCalledWith(["p1"], false)
-  expect(updateStatus.mock.invocationCallOrder[0]).toBeLessThan(saveBatch.mock.invocationCallOrder[0])
-  const [entries] = saveBatch.mock.calls[0]
-  // set_masses_publication faz UPDATE em masses e o gatilho soma 1 à revisão
-  expect(entries.find((e: { massId: string }) => e.massId === "p1").massData.expectedRevision).toBe(4)
-  expect(entries.find((e: { massId: string }) => e.massId === "m1").massData.expectedRevision).toBe(3)
-})
-
 test("a schedule_conflict shows the scheduleErrorMessage text, keeps the plan intact and does not reload", async () => {
   setup([draft()])
   const { result } = await load()
@@ -183,49 +171,6 @@ test("a schedule_conflict shows the scheduleErrorMessage text, keeps the plan in
   expect(result.current.save.saving).toBe(false)
   expect(listMonth).toHaveBeenCalledTimes(1)
   expect(errors).toHaveBeenCalled()
-})
-
-test("a failure after unpublishing says the masses stayed as draft; saving again does not unpublish twice", async () => {
-  setup([published()])
-  const { result } = await load()
-  act(() => result.current.planning.acceptPublished())
-  saveBatch.mockRejectedValueOnce(new Error("network"))
-  const errors = quietErrors()
-
-  await act(async () => {
-    await result.current.save.saveDraft()
-  })
-  expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("as missas ficaram em rascunho; salve novamente ou republique"))
-  expect(result.current.save.leftAsDraft).toBe(true)
-  expect(errors).toHaveBeenCalledTimes(1)
-  expect(result.current.save.unpublishCount).toBe(0) // já despublicadas: não pede confirmação de novo
-  expect(result.current.planning.masses[0]).toMatchObject({ id: "p1", wasPublished: true, readOnly: false })
-
-  let ok = false
-  await act(async () => {
-    ok = await result.current.save.saveDraft()
-  })
-  expect(ok).toBe(true)
-  expect(updateStatus).toHaveBeenCalledTimes(1)
-  expect(saveBatch).toHaveBeenCalledTimes(2)
-  expect(saveBatch.mock.calls[1][0][0].massData.expectedRevision).toBe(4)
-  expect(updateStatus.mock.calls.every(([, isPublished]) => isPublished === false)).toBe(true)
-})
-
-test("a failure in the unpublish step does not save and does not claim the masses went to draft", async () => {
-  setup([published()])
-  const { result } = await load()
-  act(() => result.current.planning.acceptPublished())
-  updateStatus.mockRejectedValueOnce(new Error("forbidden"))
-  const errors = quietErrors()
-  await act(async () => {
-    await result.current.save.saveDraft()
-  })
-  expect(saveBatch).not.toHaveBeenCalled()
-  expect(errors).toHaveBeenCalledTimes(1)
-  expect(toast.error).toHaveBeenCalledWith("Não foi possível salvar o rascunho. Tente novamente.")
-  expect(result.current.save.leftAsDraft).toBe(false)
-  expect(result.current.save.unpublishCount).toBe(1)
 })
 
 test("double clicks save only once", async () => {

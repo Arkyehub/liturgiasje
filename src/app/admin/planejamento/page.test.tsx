@@ -11,6 +11,7 @@ import {
 import { makeListProfiles, makeListUnavailableForRange } from "@/main/factories/usecases/profiles"
 import type { Mass } from "@/domain/models/Schedule"
 import type { Profile } from "@/domain/models/Profile"
+import { resetSync } from "@/features/planning/hooks/planSyncTestDouble"
 
 const push = jest.fn()
 jest.mock("next/navigation", () => ({ useRouter: () => ({ push, back: jest.fn() }) }))
@@ -25,6 +26,7 @@ jest.mock("@/main/factories/usecases/profiles", () => ({
   makeListProfiles: jest.fn(),
   makeListUnavailableForRange: jest.fn(),
 }))
+jest.mock("@/features/planning/hooks/usePlanSync", () => jest.requireActual("@/features/planning/hooks/planSyncTestDouble"))
 jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() } }))
 jest.mock("lucide-react", () => new Proxy({ __esModule: true }, { get: (t, p) => (p in t ? (t as Record<string | symbol, unknown>)[p] : () => <i />) }))
 
@@ -62,6 +64,7 @@ function setup(masses: Mass[] = []) {
 
 beforeEach(() => {
   jest.clearAllMocks()
+  resetSync()
   // Só o relógio é falso: a página abre no mês atual (dezembro de 2026).
   jest.useFakeTimers({
     now: new Date(2026, 11, 10, 12),
@@ -211,7 +214,7 @@ test("creating the default masses on an empty December shows 25 masses / 82 slot
   expect(within(tuesday).getByText("TER")).toBeInTheDocument()
 })
 
-test("with 2 published masses the notice offers to include them; including makes them editable", async () => {
+test("with 2 published masses the notice offers to include them; including never makes them editable", async () => {
   asAdmin()
   setup([publishedMass("m1", "07:00:00"), publishedMass("m2", "09:00:00")])
   await openPage()
@@ -223,8 +226,10 @@ test("with 2 published masses the notice offers to include them; including makes
 
   await userEvent.click(within(notice).getByRole("button", { name: "Incluir no planejamento" }))
   expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
-  expect(screen.queryByText("publicada")).not.toBeInTheDocument()
-  expect(screen.getAllByText("volta a rascunho ao salvar")).toHaveLength(2)
+  // regra nova: missa publicada fica sempre somente leitura, mesmo depois de "incluir"
+  expect(screen.getAllByText("publicada")).toHaveLength(2)
+  expect(screen.queryByText("volta a rascunho ao salvar")).not.toBeInTheDocument()
+  within(screen.getByRole("list", { name: "Missas do mês" })).getAllByRole("button").forEach((b) => expect(b).toBeDisabled())
 })
 
 test("keeping published masses leaves them read-only with a 'publicada' mark", async () => {
@@ -313,13 +318,6 @@ async function suggestDefaults() {
   await userEvent.click(screen.getByRole("button", { name: "Sugerir escala" }))
 }
 
-async function suggestPublished() {
-  await openPage()
-  const notice = await screen.findByRole("alertdialog")
-  await userEvent.click(within(notice).getByRole("button", { name: "Incluir no planejamento" }))
-  await userEvent.click(screen.getByRole("button", { name: "Sugerir escala" }))
-}
-
 test("'Prévia' opens WhatsApp with the encoded preview text", async () => {
   asAdmin()
   setup()
@@ -368,29 +366,6 @@ test("'Salvar como rascunho' without published masses saves the batch once, no c
   expect(await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")).toBeInTheDocument()
 })
 
-test("with included published masses, saving asks first; cancel writes nothing; confirm unpublishes BEFORE saving", async () => {
-  asAdmin()
-  setup([publishedMass("m1", "07:00:00"), publishedMass("m2", "09:00:00")])
-  await suggestPublished()
-
-  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
-  let confirm = screen.getByRole("alertdialog")
-  expect(within(confirm).getByText(/os leitores deixam de ver essas 2 missas/)).toBeInTheDocument()
-  expect(within(confirm).getByText(/lembretes automáticos param até você republicar/)).toBeInTheDocument()
-  await userEvent.click(within(confirm).getByRole("button", { name: "Cancelar" }))
-  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
-  expect(updateStatus).not.toHaveBeenCalled()
-  expect(saveBatch).not.toHaveBeenCalled()
-
-  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
-  confirm = screen.getByRole("alertdialog")
-  await userEvent.click(within(confirm).getByRole("button", { name: "Voltar a rascunho e salvar" }))
-  await waitFor(() => expect(saveBatch).toHaveBeenCalledTimes(1))
-  expect(updateStatus).toHaveBeenCalledTimes(1)
-  expect(updateStatus).toHaveBeenCalledWith(["m1", "m2"], false)
-  expect(updateStatus.mock.invocationCallOrder[0]).toBeLessThan(saveBatch.mock.invocationCallOrder[0])
-})
-
 test("a schedule conflict shows its message and keeps the suggestion and the edits on screen", async () => {
   asAdmin()
   setup()
@@ -405,25 +380,6 @@ test("a schedule conflict shows its message and keeps the suggestion and the edi
   expect(after).toEqual(before)
   expect(screen.getByRole("button", { name: "Salvar como rascunho" })).toBeEnabled()
   expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(1)
-  ;(console.error as jest.Mock).mockRestore()
-})
-
-test("a failure after unpublishing says the masses stayed as draft and saving again works without re-asking", async () => {
-  asAdmin()
-  setup([publishedMass("m1", "07:00:00")])
-  jest.spyOn(console, "error").mockImplementation(() => {})
-  await suggestPublished()
-  saveBatch.mockRejectedValueOnce(new Error("network"))
-
-  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
-  await userEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Voltar a rascunho e salvar" }))
-  expect(await screen.findByRole("alert")).toHaveTextContent("As missas ficaram em rascunho; salve novamente ou republique.")
-  expect(screen.getByRole("list", { name: "Vagas sugeridas" })).toBeInTheDocument()
-
-  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
-  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
-  await waitFor(() => expect(saveBatch).toHaveBeenCalledTimes(2))
-  expect(updateStatus).toHaveBeenCalledTimes(1)
   ;(console.error as jest.Mock).mockRestore()
 })
 

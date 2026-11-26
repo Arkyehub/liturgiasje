@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { endOfMonth, format, startOfMonth, subMonths } from "date-fns"
 import { toast } from "sonner"
 import type { Mass, SlotHistoryRow } from "@/domain/models/Schedule"
@@ -12,8 +12,15 @@ import { computeReaderStats } from "../lib/readerStats"
 import { suggestSchedule, summarizePlan } from "../lib/suggestSchedule"
 import { isOutsidePreference } from "../lib/slotPreference"
 import { ROLE_ORDER } from "../lib/format"
+import { parsePlanState, serializePlanState } from "../lib/planState"
+import { reconcilePlan, type ReconcileNotice } from "../lib/reconcilePlan"
+import type { PlanDocument } from "@/domain/models/SchedulePlan"
+import { usePlanSync, type PlanSyncTarget, type SyncMode, type SyncStatus } from "./usePlanSync"
 
-/** pending = aviso ainda não respondido; included = voltam a rascunho ao salvar; kept = somente leitura. */
+/** Qual planejamento abrir: o meu (editável) ou o de outro coordenador (somente leitura). */
+export type PlanTarget = { kind: "mine"; month: Date } | { kind: "other"; month: Date; planId: string }
+
+/** @deprecated Só registra a resposta; missa publicada nunca fica editável no planejamento. */
 export type PublishedDecision = "pending" | "included" | "kept"
 
 /** planning = montando as missas; suggested = a lâmpada já rodou (lista por função). */
@@ -28,6 +35,7 @@ export interface UsePlanningResult {
   unavailable: Record<string, string[]>
   summary: PlanSummary
   publishedCount: number
+  /** @deprecated Somente registro (a tela é refeita na Task 7). */
   publishedDecision: PublishedDecision
   /** Missas já gravadas que o admin removeu do planejamento (para o lote de gravação). */
   removedMasses: PlanMass[]
@@ -41,7 +49,9 @@ export interface UsePlanningResult {
   addMass(m: PlanMass): void
   updateMass(key: string, patch: Partial<PlanMass>): void
   removeMass(key: string): void
+  /** @deprecated Só registra "included"; NUNCA torna missas publicadas editáveis. */
   acceptPublished(): void
+  /** @deprecated Só registra "kept". */
   declinePublished(): void
   phase: PlanningPhase
   /** Lâmpada / "Sugerir de novo": preenche as vagas livres; travadas e somente leitura ficam. */
@@ -54,6 +64,22 @@ export interface UsePlanningResult {
    * descartaria o que fosse feito nesse intervalo).
    */
   setBusy(busy: boolean): void
+  /** Estado da sincronização com o servidor (spec 5.4). */
+  mode: SyncMode
+  syncStatus: SyncStatus
+  lostChanges: number
+  notices: ReconcileNotice[]
+  ownerName: string | null
+  holderLastSeen: string | null
+  /** Verdadeiro quando o planejamento não pode ser editado (modo diferente de "edit"). */
+  readOnly: boolean
+  sessionId: string
+  planId: string | null
+  /** Mensagem de erro de `error`/`unavailable` da sincronização. */
+  syncError: string | null
+  retrySave(): void
+  reopen(): Promise<void>
+  syncPlan: PlanDocument | null
 }
 
 const ymd = (d: Date) => format(d, "yyyy-MM-dd")
@@ -105,15 +131,26 @@ function withUniqueKeys(incoming: PlanMass[], existing: PlanMass[]): PlanMass[] 
 }
 
 /**
- * `month = null` é o estado ocioso (nenhum mês escolhido ainda): não lê nada, não carrega e toda ação é ignorada.
+ * `target = null` é o estado ocioso (nenhum mês escolhido ainda): não lê nada, não carrega e toda ação é ignorada.
+ * As leituras reais (missas, perfis, histórico, indisponibilidades) e o planejamento guardado no servidor
+ * (`usePlanSync`) carregam em paralelo; o plano inicial é o guardado reconciliado com a realidade.
  */
-export function usePlanning(month: Date | null): UsePlanningResult {
+export function usePlanning(target: PlanTarget | null): UsePlanningResult {
+  const month = target?.month ?? null
   // Chave estável: o efeito só recarrega quando o mês muda de fato.
   const monthKey = month ? format(month, "yyyy-MM") : null
   const monthStart = useMemo(() => (monthKey ? startOfMonth(new Date(`${monthKey}-01T00:00:00`)) : null), [monthKey])
+  const planId = target?.kind === "other" ? target.planId : null
+  const targetKey = target && monthKey ? (planId ? `other:${planId}:${monthKey}` : `mine:${monthKey}`) : null
+  const syncTarget = useMemo<PlanSyncTarget>(
+    () => (!monthKey ? null : planId ? { kind: "other", planId } : { kind: "mine", month: monthKey }),
+    [monthKey, planId],
+  )
+  const sync = usePlanSync(syncTarget)
 
   // Mês cujos dados estão em memória; enquanto difere do mês pedido, está carregando.
   const [loadedKey, setLoadedKey] = useState<string | null>(null)
+  const [realMasses, setRealMasses] = useState<PlanMass[]>([])
   const [plan, setPlan] = useState<PlanMass[]>([])
   const [removedMasses, setRemovedMasses] = useState<PlanMass[]>([])
   const [readers, setReaders] = useState<PlanReader[]>([])
@@ -122,16 +159,27 @@ export function usePlanning(month: Date | null): UsePlanningResult {
   const [history, setHistory] = useState<SlotHistoryRow[]>([])
   const [unavailable, setUnavailable] = useState<Record<string, string[]>>({})
   const [publishedDecision, setPublishedDecision] = useState<PublishedDecision>("pending")
+  const [notices, setNotices] = useState<ReconcileNotice[]>([])
+  // Plano reconciliado já aplicado (alvo + época): a primeira foto é a linha de base e nunca é gravada.
+  const [baseline, setBaseline] = useState<{ targetKey: string; epoch: number; real: PlanMass[] } | null>(null)
   // Mês cuja leitura falhou (nulo = sem erro) e contador para "Tentar novamente".
   const [errorKey, setErrorKey] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   const idle = monthKey === null
   const error = !idle && errorKey === monthKey
-  const loading = !idle && !error && loadedKey !== monthKey
+
+  // O documento do servidor só vale se for do alvo pedido (na troca de alvo o hook de sync ainda mostra o antigo por um render).
+  const syncPlanOk =
+    !!sync.plan && (planId ? sync.plan.id === planId : sync.plan.monthReference === monthKey)
+  const syncSettled =
+    sync.mode !== "idle" && sync.mode !== "loading" && (syncPlanOk || !["edit", "readonly", "concluded"].includes(sync.mode))
+  const applied = baseline !== null && baseline.targetKey === targetKey && baseline.real === realMasses
+  const loading = !idle && !error && (loadedKey !== monthKey || !applied)
   const ready = !idle && !loading && !error
+  const mode: SyncMode = idle ? "idle" : syncSettled ? sync.mode : "loading"
   // Gravando: o plano fica congelado. `ready` continua valendo para leitura; `editable` guarda as edições.
   const [busy, setBusy] = useState(false)
-  const editable = ready && !busy
+  const editable = ready && mode === "edit" && !busy
 
   useEffect(() => {
     if (!monthStart || !monthKey) return
@@ -145,14 +193,11 @@ export function usePlanning(month: Date | null): UsePlanningResult {
       historyRows: SlotHistoryRow[],
       unavailableMap: Record<string, string[]>,
     ) => {
-      setPlan(monthMasses)
+      setRealMasses(monthMasses)
       setReaders(nextReaders)
       setReaderNames(names)
-      setSuggested(false)
       setHistory(historyRows)
       setUnavailable(unavailableMap)
-      setRemovedMasses([])
-      setPublishedDecision("pending")
     }
     Promise.all([
       makeListSchedulesForMonth().execute(monthStart, true),
@@ -173,6 +218,9 @@ export function usePlanning(month: Date | null): UsePlanningResult {
         toast.error("Não foi possível carregar o planejamento deste mês.")
         // Sem dados confiáveis: nada de lista vazia "planejável".
         settle([], [], {}, [], {})
+        setPlan([])
+        setRemovedMasses([])
+        setSuggested(false)
         setLoadedKey(null)
         setErrorKey(monthKey)
       })
@@ -180,6 +228,48 @@ export function usePlanning(month: Date | null): UsePlanningResult {
       cancelled = true
     }
   }, [monthKey, monthStart, attempt])
+
+  // Reconciliação: o plano guardado (ou nada) contra as missas reais. Roda quando a realidade, o alvo ou o documento do servidor mudam.
+  const epochRef = useRef(0)
+  // Último estado gravado desta sessão de edição: uma recarga das leituras não pode voltar ao estado do servidor da abertura.
+  const sentRef = useRef<{ doc: PlanDocument; state: unknown } | null>(null)
+  useEffect(() => {
+    if (!targetKey || loadedKey !== monthKey || !syncSettled) return
+    const sent = sync.mode === "edit" && sentRef.current?.doc === sync.plan ? sentRef.current : null
+    const raw = sent ? sent.state : syncPlanOk ? sync.plan?.state : null
+    const stored = raw == null ? null : parsePlanState(raw)
+    const reconciled = reconcilePlan(stored, realMasses, raw != null && stored === null)
+    // Sincronização com um sistema externo (o documento do servidor + a leitura real): o plano local passa a ser a foto
+    // reconciliada e todos os setters entram no mesmo lote, junto com a nova linha de base.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setPlan(reconciled.masses)
+    setRemovedMasses(reconciled.removedMasses)
+    setSuggested(reconciled.suggested)
+    setNotices(reconciled.notices)
+    setPublishedDecision("pending")
+    setBaseline({ targetKey, epoch: ++epochRef.current, real: realMasses })
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [targetKey, monthKey, loadedKey, syncSettled, syncPlanOk, sync.mode, sync.plan, realMasses])
+
+  // Autosave: depois da linha de base, cada alteração do estado serializado vira UMA gravação (só em "edit").
+  const lastSigRef = useRef<{ epoch: number; sig: string } | null>(null)
+  const { save } = sync
+  useEffect(() => {
+    if (!baseline || baseline.targetKey !== targetKey) return
+    const state = serializePlanState(plan, removedMasses, suggested)
+    const sig = JSON.stringify(state)
+    const last = lastSigRef.current
+    // Primeiro render de uma nova linha de base: só adota a assinatura, não grava.
+    if (!last || last.epoch !== baseline.epoch) {
+      lastSigRef.current = { epoch: baseline.epoch, sig }
+      return
+    }
+    if (last.sig === sig) return
+    lastSigRef.current = { epoch: baseline.epoch, sig }
+    if (mode !== "edit" || !sync.plan) return
+    sentRef.current = { doc: sync.plan, state }
+    save(state)
+  }, [baseline, targetKey, plan, removedMasses, suggested, mode, save, sync.plan])
 
   // Também serve de recarga depois de salvar: volta a "carregando" para não editar dados velhos.
   const retry = useCallback(() => {
@@ -234,16 +324,13 @@ export function usePlanning(month: Date | null): UsePlanningResult {
     [editable, masses],
   )
 
+  // Atalhos de compatibilidade: só registram a resposta. Missa publicada nunca fica editável.
   const acceptPublished = useCallback(() => {
-    if (idle) return
-    setPlan((prev) => prev.map((m) => (m.wasPublished ? { ...m, readOnly: false } : m)))
-    setPublishedDecision("included")
+    if (!idle) setPublishedDecision("included")
   }, [idle])
 
   const declinePublished = useCallback(() => {
-    if (idle) return
-    setPlan((prev) => prev.map((m) => (m.wasPublished ? { ...m, readOnly: true } : m)))
-    setPublishedDecision("kept")
+    if (!idle) setPublishedDecision("kept")
   }, [idle])
 
   const phase: PlanningPhase = ready && suggested ? "suggested" : "planning"
@@ -322,5 +409,18 @@ export function usePlanning(month: Date | null): UsePlanningResult {
     setSlotReader,
     toggleLock,
     setBusy,
+    mode,
+    syncStatus: sync.status,
+    lostChanges: sync.lostChanges,
+    notices,
+    ownerName: sync.plan?.ownerName ?? null,
+    holderLastSeen: sync.holderLastSeen,
+    readOnly: mode !== "edit",
+    sessionId: sync.sessionId,
+    planId: sync.plan?.id ?? null,
+    syncError: sync.error,
+    retrySave: sync.retrySave,
+    reopen: sync.reopen,
+    syncPlan: sync.plan,
   }
 }
