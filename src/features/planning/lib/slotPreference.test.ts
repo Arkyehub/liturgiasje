@@ -1,4 +1,4 @@
-import { isOutsidePreference, prefersMass } from "./slotPreference"
+import { isOutsidePreference, isPreferenceSlot, prefersMass } from "./slotPreference"
 import type { PlanReader } from "./types"
 
 const reader = (dayPreferences: Record<string, string[]>): PlanReader => ({ id: "r", fullName: "R", createdAt: "2025-01-01", dayPreferences })
@@ -18,4 +18,15 @@ test("isOutsidePreference only flags preference-eligible day/times the reader di
   expect(isOutsidePreference(r, { date: "2026-12-06", time: "08:00" })).toBe(false) // horário fora da grade
   expect(isOutsidePreference(r, { date: "2026-12-05", time: "19:00" })).toBe(false) // sábado: sem preferência
   expect(isOutsidePreference(r, { date: "2026-12-09", time: "19:00" })).toBe(false) // quarta
+})
+
+test("isPreferenceSlot is the single rule: only Sun 07/09/11/19 and Tue/Fri 19:00; Saturday never", () => {
+  expect(isPreferenceSlot({ date: "2026-12-06", time: "07:00" })).toBe(true) // domingo
+  expect(isPreferenceSlot({ date: "2026-12-06", time: "19:00" })).toBe(true)
+  expect(isPreferenceSlot({ date: "2026-12-06", time: "08:00" })).toBe(false)
+  expect(isPreferenceSlot({ date: "2026-12-08", time: "19:00" })).toBe(true) // terça
+  expect(isPreferenceSlot({ date: "2026-12-11", time: "19:00" })).toBe(true) // sexta
+  expect(isPreferenceSlot({ date: "2026-12-11", time: "07:00" })).toBe(false)
+  expect(isPreferenceSlot({ date: "2026-12-05", time: "19:00" })).toBe(false) // sábado
+  expect(isPreferenceSlot({ date: "2026-12-09", time: "19:00" })).toBe(false) // quarta
 })

@@ -1,8 +1,7 @@
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { ROLE_ORDER } from "./format"
 import type { PlanMass, PlanReader } from "./types"
-
-const ROLE_ORDER: Record<string, number> = { C: 1, "1L": 2, L: 3, "2L": 4, P: 5 }
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)

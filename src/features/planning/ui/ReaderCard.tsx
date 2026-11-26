@@ -3,7 +3,8 @@
 import { X } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/shared/ui/dialog"
 import { MASS_PREFERENCE_DAYS } from "@/features/profile/lib/massPreferences"
-import type { PlanMass, PlanReader, ReaderStats, RoleCode, RoleGroup } from "../lib/types"
+import type { PlanMass, PlanReader, ReaderStats } from "../lib/types"
+import { plural, ROLE_LABEL, targetLabel, topRole } from "../lib/format"
 import { weekdayOf } from "./NotebookList"
 import { OutsidePreferenceIcon } from "./SuggestionRow"
 
@@ -23,32 +24,8 @@ interface ReaderCardProps {
   onClose: () => void
 }
 
-const ROLE_LABEL: Record<RoleCode, string> = {
-  C: "Comentarista",
-  "1L": "1ª Leitura",
-  "2L": "2ª Leitura",
-  L: "Leitura",
-  P: "Preces",
-}
-export const GROUP_LABEL: Record<RoleGroup, string> = { C: "Comentarista", R: "Leitura", P: "Preces" }
-
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
 const dayMonth = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
-
-/** Meta fracionária exibida arredondada: "3 a 4". */
-export function targetLabel(target: number): string {
-  if (!Number.isFinite(target) || target <= 0) return "—"
-  const lo = Math.floor(target)
-  const hi = Math.ceil(target)
-  return lo === hi ? String(lo) : `${lo} a ${hi}`
-}
-
-function topRole(stats?: ReaderStats): string {
-  if (!stats) return "Sem histórico de funções"
-  const [group, share] = (Object.entries(stats.roleShare) as [RoleGroup, number][]).sort((a, b) => b[1] - a[1])[0]
-  return share > 0 ? `Mais faz: ${GROUP_LABEL[group]} (${Math.round(share * 100)}%)` : "Sem histórico de funções"
-}
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/)
@@ -81,6 +58,8 @@ export function ReaderCard({ readerId, name, reader, stats, masses, unavailable,
     .sort()
   const average = stats ? `${stats.monthlyAverage.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} por mês` : "—"
   const listLabel = `Escalas em ${monthName}`
+  const top = topRole(stats)
+  const topRoleText = top ? `Mais faz: ${top.label} (${top.percent}%)` : "Sem histórico de funções"
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -91,7 +70,7 @@ export function ReaderCard({ readerId, name, reader, stats, masses, unavailable,
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <DialogTitle className="truncate text-[17px] font-black tracking-tight text-stone-900">{name}</DialogTitle>
-            <DialogDescription className="text-xs text-stone-600">{topRole(stats)}</DialogDescription>
+            <DialogDescription className="text-xs text-stone-600">{topRoleText}</DialogDescription>
           </div>
           <button
             type="button"
@@ -116,12 +95,19 @@ export function ReaderCard({ readerId, name, reader, stats, masses, unavailable,
           ) : (
             <ul aria-label={listLabel} className="max-h-60 overflow-y-auto rounded-2xl border border-stone-100">
               {items.map(({ mass, slot, isCurrent, key }) => (
-                <li key={key} className="flex min-h-12 items-center gap-2.5 border-b border-stone-100 px-3 last:border-b-0">
-                  <span className="w-16 text-[13px] font-extrabold text-stone-900">{`${capitalize(weekdayOf(mass.date))} ${dayMonth(mass.date)}`}</span>
-                  <span className="w-11 text-[13px] font-bold text-stone-700">{mass.time}</span>
-                  <span className="flex-1 text-[13px] font-semibold text-stone-900">{ROLE_LABEL[slot.role]}</span>
-                  {isCurrent && <span className="rounded-md bg-stone-900 px-1.5 py-0.5 text-[10px] font-extrabold text-white">ESTA</span>}
-                  {slot.warning === "outside-preference" && <OutsidePreferenceIcon />}
+                <li key={key} className="flex min-h-12 flex-col justify-center border-b border-stone-100 px-3 py-1 last:border-b-0">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-16 text-[13px] font-extrabold text-stone-900">{`${capitalize(weekdayOf(mass.date))} ${dayMonth(mass.date)}`}</span>
+                    <span className="w-11 text-[13px] font-bold text-stone-700">{mass.time}</span>
+                    <span className="flex-1 text-[13px] font-semibold text-stone-900">{ROLE_LABEL[slot.role]}</span>
+                    {isCurrent && <span className="rounded-md bg-stone-900 px-1.5 py-0.5 text-[10px] font-extrabold text-white">ESTA</span>}
+                    {slot.warning === "outside-preference" && <OutsidePreferenceIcon />}
+                  </div>
+                  {isCurrent && slot.reason && (
+                    <p className="pb-1 text-[11px] leading-snug text-stone-600">
+                      <span className="font-bold">Por quê:</span> {slot.reason}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>

@@ -290,3 +290,23 @@ test("the reader card marks ⚠️ on slots outside preference and handles reade
   expect(card).toHaveTextContent("Sem preferência marcada")
   expect(within(card).getByText("Indisponível: 06/12")).toBeInTheDocument()
 })
+
+test("the reader card shows 'Por quê' only on the ESTA row", async () => {
+  const masses: PlanMass[] = [
+    {
+      ...MASSES[0],
+      slots: [
+        { role: "C", profileId: "ana", locked: false, reason: "Preferência neste horário · 2 leituras no mês (meta 1 a 2)" },
+        { role: "L", profileId: "ana", locked: false, reason: "Escolhido à mão" },
+      ],
+    },
+  ]
+  const { rows } = setup({ masses })
+  await userEvent.click(within(rows()[0]).getByRole("button", { name: "Ver escalas do leitor no mês" }))
+  const card = await screen.findByRole("dialog", { name: "Ana Ribeiro" })
+  const items = within(within(card).getByRole("list", { name: "Escalas em dezembro" })).getAllByRole("listitem")
+  expect(items[0]).toHaveTextContent("ESTA")
+  expect(items[0]).toHaveTextContent("Por quê: Preferência neste horário · 2 leituras no mês (meta 1 a 2)")
+  expect(items[1]).not.toHaveTextContent("Por quê")
+  expect(items[1]).not.toHaveTextContent("Escolhido à mão")
+})

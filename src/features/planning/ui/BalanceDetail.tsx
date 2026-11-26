@@ -2,8 +2,8 @@
 
 import { ChevronLeft } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/shared/ui/dialog"
-import type { PlanMass, PlanReader, ReaderStats, RoleGroup } from "../lib/types"
-import { GROUP_LABEL, targetLabel } from "./ReaderCard"
+import type { PlanMass, PlanReader, ReaderStats } from "../lib/types"
+import { plural, targetLabel, topRole } from "../lib/format"
 
 interface BalanceDetailProps {
   masses: PlanMass[]
@@ -26,16 +26,13 @@ interface Row {
   note: string
 }
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
-
 const BAR: Record<Balance, string> = { over: "bg-amber-600", on: "bg-stone-500", under: "bg-blue-600" }
 const COUNT: Record<Balance, string> = { over: "text-amber-700", on: "text-stone-900", under: "text-blue-700" }
 const STATUS: Record<Balance, string> = { over: "Acima da meta", on: "Na meta", under: "Abaixo da meta" }
 
-function topRole(stats?: ReaderStats): string {
-  if (!stats) return "Sem histórico de funções"
-  const [group, share] = (Object.entries(stats.roleShare) as [RoleGroup, number][]).sort((a, b) => b[1] - a[1])[0]
-  return share > 0 ? `${GROUP_LABEL[group]} · ${Math.round(share * 100)}%` : "Sem histórico de funções"
+function topRoleText(stats?: ReaderStats): string {
+  const top = topRole(stats)
+  return top ? `${top.label} · ${top.percent}%` : "Sem histórico de funções"
 }
 
 function historyLine(s?: ReaderStats): string {
@@ -61,7 +58,7 @@ function buildRows({ masses, readers, stats, unavailable }: Omit<BalanceDetailPr
       if (days > 0) reasons.push(`indisponível em ${plural(days, "dia", "dias")}`)
       if (s && s.monthlyAverage < groupAverage) reasons.push("média baixa → prioridade")
       if (s && s.takeovers > 0) reasons.push("assume trocas → um pouco menos")
-      return { reader, count, balance, role: topRole(s), history: historyLine(s), note: reasons.join(" · ") }
+      return { reader, count, balance, role: topRoleText(s), history: historyLine(s), note: reasons.join(" · ") }
     })
     .sort((a, b) => b.count - a.count || a.reader.fullName.localeCompare(b.reader.fullName, "pt-BR"))
 }

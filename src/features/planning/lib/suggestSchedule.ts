@@ -1,4 +1,3 @@
-import { MASS_PREFERENCE_DAYS, preferenceKeyForWeekday, preferredTimesForDate } from "@/features/profile/lib/massPreferences"
 import {
   roleGroup,
   type PlanMass,
@@ -8,6 +7,8 @@ import {
   type RoleCode,
   type SuggestInput,
 } from "./types"
+import { isOutsidePreference, isPreferenceSlot, prefersMass } from "./slotPreference"
+import { ROLE_LABEL, targetLabel } from "./format"
 
 /*
  * Lâmpada: sugestão de escala.
@@ -38,14 +39,6 @@ const MAX_AVG_BIAS = 0.4
 const EPS = 1e-9
 const MAX_SWEEPS = 200
 
-const ROLE_LABEL: Record<RoleCode, string> = {
-  C: "Comentarista",
-  "1L": "1ª Leitura",
-  "2L": "2ª Leitura",
-  L: "Leitura",
-  P: "Preces",
-}
-
 /** Dia sequencial (UTC) e dia da semana de uma data yyyy-MM-dd, sem efeito de fuso/horário de verão. */
 function dayNumber(date: string): number {
   return Math.floor(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10))) / 86400000)
@@ -58,13 +51,6 @@ function weekendId(date: string): number | null {
   if (weekday === 0) return n
   if (weekday === 6) return n + 1
   return null
-}
-
-/** O dia/horário da missa é um dos que o leitor pode marcar como preferência. */
-function isPreferenceSlot(mass: PlanMass): boolean {
-  const key = preferenceKeyForWeekday((dayNumber(mass.date) + 4) % 7)
-  if (key === null) return false
-  return MASS_PREFERENCE_DAYS.some((d) => d.key === key && d.times.includes(mass.time))
 }
 
 interface Cell {
@@ -90,13 +76,9 @@ interface Ctx {
   inMass: Map<number, Set<string>>
 }
 
-function prefers(reader: PlanReader, cell: Cell): boolean {
-  return preferredTimesForDate(reader.dayPreferences, cell.date).includes(cell.mass.time)
-}
-
 function cellCost(ctx: Ctx, reader: PlanReader, cell: Cell): number {
   let c = 0
-  if (cell.prefSlot && !prefers(reader, cell)) c += W_PREF_MISS
+  if (cell.prefSlot && !prefersMass(reader, cell.mass)) c += W_PREF_MISS
   const group = roleGroup(cell.role)
   const share = group ? (ctx.input.stats[reader.id]?.roleShare?.[group] ?? 0) : 0
   c += W_AFFINITY * (1 - share)
@@ -154,15 +136,11 @@ function unassign(ctx: Ctx, readerId: string, cell: Cell): void {
   ctx.inMass.get(cell.massIdx)?.delete(readerId)
 }
 
-function formatNumber(n: number): string {
-  return (Math.round(n * 10) / 10).toLocaleString("pt-BR")
-}
-
 function buildReason(ctx: Ctx, reader: PlanReader, cell: Cell): string {
   const parts: string[] = []
-  if (cell.prefSlot) parts.push(prefers(reader, cell) ? "Preferência neste horário" : "Fora da preferência (sem opção melhor)")
+  if (cell.prefSlot) parts.push(prefersMass(reader, cell.mass) ? "Preferência neste horário" : "Fora da preferência de dia/horário")
   const load = cellsOf(ctx, reader.id).length
-  parts.push(`${load} ${load === 1 ? "leitura" : "leituras"} no mês (meta ${formatNumber(ctx.groupTarget)})`)
+  parts.push(`${load} ${load === 1 ? "leitura" : "leituras"} no mês (meta ${targetLabel(ctx.groupTarget)})`)
   const stats = ctx.input.stats[reader.id]
   const avg = stats?.monthlyAverage
   const groupAvg = groupAverage(ctx.input)
@@ -317,7 +295,7 @@ export function suggestSchedule(input: SuggestInput): PlanMass[] {
       if (!readerId) return { ...rest, profileId: "", reason: "Nenhum leitor disponível nesta data" }
       const reader = readerById.get(readerId) as PlanReader
       const out: PlanSlot = { ...rest, profileId: readerId, reason: buildReason(ctx, reader, cell) }
-      if (cell.prefSlot && !prefers(reader, cell)) out.warning = "outside-preference"
+      if (isOutsidePreference(reader, cell.mass)) out.warning = "outside-preference"
       return out
     })
     return { ...mass, slots }

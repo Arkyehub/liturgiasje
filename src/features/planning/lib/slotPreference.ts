@@ -9,12 +9,17 @@ export function prefersMass(reader: PlanReader, mass: MassTime): boolean {
 }
 
 /**
- * Mesma regra do ⚠️ da lâmpada: só há aviso em dia/horário que pode ser marcado como
- * preferência (Dom 07/09/11/19, Ter e Sex 19:00) e que o leitor não marcou.
+ * O dia/horário da missa é um dos que o leitor pode marcar como preferência
+ * (Dom 07/09/11/19, Ter e Sex 19:00). Sábado não tem chave de preferência: nunca é.
+ * Única fonte da regra do ⚠️ (lâmpada, troca manual e cards).
  */
-export function isOutsidePreference(reader: PlanReader, mass: MassTime): boolean {
+export function isPreferenceSlot(mass: MassTime): boolean {
   const key = preferenceKeyForWeekday(new Date(`${mass.date}T00:00:00`).getDay())
   if (key === null) return false
-  const preferenceSlot = MASS_PREFERENCE_DAYS.some((d) => d.key === key && d.times.includes(mass.time))
-  return preferenceSlot && !prefersMass(reader, mass)
+  return MASS_PREFERENCE_DAYS.some((d) => d.key === key && d.times.includes(mass.time))
+}
+
+/** ⚠️: vaga em dia/horário de preferência que o leitor não marcou. */
+export function isOutsidePreference(reader: PlanReader, mass: MassTime): boolean {
+  return isPreferenceSlot(mass) && !prefersMass(reader, mass)
 }

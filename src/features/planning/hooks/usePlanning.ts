@@ -11,6 +11,7 @@ import { buildDefaultMasses } from "../lib/defaultMasses"
 import { computeReaderStats } from "../lib/readerStats"
 import { suggestSchedule, summarizePlan } from "../lib/suggestSchedule"
 import { isOutsidePreference } from "../lib/slotPreference"
+import { ROLE_ORDER } from "../lib/format"
 
 /** pending = aviso ainda não respondido; included = voltam a rascunho ao salvar; kept = somente leitura. */
 export type PublishedDecision = "pending" | "included" | "kept"
@@ -50,7 +51,6 @@ export interface UsePlanningResult {
   toggleLock(massKey: string, slotIndex: number): void
 }
 
-const ROLE_ORDER: Record<string, number> = { C: 0, "1L": 1, "2L": 2, L: 3, P: 4 }
 const ymd = (d: Date) => format(d, "yyyy-MM-dd")
 const byDateTime = (a: PlanMass, b: PlanMass) =>
   a.date === b.date ? a.time.localeCompare(b.time) : a.date.localeCompare(b.date)

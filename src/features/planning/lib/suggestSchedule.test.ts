@@ -146,6 +146,23 @@ describe("suggestSchedule — pontuação", () => {
     expect(out[0].slots[0].warning).toBe("outside-preference")
   })
 
+  it("o motivo diz só o que é verdade: fora da preferência, carga e a mesma meta exibida no card", () => {
+    const A = prefReader("A", { "6": ["07:00"] })
+    const B = prefReader("B", { "6": ["09:00"] })
+    const out = suggestSchedule(
+      input([mass("m1", "2026-12-06", [slot("C")], { time: "07:00" })], [A, B], { "2026-12-06": ["A"] })
+    )
+    // 1 vaga ÷ 2 leitores = 0,5 ⇒ o card mostra "0 a 1"
+    expect(out[0].slots[0].reason).toBe("Fora da preferência de dia/horário · 1 leitura no mês (meta 0 a 1)")
+    expect(out[0].slots[0].reason).not.toMatch(/sem opção melhor/)
+  })
+
+  it("motivo de quem marcou a preferência", () => {
+    const A = prefReader("A", { "6": ["07:00"] })
+    const out = suggestSchedule(input([mass("m1", "2026-12-06", [slot("C")], { time: "07:00" })], [A]))
+    expect(out[0].slots[0].reason).toBe("Preferência neste horário · 1 leitura no mês (meta 1)")
+  })
+
   it("sábado não gera aviso", () => {
     const A = prefReader("A", { "6": ["07:00"] })
     const out = suggestSchedule(input([mass("m1", "2026-12-05", [slot("C")], { time: "07:00" })], [A]))
