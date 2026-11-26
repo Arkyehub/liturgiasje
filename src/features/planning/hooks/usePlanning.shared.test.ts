@@ -292,11 +292,9 @@ describe("modos sem edição", () => {
 })
 
 describe("missas publicadas e troca de alvo", () => {
-  test("published masses never become editable (shims only record the decision) and still count for the lamp", async () => {
+  test("published masses stay read-only and still count for the lamp", async () => {
     setup([published(), draft()])
     const { result } = await load()
-    act(() => result.current.acceptPublished())
-    expect(result.current.publishedDecision).toBe("included")
     expect(result.current.masses.find((m) => m.key === "p1")).toMatchObject({ readOnly: true, wasPublished: true })
     expect(result.current.publishedCount).toBe(1)
     expect(syncSave).not.toHaveBeenCalled()

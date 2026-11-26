@@ -20,6 +20,8 @@ interface SuggestionRowProps extends SuggestionLine {
   onPick: () => void
   onView: () => void
   onToggleLock: () => void
+  /** Planejamento somente leitura: trocar leitor e travar ficam desativados (ver continua). */
+  readOnly?: boolean
 }
 
 /** Ícone ⚠️ com nome acessível (a lucide fica oculta e o rótulo vai no span). */
@@ -54,11 +56,12 @@ export function SuggestionRow({
   onPick,
   onView,
   onToggleLock,
+  readOnly = false,
 }: SuggestionRowProps) {
   const dd = mass.date.slice(8, 10)
   const empty = slot.profileId === ""
   const swapPending = !!slot.isSwapRequested
-  const frozen = mass.readOnly || swapPending
+  const frozen = mass.readOnly || swapPending || readOnly
   return (
     <li
       data-date={mass.date}
@@ -79,7 +82,7 @@ export function SuggestionRow({
           <button
             type="button"
             onClick={onPick}
-            disabled={mass.readOnly}
+            disabled={mass.readOnly || readOnly}
             className="min-h-11 flex-1 text-left text-[13px] font-bold text-red-700 underline decoration-dashed underline-offset-4 disabled:opacity-60"
           >
             sem leitor · escolher

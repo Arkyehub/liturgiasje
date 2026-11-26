@@ -20,9 +20,6 @@ import { usePlanSync, type PlanSyncTarget, type SyncMode, type SyncStatus } from
 /** Qual planejamento abrir: o meu (editável) ou o de outro coordenador (somente leitura). */
 export type PlanTarget = { kind: "mine"; month: Date } | { kind: "other"; month: Date; planId: string }
 
-/** @deprecated Só registra a resposta; missa publicada nunca fica editável no planejamento. */
-export type PublishedDecision = "pending" | "included" | "kept"
-
 /** planning = montando as missas; suggested = a lâmpada já rodou (lista por função). */
 export type PlanningPhase = "planning" | "suggested"
 
@@ -35,8 +32,6 @@ export interface UsePlanningResult {
   unavailable: Record<string, string[]>
   summary: PlanSummary
   publishedCount: number
-  /** @deprecated Somente registro (a tela é refeita na Task 7). */
-  publishedDecision: PublishedDecision
   /** Missas já gravadas que o admin removeu do planejamento (para o lote de gravação). */
   removedMasses: PlanMass[]
   loading: boolean
@@ -49,10 +44,6 @@ export interface UsePlanningResult {
   addMass(m: PlanMass): void
   updateMass(key: string, patch: Partial<PlanMass>): void
   removeMass(key: string): void
-  /** @deprecated Só registra "included"; NUNCA torna missas publicadas editáveis. */
-  acceptPublished(): void
-  /** @deprecated Só registra "kept". */
-  declinePublished(): void
   phase: PlanningPhase
   /** Lâmpada / "Sugerir de novo": preenche as vagas livres; travadas e somente leitura ficam. */
   runLamp(): void
@@ -158,7 +149,6 @@ export function usePlanning(target: PlanTarget | null): UsePlanningResult {
   const [suggested, setSuggested] = useState(false)
   const [history, setHistory] = useState<SlotHistoryRow[]>([])
   const [unavailable, setUnavailable] = useState<Record<string, string[]>>({})
-  const [publishedDecision, setPublishedDecision] = useState<PublishedDecision>("pending")
   const [notices, setNotices] = useState<ReconcileNotice[]>([])
   // Plano reconciliado já aplicado (alvo + época): a primeira foto é a linha de base e nunca é gravada.
   const [baseline, setBaseline] = useState<{ targetKey: string; epoch: number; real: PlanMass[] } | null>(null)
@@ -247,7 +237,6 @@ export function usePlanning(target: PlanTarget | null): UsePlanningResult {
     setRemovedMasses(reconciled.removedMasses)
     setSuggested(reconciled.suggested)
     setNotices(reconciled.notices)
-    setPublishedDecision("pending")
     setBaseline({ targetKey, epoch: ++epochRef.current, real: realMasses })
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [targetKey, monthKey, loadedKey, syncSettled, syncPlanOk, sync.mode, sync.plan, realMasses])
@@ -325,15 +314,6 @@ export function usePlanning(target: PlanTarget | null): UsePlanningResult {
     [editable, masses],
   )
 
-  // Atalhos de compatibilidade: só registram a resposta. Missa publicada nunca fica editável.
-  const acceptPublished = useCallback(() => {
-    if (!idle) setPublishedDecision("included")
-  }, [idle])
-
-  const declinePublished = useCallback(() => {
-    if (!idle) setPublishedDecision("kept")
-  }, [idle])
-
   const phase: PlanningPhase = ready && suggested ? "suggested" : "planning"
 
   const runLamp = useCallback(() => {
@@ -394,7 +374,6 @@ export function usePlanning(target: PlanTarget | null): UsePlanningResult {
     unavailable,
     summary,
     publishedCount,
-    publishedDecision,
     removedMasses,
     loading,
     error,
@@ -403,8 +382,6 @@ export function usePlanning(target: PlanTarget | null): UsePlanningResult {
     addMass,
     updateMass,
     removeMass,
-    acceptPublished,
-    declinePublished,
     phase,
     runLamp,
     setSlotReader,

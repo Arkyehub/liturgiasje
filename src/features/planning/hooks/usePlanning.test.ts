@@ -102,11 +102,9 @@ test("with month=null the hook is idle: no reads, nothing loading, every action 
     result.current.addMass({ key: "k", date: "2026-12-06", time: "07:00", description: "", wasPublished: false, readOnly: false, slots: [] })
     result.current.runLamp()
     result.current.retry()
-    result.current.acceptPublished()
   })
   await act(async () => {})
   expect(result.current.masses).toEqual([])
-  expect(result.current.publishedDecision).toBe("pending")
   expect(result.current.phase).toBe("planning")
   expect(makeListSchedulesForMonth).not.toHaveBeenCalled()
 })
@@ -180,29 +178,18 @@ test("createDefaults does not duplicate an existing mass whose time came from Po
   expect(order).toEqual([...order].sort())
 })
 
-test("acceptPublished/declinePublished only record the decision: published masses stay read-only and untouched", async () => {
-  const published = [
+test("published masses stay read-only and untouched by edits", async () => {
+  setup([
     mass("m1", "2026-12-06", "07:00:00", true, [slot("s1", "m1", "C", "a")]),
     mass("m2", "2026-12-06", "09:00:00", true, [slot("s2", "m2", "C", "")]),
-  ]
-  setup(published)
-  const accepted = await load()
-  expect(accepted.result.current.publishedDecision).toBe("pending")
-  act(() => accepted.result.current.acceptPublished())
-  expect(accepted.result.current.publishedDecision).toBe("included")
-  expect(accepted.result.current.masses.every((m) => m.readOnly && m.wasPublished)).toBe(true)
-  act(() => accepted.result.current.updateMass("m1", { description: "x" }))
-  act(() => accepted.result.current.setSlotReader("m2", 0, "b"))
-  act(() => accepted.result.current.removeMass("m1"))
-  expect(accepted.result.current.masses.map((m) => [m.description, m.slots[0].profileId])).toEqual([["", "a"], ["", ""]])
-  expect(accepted.result.current.removedMasses).toEqual([])
-  accepted.unmount()
-
-  setup(published)
-  const declined = await load()
-  act(() => declined.result.current.declinePublished())
-  expect(declined.result.current.masses.every((m) => m.readOnly)).toBe(true)
-  expect(declined.result.current.publishedDecision).toBe("kept")
+  ])
+  const { result } = await load()
+  expect(result.current.masses.every((m) => m.readOnly && m.wasPublished)).toBe(true)
+  act(() => result.current.updateMass("m1", { description: "x" }))
+  act(() => result.current.setSlotReader("m2", 0, "b"))
+  act(() => result.current.removeMass("m1"))
+  expect(result.current.masses.map((m) => [m.description, m.slots[0].profileId])).toEqual([["", "a"], ["", ""]])
+  expect(result.current.removedMasses).toEqual([])
 })
 
 test("addMass, updateMass and removeMass edit the plan; read-only masses are untouched", async () => {
@@ -237,11 +224,10 @@ test("addMass, updateMass and removeMass edit the plan; read-only masses are unt
   expect(result.current.removedMasses.map((m) => m.id)).toEqual(["draft"])
 })
 
-test("switching month reloads and resets the plan and the published decision", async () => {
+test("switching month reloads and resets the plan", async () => {
   setup([mass("m1", "2026-12-06", "07:00:00", true, [slot("s1", "m1", "C", "a")])])
   const hook = renderHook(({ month }) => usePlanning({ kind: "mine", month }), { initialProps: { month: DEC } })
   await waitFor(() => expect(hook.result.current.loading).toBe(false))
-  act(() => hook.result.current.declinePublished())
 
   listMonth.mockResolvedValue([])
   const JAN = new Date(2027, 0, 1)
@@ -251,7 +237,6 @@ test("switching month reloads and resets the plan and the published decision", a
   await waitFor(() => expect(hook.result.current.loading).toBe(false))
   expect(listMonth).toHaveBeenLastCalledWith(JAN, true)
   expect(listHistory).toHaveBeenLastCalledWith("2026-01-01", "2026-12-31")
-  expect(hook.result.current.publishedDecision).toBe("pending")
   expect(hook.result.current.publishedCount).toBe(0)
 })
 

@@ -30,3 +30,8 @@ test("tapping an editable row reports its key; a read-only row cannot be tapped"
   await userEvent.click(readOnly)
   expect(onSelect).toHaveBeenCalledTimes(1)
 })
+
+test("without onSelectMass (read-only plan) every row is disabled", () => {
+  render(<NotebookList masses={[mass("a"), mass("b", { time: "20:00" })]} />)
+  screen.getAllByRole("button").forEach((b) => expect(b).toBeDisabled())
+})

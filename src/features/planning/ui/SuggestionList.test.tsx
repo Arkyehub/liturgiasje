@@ -329,3 +329,35 @@ test("a slot with a pending swap shows the 'troca pendente' badge and cannot be 
   expect(within(normal).queryByRole("img", { name: "Troca pendente" })).not.toBeInTheDocument()
   expect(within(normal).getByRole("button", { name: /Bia Souza/ })).toBeEnabled()
 })
+
+describe("readOnly", () => {
+  test("disables the reader picker, the lock toggle and 'Sugerir de novo'; viewing, Detalhar and Prévia stay available", async () => {
+    const onDetail = jest.fn()
+    const onPreview = jest.fn()
+    const { rows, onSuggestAgain, onToggleLock } = setup({ readOnly: true, onDetail, onPreview })
+    const lines = rows()
+    // linha com leitor: troca e trava desativadas, olho ativo
+    expect(within(lines[0]).getByRole("button", { name: "Ana Ribeiro" })).toBeDisabled()
+    expect(within(lines[0]).getByRole("button", { name: "Destravar leitor" })).toBeDisabled()
+    expect(within(lines[1]).getByRole("button", { name: "Travar leitor" })).toBeDisabled()
+    expect(within(lines[0]).getByRole("button", { name: "Ver escalas do leitor no mês" })).toBeEnabled()
+    // vaga vazia: "escolher" desativado
+    expect(within(lines[3]).getByRole("button", { name: "sem leitor · escolher" })).toBeDisabled()
+    // rodapé
+    expect(screen.getByRole("button", { name: /Sugerir de novo/ })).toBeDisabled()
+    await userEvent.click(screen.getByRole("button", { name: /Sugerir de novo/ }))
+    expect(onSuggestAgain).not.toHaveBeenCalled()
+    expect(onToggleLock).not.toHaveBeenCalled()
+    expect(screen.getByRole("button", { name: "Detalhar" })).toBeEnabled()
+    await userEvent.click(screen.getByRole("button", { name: "Prévia pelo WhatsApp" }))
+    expect(onPreview).toHaveBeenCalledTimes(1)
+    await userEvent.click(within(lines[0]).getByRole("button", { name: "Ver escalas do leitor no mês" }))
+    expect(screen.getByRole("dialog")).toBeInTheDocument()
+  })
+
+  test("without readOnly everything stays enabled", () => {
+    const { rows } = setup()
+    expect(within(rows()[0]).getByRole("button", { name: "Ana Ribeiro" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: /Sugerir de novo/ })).toBeEnabled()
+  })
+})

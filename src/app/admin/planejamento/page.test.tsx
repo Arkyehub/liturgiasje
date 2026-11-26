@@ -8,11 +8,14 @@ import {
   makeSaveScheduleBatch,
   makeUpdateMassesStatus,
 } from "@/main/factories/usecases/schedule"
-import { makeConcludePlan } from "@/main/factories/usecases/plans"
+import { makeConcludePlan, makeListPlans } from "@/main/factories/usecases/plans"
 import { makeListProfiles, makeListUnavailableForRange } from "@/main/factories/usecases/profiles"
 import type { Mass } from "@/domain/models/Schedule"
 import type { Profile } from "@/domain/models/Profile"
-import { resetSync } from "@/features/planning/hooks/planSyncTestDouble"
+import type { PlanListItem } from "@/domain/models/SchedulePlan"
+import { resetSync, setSync, planDoc, syncReopen, syncRetrySave } from "@/features/planning/hooks/planSyncTestDouble"
+import { serializePlanState } from "@/features/planning/lib/planState"
+import { massToPlan } from "@/features/planning/hooks/usePlanning"
 
 const push = jest.fn()
 jest.mock("next/navigation", () => ({ useRouter: () => ({ push, back: jest.fn() }) }))
@@ -23,7 +26,13 @@ jest.mock("@/main/factories/usecases/schedule", () => ({
   makeSaveScheduleBatch: jest.fn(),
   makeUpdateMassesStatus: jest.fn(),
 }))
-jest.mock("@/main/factories/usecases/plans", () => ({ makeConcludePlan: jest.fn() }))
+jest.mock("@/main/factories/usecases/plans", () => ({
+  makeConcludePlan: jest.fn(),
+  makeListPlans: jest.fn(),
+  makeCopyPlan: jest.fn(),
+  makeDiscardPlan: jest.fn(),
+  makeReopenPlan: jest.fn(),
+}))
 jest.mock("@/main/factories/usecases/profiles", () => ({
   makeListProfiles: jest.fn(),
   makeListUnavailableForRange: jest.fn(),
@@ -53,8 +62,17 @@ const publishedMass = (id: string, time: string): Mass => ({
 let saveBatch: jest.Mock
 let updateStatus: jest.Mock
 let conclude: jest.Mock
+let listPlans: jest.Mock
 
-function setup(masses: Mass[] = []) {
+const listItem = (extra: Partial<PlanListItem> = {}): PlanListItem => ({
+  id: "o1", monthReference: "2026-12", ownerProfileId: "owner-2", ownerName: "Maria Teste", isMine: false, status: "em_andamento",
+  createdAt: "2026-11-20T12:00:00Z", updatedAt: "2026-11-26T09:00:00Z", expiresAt: "2026-12-26T09:00:00Z",
+  copiedFromName: null, concludedAt: null, openElsewhere: false, ...extra,
+})
+
+function setup(masses: Mass[] = [], plans: PlanListItem[] = []) {
+  listPlans = jest.fn().mockResolvedValue(plans)
+  ;(makeListPlans as jest.Mock).mockReturnValue({ execute: listPlans })
   conclude = jest.fn().mockResolvedValue(undefined)
   ;(makeConcludePlan as jest.Mock).mockReturnValue({ execute: conclude })
   saveBatch = jest.fn().mockResolvedValue(undefined)
@@ -82,10 +100,12 @@ beforeEach(() => {
 })
 afterEach(() => jest.useRealTimers())
 
-// A página abre sem mês: o teste escolhe o mês (por padrão o atual, dezembro de 2026) antes de qualquer leitura.
+const monthRegion = (name: RegExp) => screen.findByRole("region", { name })
+
+// A página abre na lista de planejamentos: o teste cria o seu (por padrão o do mês atual, dezembro de 2026) antes de qualquer leitura.
 async function openPage(optionName: RegExp = /^Dezembro 2026/) {
   const view = render(<PlanejamentoPage />)
-  await userEvent.click(await screen.findByRole("button", { name: optionName }))
+  await userEvent.click(within(await monthRegion(optionName)).getByRole("button", { name: /Criar meu planejamento/ }))
   return view
 }
 
@@ -98,23 +118,24 @@ test("a non-admin is sent back to the home page", async () => {
   expect(makeListProfiles).not.toHaveBeenCalled()
   expect(makeListSlotHistory).not.toHaveBeenCalled()
   expect(makeListUnavailableForRange).not.toHaveBeenCalled()
-  expect(screen.queryByText("Qual mês você vai planejar?")).not.toBeInTheDocument()
+  expect(listPlans).not.toHaveBeenCalled()
 })
 
-test("on entry no month is selected and nothing is read: the page asks which month to plan", async () => {
+test("on entry only the plan chooser shows and no real masses or profiles are read", async () => {
   asAdmin()
   setup([publishedMass("m1", "07:00:00")])
   render(<PlanejamentoPage />)
   expect(await screen.findByRole("heading", { name: "Qual mês você vai planejar?" })).toBeInTheDocument()
+  expect(listPlans).toHaveBeenCalledWith(["2026-12", "2027-01", "2027-02"])
   expect(makeListSchedulesForMonth).not.toHaveBeenCalled()
   expect(makeListProfiles).not.toHaveBeenCalled()
   expect(makeListSlotHistory).not.toHaveBeenCalled()
   expect(makeListUnavailableForRange).not.toHaveBeenCalled()
-  // sem aviso de publicadas, sem cabeçalho de mês, sem rodapé/lâmpada, sem lista
   expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
-  expect(screen.queryByRole("button", { name: "Mês anterior" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Trocar planejamento" })).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "Sugerir escala" })).not.toBeInTheDocument()
   expect(screen.queryByRole("list", { name: "Missas do mês" })).not.toBeInTheDocument()
+  expect(screen.queryByText("SOMENTE LEITURA")).not.toBeInTheDocument()
   expect(push).not.toHaveBeenCalled()
 })
 
@@ -122,18 +143,15 @@ test("the chooser offers the current month, the next one marked 'Sugerido' and t
   asAdmin()
   setup()
   render(<PlanejamentoPage />)
-  const current = await screen.findByRole("button", { name: /^Dezembro 2026/ })
-  const next = screen.getByRole("button", { name: /^Janeiro 2027/ })
-  const after = screen.getByRole("button", { name: /^Fevereiro 2027/ })
-  expect(screen.getAllByRole("button")).toHaveLength(3)
+  const current = await monthRegion(/^Dezembro 2026/)
+  const next = screen.getByRole("region", { name: /^Janeiro 2027/ })
+  const after = screen.getByRole("region", { name: /^Fevereiro 2027/ })
   expect(within(next).getByText("Sugerido")).toBeInTheDocument()
   expect(within(current).queryByText("Sugerido")).not.toBeInTheDocument()
   expect(within(after).queryByText("Sugerido")).not.toBeInTheDocument()
-  // toque grande (>= 44px): classe min-h-14 = 56px
-  ;[current, next, after].forEach((b) => expect(b.className).toMatch(/min-h-1[1-9]|min-h-[2-9]\d/))
 })
 
-test("choosing the next month reads with that month's ranges and then shows the published notice", async () => {
+test("creating my plan for the next month reads with that month's ranges and then shows the informative published notice", async () => {
   asAdmin()
   const listMonth = jest.fn().mockResolvedValue([{ ...publishedMass("m1", "07:00:00"), date: "2027-01-03", monthReference: "2027-01" }])
   const listHistory = jest.fn().mockResolvedValue([])
@@ -143,10 +161,10 @@ test("choosing the next month reads with that month's ranges and then shows the 
   ;(makeListSlotHistory as jest.Mock).mockReturnValue({ execute: listHistory })
   ;(makeListUnavailableForRange as jest.Mock).mockReturnValue({ execute: listUnavailable })
   render(<PlanejamentoPage />)
-  await userEvent.click(await screen.findByRole("button", { name: /^Janeiro 2027/ }))
+  await userEvent.click(within(await monthRegion(/^Janeiro 2027/)).getByRole("button", { name: /Criar meu planejamento/ }))
 
   const notice = await screen.findByRole("alertdialog")
-  expect(within(notice).getByText(/Existe 1 missa publicada em janeiro/)).toBeInTheDocument()
+  expect(within(notice).getByText(/Já existe 1 missa publicada em janeiro \(03\/01\)/)).toBeInTheDocument()
   expect(listMonth).toHaveBeenCalledTimes(1)
   expect(listMonth).toHaveBeenCalledWith(new Date(2027, 0, 1), true)
   expect(listHistory).toHaveBeenCalledWith("2026-01-01", "2026-12-31")
@@ -155,19 +173,17 @@ test("choosing the next month reads with that month's ranges and then shows the 
   expect(screen.queryByText("Qual mês você vai planejar?")).not.toBeInTheDocument()
 })
 
-test("after choosing a month the header arrows still change it", async () => {
+test("'Trocar planejamento' goes back to the chooser without month arrows in the header", async () => {
   asAdmin()
   setup()
   await openPage(/^Janeiro 2027/)
   await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
-  expect(screen.getByText("Janeiro 2027")).toBeInTheDocument()
-  await userEvent.click(screen.getByRole("button", { name: "Próximo mês" }))
-  expect(screen.getByText("Fevereiro 2027")).toBeInTheDocument()
-  await userEvent.click(screen.getByRole("button", { name: "Mês anterior" }))
-  await userEvent.click(screen.getByRole("button", { name: "Mês anterior" }))
-  expect(screen.getByText("Dezembro 2026")).toBeInTheDocument()
-  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
-})
+  expect(screen.queryByRole("button", { name: "Mês anterior" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Próximo mês" })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Trocar planejamento" }))
+  expect(await screen.findByRole("heading", { name: "Qual mês você vai planejar?" })).toBeInTheDocument()
+  expect(screen.queryByText("0 missas · 0 vagas · 2 leitores aptos")).not.toBeInTheDocument()
+  })
 
 test("the admin sees the title, the month and the summary", async () => {
   asAdmin()
@@ -219,35 +235,36 @@ test("creating the default masses on an empty December shows 25 masses / 82 slot
   expect(within(tuesday).getByText("TER")).toBeInTheDocument()
 })
 
-test("with 2 published masses the notice offers to include them; including never makes them editable", async () => {
+test("with 2 published masses the informative notice lists the dates once; they stay read-only and there is no include/keep option", async () => {
   asAdmin()
   setup([publishedMass("m1", "07:00:00"), publishedMass("m2", "09:00:00")])
   await openPage()
   const notice = await screen.findByRole("alertdialog")
-  expect(within(notice).getByText(/Existem 2 missas publicadas em dezembro/)).toBeInTheDocument()
-  expect(within(notice).getByText(/voltarão a rascunho/)).toBeInTheDocument()
-  expect(within(notice).getByText(/deixam de ver/)).toBeInTheDocument()
-  expect(within(notice).getByText(/lembretes/)).toBeInTheDocument()
+  expect(
+    within(notice).getByText(
+      "Já existem 2 missas publicadas em dezembro (06/12). Elas não podem ser alteradas no planejamento. Para mexer nelas, transforme-as em rascunho na tela de Escala.",
+    ),
+  ).toBeInTheDocument()
+  expect(within(notice).queryByRole("button", { name: "Incluir no planejamento" })).not.toBeInTheDocument()
+  expect(within(notice).queryByRole("button", { name: "Manter somente leitura" })).not.toBeInTheDocument()
 
-  await userEvent.click(within(notice).getByRole("button", { name: "Incluir no planejamento" }))
+  await userEvent.click(within(notice).getByRole("button", { name: "Entendi" }))
   expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
-  // regra nova: missa publicada fica sempre somente leitura, mesmo depois de "incluir"
   expect(screen.getAllByText("publicada")).toHaveLength(2)
   expect(screen.queryByText("volta a rascunho ao salvar")).not.toBeInTheDocument()
   within(screen.getByRole("list", { name: "Missas do mês" })).getAllByRole("button").forEach((b) => expect(b).toBeDisabled())
 })
 
-test("keeping published masses leaves them read-only with a 'publicada' mark", async () => {
+test("the published notice shows once per plan: not again after acknowledging, but again when another plan is opened", async () => {
   asAdmin()
-  setup([publishedMass("m1", "07:00:00"), publishedMass("m2", "09:00:00")])
+  setup([publishedMass("m1", "07:00:00")])
   await openPage()
-  const notice = await screen.findByRole("alertdialog")
-  await userEvent.click(within(notice).getByRole("button", { name: "Manter somente leitura" }))
+  await userEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Entendi" }))
   expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
-  expect(screen.getAllByText("publicada")).toHaveLength(2)
-  // linhas somente leitura não abrem edição
-  const rows = within(screen.getByRole("list", { name: "Missas do mês" })).getAllByRole("button")
-  rows.forEach((b) => expect(b).toBeDisabled())
+  // volta ao mesmo planejamento: o reconhecimento é por abertura
+  await userEvent.click(screen.getByRole("button", { name: "Trocar planejamento" }))
+  await userEvent.click(within(await monthRegion(/^Dezembro 2026/)).getByRole("button", { name: /Criar meu planejamento/ }))
+  expect(await screen.findByRole("alertdialog")).toBeInTheDocument()
 })
 
 test("a failed month read shows an error with 'Tentar novamente' instead of an empty, plannable month", async () => {
@@ -443,7 +460,7 @@ test("cancelling the replacement confirmation writes nothing and keeps the sugge
   expect(screen.getByRole("list", { name: "Vagas sugeridas" })).toBeInTheDocument()
 })
 
-test("changing month while the real masses are being read is ignored", async () => {
+test("'Trocar planejamento' while the real masses are being read is ignored", async () => {
   asAdmin()
   setup()
   await suggestDefaults()
@@ -452,34 +469,38 @@ test("changing month while the real masses are being read is ignored", async () 
   ;(makeListSchedulesForMonth as jest.Mock).mockReturnValue({ execute })
   await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
   await waitFor(() => expect(execute).toHaveBeenCalledTimes(1))
-  await userEvent.click(screen.getByRole("button", { name: "Próximo mês", hidden: true }))
+  expect(screen.getByRole("button", { name: "Trocar planejamento", hidden: true })).toBeDisabled()
+  await userEvent.click(screen.getByRole("button", { name: "Trocar planejamento", hidden: true }))
   expect(screen.getByText("Dezembro 2026")).toBeInTheDocument()
+  expect(screen.queryByRole("heading", { name: "Qual mês você vai planejar?" })).not.toBeInTheDocument()
   await act(async () => release([]))
   await waitFor(() => expect(saveBatch).toHaveBeenCalledTimes(1))
   expect(saveBatch.mock.calls[0][0]).toHaveLength(25)
 })
 
-test("changing month while the replacement dialog is open is ignored and the dialog stays", async () => {
+test("'Trocar planejamento' while the replacement dialog is open is ignored and the dialog stays", async () => {
   asAdmin()
   setupWithStrayDraft()
   await suggestDefaults()
   await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
   const dialog = await screen.findByRole("alertdialog")
-  await userEvent.click(screen.getByRole("button", { name: "Próximo mês", hidden: true }))
+  expect(screen.getByRole("button", { name: "Trocar planejamento", hidden: true })).toBeDisabled()
+  await userEvent.click(screen.getByRole("button", { name: "Trocar planejamento", hidden: true }))
   expect(screen.getByRole("alertdialog")).toBe(dialog)
+  expect(screen.queryByRole("heading", { name: "Qual mês você vai planejar?" })).not.toBeInTheDocument()
   expect(screen.getByText("Dezembro 2026")).toBeInTheDocument()
   expect(saveBatch).not.toHaveBeenCalled()
 })
 
-test("changing month never asks to discard: the plan is saved as you go", async () => {
+test("going back to the chooser never asks to discard: the plan is saved as you go", async () => {
   asAdmin()
   setup()
   await openPage()
   await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
   await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
-  await userEvent.click(screen.getByRole("button", { name: "Próximo mês" }))
+  await userEvent.click(screen.getByRole("button", { name: "Trocar planejamento" }))
   expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
-  expect(screen.getByText("Janeiro 2027")).toBeInTheDocument()
+  expect(await screen.findByRole("heading", { name: "Qual mês você vai planejar?" })).toBeInTheDocument()
   const event = new Event("beforeunload", { cancelable: true })
   window.dispatchEvent(event)
   expect(event.defaultPrevented).toBe(false)
@@ -514,4 +535,236 @@ test("while saving, the planning is inert and edits are ignored (no edit is lost
   await act(async () => release())
   await waitFor(() => expect(sonner().success).toHaveBeenCalledWith("Rascunho salvo."))
   await waitFor(() => expect(screen.getByRole("main")).not.toHaveAttribute("inert"))
+})
+
+// ---------------------------------------------------------------------------
+// Task 7b: Somente Leitura, indicador de gravação, avisos e estados do servidor
+// ---------------------------------------------------------------------------
+
+const draftMass = (id: string, time: string): Mass => ({
+  id, date: "2026-12-08", time, isPublished: false, monthReference: "2026-12", scheduleRevision: 3,
+  slots: [
+    { id: `s-${id}`, massId: id, role: "C", profileId: "a", isConfirmed: false, isSwapRequested: false, createdAt: "2026-11-01" },
+    { id: `t-${id}`, massId: id, role: "L", profileId: "", isConfirmed: false, isSwapRequested: false, createdAt: "2026-11-01" },
+  ],
+})
+
+async function openMine() {
+  await openPage()
+  await screen.findByText(/missas? · .* vagas?/)
+}
+
+async function viewOther() {
+  setSync({ mode: "readonly", plan: planDoc({ id: "o1", isMine: false, ownerName: "Maria Teste", ownerProfileId: "owner-2", updatedAt: "2026-11-26T09:00:00Z" }) })
+  render(<PlanejamentoPage />)
+  await userEvent.click(within(await monthRegion(/^Dezembro 2026/)).getByRole("button", { name: "Ver" }))
+  await screen.findByText("SOMENTE LEITURA")
+}
+
+test("viewing another coordinator's plan shows the read-only banner and disables every editing control", async () => {
+  asAdmin()
+  setup([draftMass("d1", "19:00:00")], [listItem()])
+  await viewOther()
+  expect(screen.getByText("Planejamento de Maria Teste", { exact: false })).toBeInTheDocument()
+  expect(screen.getByText("Para editar, use Duplicar para mim.")).toBeInTheDocument()
+  expect(screen.getByText("Dezembro 2026")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "Adicionar missa" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "Sugerir escala" })).toBeDisabled()
+  within(screen.getByRole("list", { name: "Missas do mês" })).getAllByRole("button").forEach((b) => expect(b).toBeDisabled())
+  // sem indicador de gravação nem botão de reabrir/editar no modo de outro coordenador
+  expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Reabrir" })).not.toBeInTheDocument()
+  expect(screen.queryByText("Salvo")).not.toBeInTheDocument()
+  expect(syncRetrySave).not.toHaveBeenCalled()
+  // nada de gravação: a leitura de outro coordenador não escreve
+  expect(saveBatch).not.toHaveBeenCalled()
+})
+
+test("a read-only plan after the lamp keeps viewing, Detalhar and Prévia, but locks pickers, locks, 'Sugerir de novo' and saving", async () => {
+  asAdmin()
+  setup([draftMass("d1", "19:00:00")], [listItem()])
+  const open = jest.spyOn(window, "open").mockImplementation(() => null)
+  const stored = serializePlanState([{ ...massToPlan(draftMass("d1", "19:00:00")) }], [], true)
+  setSync({ mode: "readonly", plan: planDoc({ id: "o1", isMine: false, ownerName: "Maria Teste", state: stored }) })
+  render(<PlanejamentoPage />)
+  await userEvent.click(within(await monthRegion(/^Dezembro 2026/)).getByRole("button", { name: "Ver" }))
+  const list = await screen.findByRole("list", { name: "Vagas sugeridas" })
+  const lines = within(list).getAllByRole("listitem")
+  expect(within(lines[0]).getByRole("button", { name: "Leitor a" })).toBeDisabled()
+  expect(within(lines[0]).getByRole("button", { name: /Destravar leitor|Travar leitor/ })).toBeDisabled()
+  expect(within(lines[1]).getByRole("button", { name: "sem leitor · escolher" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: /Sugerir de novo/ })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "Salvar como rascunho" })).toBeDisabled()
+  expect(screen.queryByRole("button", { name: "Sugerir escala" })).not.toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole("button", { name: "Prévia pelo WhatsApp" }))
+  expect(open).toHaveBeenCalledTimes(1)
+  await userEvent.click(screen.getByRole("button", { name: "Detalhar" }))
+  expect(screen.getByRole("dialog")).toBeInTheDocument()
+  open.mockRestore()
+})
+
+test("'Trocar planejamento' from a read-only view returns to the chooser", async () => {
+  asAdmin()
+  setup([], [listItem()])
+  await viewOther()
+  await userEvent.click(screen.getByRole("button", { name: "Trocar planejamento" }))
+  expect(await screen.findByRole("heading", { name: "Qual mês você vai planejar?" })).toBeInTheDocument()
+  expect(screen.queryByText("SOMENTE LEITURA")).not.toBeInTheDocument()
+})
+
+test("'Trocar planejamento' waits while a save is in flight", async () => {
+  asAdmin()
+  setup()
+  setSync({ status: "saving" })
+  await openMine()
+  const button = screen.getByRole("button", { name: "Trocar planejamento" })
+  expect(button).toBeDisabled()
+  await userEvent.click(button)
+  expect(screen.queryByRole("heading", { name: "Qual mês você vai planejar?" })).not.toBeInTheDocument()
+  expect(screen.getByText("Salvando…")).toBeInTheDocument()
+})
+
+test("a plan open on another device shows the banner with Editar, which reopens it, and locks the editing controls", async () => {
+  asAdmin()
+  setup([draftMass("d1", "19:00:00")])
+  setSync({ mode: "readonly", holderLastSeen: "2026-11-26T11:00:00Z", plan: planDoc({ openElsewhere: true }) })
+  await openMine()
+  expect(screen.getByText("SOMENTE LEITURA")).toBeInTheDocument()
+  expect(screen.getByText(/Aberto em outro aparelho \(última atividade/)).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeDisabled()
+  expect(screen.queryByText("Salvo")).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Editar" }))
+  expect(syncReopen).toHaveBeenCalledTimes(1)
+})
+
+test("losing the reservation shows how many changes were left out and Editar reopens", async () => {
+  asAdmin()
+  setup([draftMass("d1", "19:00:00")])
+  setSync({ mode: "readonly", lostChanges: 2, holderLastSeen: "2026-11-26T11:00:00Z" })
+  await openMine()
+  expect(screen.getByText("Você perdeu a reserva deste planejamento")).toBeInTheDocument()
+  expect(screen.getByText("2 alterações não foram salvas.")).toBeInTheDocument()
+  expect(screen.queryByText(/Aberto em outro aparelho \(/)).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Editar" }))
+  expect(syncReopen).toHaveBeenCalledTimes(1)
+})
+
+test("a concluded plan shows 'Planejamento concluído' with Reabrir, read-only", async () => {
+  asAdmin()
+  setup([draftMass("d1", "19:00:00")])
+  setSync({ mode: "concluded", plan: planDoc({ status: "concluido", concludedAt: "2026-11-25T10:00:00Z" }) })
+  await openMine()
+  expect(screen.getByText("SOMENTE LEITURA")).toBeInTheDocument()
+  expect(screen.getByText("Planejamento concluído")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeDisabled()
+  expect(screen.queryByText("Salvo")).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Reabrir" }))
+  expect(syncReopen).toHaveBeenCalledTimes(1)
+})
+
+test("in edit mode there is no read-only banner", async () => {
+  asAdmin()
+  setup()
+  await openMine()
+  expect(screen.queryByText("SOMENTE LEITURA")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeEnabled()
+})
+
+test("unavailable shared planning shows the message and 'Voltar à lista'", async () => {
+  asAdmin()
+  setup()
+  setSync({ mode: "unavailable", plan: null, error: "ignorado" })
+  render(<PlanejamentoPage />)
+  await userEvent.click(within(await monthRegion(/^Dezembro 2026/)).getByRole("button", { name: /Criar meu planejamento/ }))
+  expect(await screen.findByText("Planejamento compartilhado indisponível neste ambiente.")).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: /Criar Missas Padrões no mês/ })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Voltar à lista" }))
+  expect(await screen.findByRole("heading", { name: "Qual mês você vai planejar?" })).toBeInTheDocument()
+})
+
+test("a sync error shows its message and 'Voltar à lista'", async () => {
+  asAdmin()
+  setup()
+  setSync({ mode: "error", plan: null, error: "Não foi possível abrir o planejamento agora." })
+  render(<PlanejamentoPage />)
+  await userEvent.click(within(await monthRegion(/^Dezembro 2026/)).getByRole("button", { name: /Criar meu planejamento/ }))
+  expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível abrir o planejamento agora.")
+  await userEvent.click(screen.getByRole("button", { name: "Voltar à lista" }))
+  expect(await screen.findByRole("heading", { name: "Qual mês você vai planejar?" })).toBeInTheDocument()
+})
+
+test.each([
+  ["saving", "Salvando…"],
+  ["saved", "Salvo"],
+] as const)("the save indicator shows '%s' while editing", async (status, text) => {
+  asAdmin()
+  setup()
+  setSync({ status })
+  await openMine()
+  expect(screen.getByText(text)).toBeInTheDocument()
+})
+
+test("a failed save shows 'Falhou — tentar de novo', which retries", async () => {
+  asAdmin()
+  setup()
+  setSync({ status: "failed" })
+  await openMine()
+  await userEvent.click(screen.getByRole("button", { name: "Falhou — tentar de novo" }))
+  expect(syncRetrySave).toHaveBeenCalledTimes(1)
+})
+
+test("the save indicator is not shown without editing", async () => {
+  asAdmin()
+  setup()
+  setSync({ mode: "readonly", status: "saved" })
+  await openMine()
+  expect(screen.queryByText("Salvo")).not.toBeInTheDocument()
+})
+
+test("reconciliation notices show in edit mode, are dismissible one by one, and come back for a newly opened plan", async () => {
+  asAdmin()
+  setup([draftMass("d1", "19:00:00")])
+  const gone = { ...massToPlan(draftMass("gone", "10:00:00")), date: "2026-12-13" }
+  setSync({ plan: planDoc({ state: serializePlanState([massToPlan(draftMass("d1", "19:00:00")), gone], [], true) }) })
+  await openMine()
+  expect(screen.getByText("Missas removidas fora do planejamento: 13/12")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Dispensar aviso" }))
+  expect(screen.queryByText(/Missas removidas fora do planejamento/)).not.toBeInTheDocument()
+  // outro planejamento: o aviso volta
+  await userEvent.click(screen.getByRole("button", { name: "Trocar planejamento" }))
+  await userEvent.click(within(await monthRegion(/^Janeiro 2027/)).getByRole("button", { name: /Criar meu planejamento/ }))
+  await screen.findByText(/missas? · .* vagas?/)
+  expect(screen.getByText("Missas removidas fora do planejamento: 13/12")).toBeInTheDocument()
+})
+
+test("an unreadable stored plan shows the corrupted-state notice in edit mode", async () => {
+  asAdmin()
+  setup([draftMass("d1", "19:00:00")])
+  setSync({ plan: planDoc({ state: "lixo" }) })
+  await openMine()
+  expect(screen.getByText("O planejamento guardado estava corrompido e foi ignorado.")).toBeInTheDocument()
+})
+
+test("notices are not shown when the plan is read-only", async () => {
+  asAdmin()
+  setup([draftMass("d1", "19:00:00")])
+  setSync({ mode: "readonly", plan: planDoc({ state: "lixo" }) })
+  await openMine()
+  expect(screen.queryByText(/corrompido/)).not.toBeInTheDocument()
+})
+
+test("after 'Salvar como rascunho' the plan reopens as concluded with the Reabrir banner", async () => {
+  asAdmin()
+  setup()
+  await suggestDefaults()
+  expect(screen.queryByText("SOMENTE LEITURA")).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  await waitFor(() => expect(conclude).toHaveBeenCalledTimes(1))
+  // a recarga reabre o plano; o servidor agora o devolve concluído
+  setSync({ mode: "concluded", plan: planDoc({ status: "concluido", concludedAt: "2026-11-26T12:00:00Z" }) })
+  await waitFor(() => expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(3))
+  expect(await screen.findByText("Planejamento concluído")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Reabrir" })).toBeInTheDocument()
 })

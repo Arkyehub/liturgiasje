@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { useState } from "react"
 
-import { LegacyPublishedNotice, PublishedNotice } from "./PublishedNotice"
+import { PublishedNotice } from "./PublishedNotice"
 
 function setupNew(count = 2, dates = ["05/12", "12/12"]) {
   const onAcknowledge = jest.fn()
@@ -75,61 +75,5 @@ describe("PublishedNotice (informativo)", () => {
     await userEvent.click(document.querySelector('[data-slot="dialog-overlay"]') as HTMLElement)
     expect(screen.getByRole("alertdialog")).toBeInTheDocument()
     expect(onAcknowledge).not.toHaveBeenCalled()
-  })
-})
-
-function setupLegacy(count = 2) {
-  const onInclude = jest.fn()
-  const onKeep = jest.fn()
-  function Harness() {
-    const [open, setOpen] = useState(false)
-    return (
-      <>
-        <button type="button" onClick={() => setOpen(true)}>
-          Abrir
-        </button>
-        {open && (
-          <LegacyPublishedNotice
-            count={count}
-            monthName="dezembro"
-            onInclude={onInclude}
-            onKeep={() => {
-              onKeep()
-              setOpen(false)
-            }}
-          />
-        )}
-      </>
-    )
-  }
-  render(<Harness />)
-  return { onInclude, onKeep }
-}
-
-describe("LegacyPublishedNotice (removido na Task 7b)", () => {
-  it("move o foco para a opção segura e expõe nome e descrição", async () => {
-    setupLegacy()
-    await userEvent.click(screen.getByRole("button", { name: "Abrir" }))
-    const dialog = await screen.findByRole("alertdialog", { name: "Missas publicadas" })
-    expect(dialog).toHaveAccessibleDescription(/lembretes automáticos param/)
-    await waitFor(() => expect(screen.getByRole("button", { name: "Manter somente leitura" })).toHaveFocus())
-  })
-
-  it("Escape escolhe a opção segura, nunca incluir", async () => {
-    const { onInclude, onKeep } = setupLegacy()
-    await userEvent.click(screen.getByRole("button", { name: "Abrir" }))
-    await screen.findByRole("alertdialog")
-    await userEvent.keyboard("{Escape}")
-    expect(onKeep).toHaveBeenCalledTimes(1)
-    expect(onInclude).not.toHaveBeenCalled()
-  })
-
-  it("os botões chamam seus callbacks e o singular usa o texto do singular", async () => {
-    const { onInclude, onKeep } = setupLegacy(1)
-    await userEvent.click(screen.getByRole("button", { name: "Abrir" }))
-    expect(await screen.findByText(/Existe 1 missa publicada em dezembro/)).toBeInTheDocument()
-    await userEvent.click(screen.getByRole("button", { name: "Incluir no planejamento" }))
-    expect(onInclude).toHaveBeenCalledTimes(1)
-    expect(onKeep).not.toHaveBeenCalled()
   })
 })

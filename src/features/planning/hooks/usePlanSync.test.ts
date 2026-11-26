@@ -98,6 +98,13 @@ describe("usePlanSync - abertura", () => {
     Object.values(mockUc).forEach(fn => expect(fn).not.toHaveBeenCalled())
   })
 
+  it("já ocioso (sem plano aberto) expõe um session_id não vazio para a lista de planejamentos", async () => {
+    const { result } = renderHook(() => usePlanSync(null))
+    await tick(0)
+    expect(result.current.mode).toBe("idle")
+    expect(result.current.sessionId).not.toBe("")
+  })
+
   it.each(["edit", "readonly", "concluded"] as const)("mine abre com o session_id e expõe %s", async mode => {
     mockUc.open.mockResolvedValue(opened(mode, 4))
     const { result } = renderHook(() => usePlanSync(MINE))
