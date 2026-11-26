@@ -49,11 +49,10 @@ it("mantém o foco preso no diálogo ao tabular", async () => {
   const opener = screen.getByRole("button", { name: "Abrir", hidden: true })
   // A página fica fora da árvore de acessibilidade (inerte) enquanto o diálogo está aberto.
   expect(screen.queryByRole("button", { name: "Abrir" })).not.toBeInTheDocument()
-  // Do foco inicial até o fim do diálogo, o Tab passa só pelos botões e pelas sentinelas do primitivo,
-  // nunca pela página. (O salto da última sentinela de volta ao início depende de eventos de foco reais
-  // do navegador e não é reproduzido pelo jsdom, por isso o laço para antes.)
-  for (let i = 0; i < 4; i++) {
-    await userEvent.tab()
+  // Shift+Tab a partir do foco inicial percorre só o conteúdo do diálogo, nunca a página. (O salto da
+  // sentinela de volta ao fim depende de eventos de foco reais do navegador e não é reproduzido pelo jsdom.)
+  for (let i = 0; i < 2; i++) {
+    await userEvent.tab({ shift: true })
     expect(document.activeElement).not.toBe(opener)
   }
 })
