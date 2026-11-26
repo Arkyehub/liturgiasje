@@ -112,7 +112,7 @@ Gera **texto** (não link — a sugestão só existe no aparelho de quem planeja
 O Planejamento é **outra visão do mesmo mês**, não um rascunho paralelo:
 - Missas já existentes aparecem na página; leitores já escalados contam como **travados**.
 - A lâmpada preenche **só vagas vazias**.
-- Em mês **já publicado**, nunca troca quem já foi escalado/avisado; só preenche vazios.
+- Em mês com missas **já publicadas**: aviso "Existem X missas publicadas… incluir no planejamento? Elas voltarão a rascunho" (ver seção 11). Aceitando, entram como rascunho (gravado só ao salvar); recusando, ficam somente leitura. Em ambos os casos a lâmpada nunca troca quem já está escalado; só preenche vazios.
 - "Criar Missas Padrões" não duplica missas existentes.
 - Nada é gravado até **Salvar como rascunho**, que grava via `saveScheduleBatch` como não publicado (`isPublished: false`), respeitando `expectedRevision`. Publicar permanece no fluxo atual. Em rascunho salvo e reaberto, as vagas já preenchidas contam como travadas (o admin destrava o que quiser refazer).
 
@@ -138,6 +138,10 @@ Pesos exatos da pontuação e critério de parada da rodada de melhoria; estrutu
 - Mês sem histórico algum (primeiro uso): todos entram na média do grupo; só preferência e afinidade (que também pode estar vazia) decidem.
 - Missas publicadas aparecem na lista com um indicador discreto de "publicada".
 
-**Pendente do usuário:** quando uma missa **já está publicada** e tem vaga vazia, o Planejamento preenche essa vaga? Gravar ali torna o leitor visível e sujeito a lembrete **na hora**, sem passar por rascunho. Ver resposta registrada abaixo.
-
-Resposta: _(aguardando)_
+**Decisão do usuário (missas já publicadas):** ao abrir um mês que tem missas publicadas, o Planejamento mostra um aviso: "Existem X missas publicadas em <Mês>. Deseja incluí-las no planejamento? Elas voltarão a rascunho." 
+- **Aceitar:** essas missas passam a rascunho e podem ser manipuladas dentro do Planejamento (usa `updateMassesStatus(massIds, false)`, o mesmo da tela de Escala). O admin republica depois pelo fluxo atual.
+- **Recusar:** as missas publicadas ficam **somente leitura** (marca discreta "publicada", nenhuma gravação nelas); a lâmpada só atua nas missas não publicadas.
+- **Minhas chamadas sobre isso:**
+  - a mudança para rascunho só é **gravada em "Salvar como rascunho"**; aceitar o aviso apenas marca as missas dentro do planejamento. Se o admin sair sem salvar, nada mudou para os leitores;
+  - leitores já escalados nessas missas continuam **travados** (a lâmpada só preenche vagas vazias; o admin destrava o que quiser refazer); vagas com troca pendente (`is_swap_requested`) ficam travadas e destacadas;
+  - o texto do aviso e do botão de salvar deixa claro que os leitores deixam de ver essas missas, e os lembretes automáticos param, até a republicação.
