@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { useState } from "react"
 
@@ -40,7 +40,7 @@ describe("PublishedNotice (informativo)", () => {
       "Já existem 2 missas publicadas em dezembro (05/12, 12/12). Elas não podem ser alteradas no planejamento. Para mexer nelas, transforme-as em rascunho na tela de Escala."
     )
     const entendi = screen.getByRole("button", { name: "Entendi" })
-    expect(entendi).toHaveFocus()
+    await waitFor(() => expect(entendi).toHaveFocus())
     expect(within(dialog).getAllByRole("button").filter((b) => b.tagName === "BUTTON")).toHaveLength(1)
   })
 
@@ -112,7 +112,7 @@ describe("LegacyPublishedNotice (removido na Task 7b)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Abrir" }))
     const dialog = await screen.findByRole("alertdialog", { name: "Missas publicadas" })
     expect(dialog).toHaveAccessibleDescription(/lembretes automáticos param/)
-    expect(screen.getByRole("button", { name: "Manter somente leitura" })).toHaveFocus()
+    await waitFor(() => expect(screen.getByRole("button", { name: "Manter somente leitura" })).toHaveFocus())
   })
 
   it("Escape escolhe a opção segura, nunca incluir", async () => {
