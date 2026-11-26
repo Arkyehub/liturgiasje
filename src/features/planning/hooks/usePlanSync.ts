@@ -103,6 +103,10 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
   const pumpingRef = useRef(false)
   const pollingRef = useRef(false)
   const genRef = useRef(0)
+  /** Época da fila de gravação: qualquer troca de reserva/alvo a invalida (sendJob e pump param). */
+  const epochRef = useRef(0)
+  /** Tentativa de gravação em rede neste momento (para o release esperar o resultado). */
+  const activeRef = useRef<Promise<number> | null>(null)
   const timersRef = useRef(new Set<ReturnType<typeof setTimeout>>())
 
   const setMode = useCallback((m: SyncMode) => {
@@ -127,20 +131,66 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
     []
   )
 
+  /** Invalida a fila: descarta pendentes, para esperas de repetição e impede qualquer gravação antiga. */
+  const killQueue = useCallback(() => {
+    epochRef.current++
+    pumpingRef.current = false
+    pendingRef.current = null
+    inflightRef.current = null
+    failedRef.current = false
+    timersRef.current.forEach(clearTimeout)
+    timersRef.current.clear()
+  }, [])
+
+  /**
+   * Libera a reserva. release() e o desmonte fazem UMA tentativa de melhor esforço de enviar o estado
+   * mais recente ainda não aplicado (sem repetições nem espera; erros engolidos) e só então chamam
+   * ReleasePlan. Depois disso a fila está morta e save() é ignorado.
+   */
   const releaseNow = useCallback(() => {
     if (!holdingRef.current) return
     holdingRef.current = false
     const planId = planRef.current?.id
     if (!planId) return
-    try {
-      void Promise.resolve(makeReleasePlan().execute(planId, sessionRef.current)).catch(() => {})
-    } catch {
-      // melhor esforço
-    }
-  }, [])
+    const session = sessionRef.current
+    const pend = pendingRef.current
+    const inflight = inflightRef.current
+    const active = activeRef.current
+    const revision0 = revisionRef.current
+    killQueue()
+    void (async () => {
+      try {
+        let revision = revision0
+        let inflightApplied = false
+        if (active) {
+          try {
+            revision = await active
+            inflightApplied = true
+          } catch {
+            // a tentativa em rede falhou: o estado volta a ser candidato
+          }
+        }
+        const job = pend ?? (inflightApplied ? null : inflight)
+        if (job) {
+          try {
+            await makeSavePlan().execute(planId, session, job.requestId, revision, job.state)
+          } catch {
+            // melhor esforço
+          }
+        }
+      } finally {
+        try {
+          await makeReleasePlan().execute(planId, session)
+        } catch {
+          // melhor esforço
+        }
+      }
+    })()
+  }, [killQueue])
 
   const applyOpen = useCallback(
     (result: PlanOpenResult) => {
+      killQueue()
       revisionRef.current = result.plan.revision
       setPlan(result.plan)
       setHolderLastSeen(result.holderLastSeen)
@@ -155,7 +205,7 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
       }
       setMode(result.mode)
     },
-    [setMode, setPlan]
+    [killQueue, setMode, setPlan]
   )
 
   /** Recarrega o documento depois de perder a reserva/conflito (melhor esforço). */
@@ -178,9 +228,7 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
     (gen: number, releaseReservation: boolean) => {
       if (modeRef.current !== "edit") return
       const lost = (inflightRef.current?.count ?? 0) + (pendingRef.current?.count ?? 0)
-      inflightRef.current = null
-      pendingRef.current = null
-      failedRef.current = false
+      killQueue()
       setLostChanges(lost)
       setStatus("idle")
       setMode("readonly")
@@ -189,7 +237,7 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
       else holdingRef.current = false
       if (planId) void reloadPlan(gen, planId)
     },
-    [releaseNow, reloadPlan, setMode]
+    [killQueue, releaseNow, reloadPlan, setMode]
   )
 
   const handleWriteError = useCallback(
@@ -202,16 +250,14 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
           dropToReadonly(gen, true)
           return "stop"
         case "plan_expired":
-          inflightRef.current = null
-          pendingRef.current = null
+          killQueue()
           holdingRef.current = false
           setError(planErrorMessage(e))
           setStatus("idle")
           setMode("error")
           return "stop"
         case "plan_concluded": {
-          inflightRef.current = null
-          pendingRef.current = null
+          killQueue()
           holdingRef.current = false
           const planId = planRef.current?.id
           setStatus("idle")
@@ -227,25 +273,27 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
           return "failed"
       }
     },
-    [dropToReadonly, reloadPlan, setMode]
+    [dropToReadonly, killQueue, reloadPlan, setMode]
   )
 
   /** Envia o job (com repetições, mesmo request_id). Retorna true se foi aplicado. */
   const sendJob = useCallback(
-    async (gen: number, job: Job): Promise<boolean> => {
+    async (epoch: number, job: Job): Promise<boolean> => {
       const save = makeSavePlan()
       for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
-        if (gen !== genRef.current || modeRef.current !== "edit") return false
+        if (epoch !== epochRef.current || modeRef.current !== "edit" || !holdingRef.current) return false
         const planId = planRef.current?.id
         if (!planId) return false
+        const call = save.execute(planId, sessionRef.current, job.requestId, revisionRef.current, job.state)
+        activeRef.current = call
         try {
-          const revision = await save.execute(planId, sessionRef.current, job.requestId, revisionRef.current, job.state)
-          if (gen !== genRef.current || modeRef.current !== "edit") return false
+          const revision = await call
+          if (epoch !== epochRef.current || modeRef.current !== "edit") return false
           revisionRef.current = revision
           return true
         } catch (e) {
-          if (gen !== genRef.current || modeRef.current !== "edit") return false
-          const verdict = handleWriteError(gen, e)
+          if (epoch !== epochRef.current || modeRef.current !== "edit") return false
+          const verdict = handleWriteError(genRef.current, e)
           if (verdict === "stop") return false
           if (verdict === "retry" && attempt < RETRY_DELAYS_MS.length) {
             await sleep(RETRY_DELAYS_MS[attempt])
@@ -254,6 +302,8 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
           failedRef.current = true
           setStatus("failed")
           return false
+        } finally {
+          if (activeRef.current === call) activeRef.current = null
         }
       }
       return false
@@ -264,10 +314,10 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
   const pump = useCallback(async () => {
     if (pumpingRef.current) return
     pumpingRef.current = true
-    const gen = genRef.current
+    const epoch = epochRef.current
     let drained = false
     try {
-      while (gen === genRef.current && modeRef.current === "edit" && !failedRef.current) {
+      while (epoch === epochRef.current && modeRef.current === "edit" && !failedRef.current) {
         let job = inflightRef.current
         if (!job) {
           job = pendingRef.current
@@ -278,14 +328,14 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
           pendingRef.current = null
           inflightRef.current = job
         }
-        const ok = await sendJob(gen, job)
+        const ok = await sendJob(epoch, job)
         if (!ok) break
-        if (gen === genRef.current) inflightRef.current = null
+        if (epoch === epochRef.current) inflightRef.current = null
       }
     } finally {
-      if (gen === genRef.current) pumpingRef.current = false
+      if (epoch === epochRef.current) pumpingRef.current = false
     }
-    if (drained && gen === genRef.current) setStatus("saved")
+    if (drained && epoch === epochRef.current) setStatus("saved")
   }, [sendJob])
 
   const save = useCallback(
@@ -338,10 +388,7 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
     sessionRef.current = readSessionId()
     setSessionId(sessionRef.current)
     holdingRef.current = false
-    failedRef.current = false
-    pendingRef.current = null
-    inflightRef.current = null
-    pumpingRef.current = false
+    killQueue()
     pollingRef.current = false
     planRef.current = null
     revisionRef.current = 0
@@ -380,10 +427,11 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
     return () => {
       generation.current++
       releaseNow()
+      killQueue()
       timers.forEach(clearTimeout)
       timers.clear()
     }
-  }, [targetKey, applyOpen, releaseNow, setMode, setPlan])
+  }, [targetKey, applyOpen, killQueue, releaseNow, setMode, setPlan])
 
   // Heartbeat: só em edit; também ao voltar a ficar visível.
   useEffect(() => {
