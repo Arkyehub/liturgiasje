@@ -9,7 +9,7 @@ import { prefersMass } from "../lib/slotPreference"
 interface ReaderPickerProps {
   mass: PlanMass
   slotIndex: number
-  /** Só leitores elegíveis (ativos e com conta): arquivados/sem conta nunca chegam aqui. */
+  /** Só leitores elegíveis (ativos, com ou sem conta vinculada): arquivados nunca chegam aqui. */
   readers: PlanReader[]
   unavailable: Record<string, string[]>
   /** Vagas de cada leitor no plano do mês (para "menos escalados primeiro"). */

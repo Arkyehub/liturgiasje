@@ -11,7 +11,7 @@ interface SuggestionListProps {
   masses: PlanMass[]
   /** Elegíveis: os únicos oferecidos na troca manual. */
   readers: PlanReader[]
-  /** Nomes de todos os perfis, para vagas já gravadas com leitor arquivado/sem conta. */
+  /** Nomes de todos os perfis, para vagas já gravadas com leitor arquivado. */
   readerNames: Record<string, string>
   stats: Record<string, ReaderStats>
   unavailable: Record<string, string[]>

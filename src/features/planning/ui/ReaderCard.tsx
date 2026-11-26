@@ -11,7 +11,7 @@ import { OutsidePreferenceIcon } from "./SuggestionRow"
 interface ReaderCardProps {
   readerId: string
   name: string
-  /** Ausente quando o leitor da vaga já não é elegível (arquivado/sem conta). */
+  /** Ausente quando o leitor da vaga já não é elegível (arquivado). */
   reader?: PlanReader
   stats?: ReaderStats
   masses: PlanMass[]

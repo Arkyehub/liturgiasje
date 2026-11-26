@@ -15,7 +15,7 @@
 - Ler `node_modules/next/dist/docs/` antes de criar a rota ou mexer em convenções do Next 16 (`AGENTS.md`).
 - **Sem mudança de banco**: nenhuma tabela, coluna, migration ou DDL. Só leituras novas e os métodos de escrita que já existem.
 - Códigos de função: `C`, `1L`, `2L`, `L`, `P` (valores de `schedule_slots.role`), sempre **abreviados** na lista.
-- Elegível = perfil **não arquivado** (`archivedAt` vazio) e **com conta vinculada** (`authUserId` preenchido).
+- Elegível = perfil **ativo (não arquivado**, `archivedAt` vazio), **com ou sem conta vinculada** (decisão do usuário em 26/11/2026).
 - Preferências: `preferences.day_preferences` via `preferredTimesForDate` (`src/features/profile/lib/massPreferences.ts`); Domingo=`"6"`, Terça=`"2"`, Sexta=`"5"`; sábado não tem preferência.
 - Missas padrão: Terça e Sexta 19:00 → `C`+`L`; Domingo 07:00, 09:00, 11:00, 19:00 → `C`,`1L`,`2L`,`P`.
 - Média mensal = leituras servidas (escaladas cumpridas + trocas assumidas; vagas passadas não contam) ÷ meses da janela de **3 meses** anteriores ao mês planejado (ou desde a entrada do leitor, se mais novo); novato sem histórico entra na média do grupo; todo mês conta. Afinidade de função: **12 meses**.
@@ -30,7 +30,7 @@
 - **Missa de sábado** (sem chave de preferência): sem ⚠️ e sem pontuação de preferência (Task 4).
 - **Mês sem missas ou sem leitores elegíveis**: lâmpada não quebra, mostra aviso claro, nada é gravado (Tasks 4 e 10).
 - **Conflito de edição** (`schedule_conflict`) ou falha depois de despublicar missas: mensagem amigável, estado do planejamento preservado, nada perdido (Task 11).
-- **Leitor arquivado/desvinculado já escalado numa vaga existente**: o nome continua visível e travado, mas não aparece como opção na troca manual nem é sugerido (Task 10).
+- **Leitor arquivado já escalado numa vaga existente**: o nome continua visível e travado, mas não aparece como opção na troca manual nem é sugerido (Task 10).
 
 ---
 
@@ -75,7 +75,7 @@ Modificar: `src/domain/models/Schedule.ts`, `src/domain/repositories/ScheduleRep
   e em `defaultMasses.ts`: `export function buildDefaultMasses(month: Date, existing: { date: string; time: string }[]): PlanMass[]`
 
 - [ ] **Step 1: Write the failing tests**
-  - `types.test.ts`: `roleGroup("1L")`, `roleGroup("2L")`, `roleGroup("L")` → `"R"`; `roleGroup("C")` → `"C"`; `roleGroup("P")` → `"P"`; `roleGroup("X")` → `null`. `eligibleReaders` com 4 perfis (ativo com `authUserId`, arquivado, sem `authUserId`, admin ativo com `authUserId`) devolve só o ativo e o admin ativo, com `dayPreferences` vindo de `preferences.day_preferences` (ausente → `{}`).
+  - `types.test.ts`: `roleGroup("1L")`, `roleGroup("2L")`, `roleGroup("L")` → `"R"`; `roleGroup("C")` → `"C"`; `roleGroup("P")` → `"P"`; `roleGroup("X")` → `null`. `eligibleReaders` com 4 perfis (ativo com `authUserId`, arquivado, ativo sem `authUserId`, admin ativo com `authUserId`) devolve o ativo, o ativo sem conta e o admin ativo (não o arquivado), com `dayPreferences` vindo de `preferences.day_preferences` (ausente → `{}`).
   - `defaultMasses.test.ts` (Dezembro/2026): `buildDefaultMasses(new Date(2026, 11, 1), [])` devolve 25 missas e 82 vagas; terças em 01, 08, 15, 22, 29 e sextas em 04, 11, 18, 25 às `19:00` com roles `["C","L"]`; domingos 06, 13, 20, 27 às `07:00`,`09:00`,`11:00`,`19:00` com `["C","1L","2L","P"]`; todas com `wasPublished=false`, `readOnly=false`, vagas `profileId: ""`, `locked: false`, `key` únicas. Com `existing=[{date:"2026-12-06",time:"07:00"}]` devolve 24 e nenhuma é 06/12 07:00.
 
 - [ ] **Step 2: Run to verify fail** — `npx jest src/features/planning/lib/types.test.ts src/features/planning/lib/defaultMasses.test.ts` → FAIL (módulos inexistentes).
@@ -266,7 +266,7 @@ Modificar: `src/domain/models/Schedule.ts`, `src/domain/repositories/ScheduleRep
 - Consumes: `suggestSchedule`, `summarizePlan` (Tasks 3–4); `usePlanning` (Task 8).
 - Produces: novas ações em `usePlanning`: `runLamp(): void`, `setSlotReader(massKey: string, slotIndex: number, profileId: string): void` (**trava a vaga**), `toggleLock(massKey: string, slotIndex: number): void`, `phase: "planning" | "suggested"`.
 
-- [ ] **Step 1: Write the failing tests:** lâmpada com missas e leitores preenche vagas e passa a `phase="suggested"`; sem missas, a lâmpada mostra "Crie as missas do mês primeiro" e não faz nada; sem leitores elegíveis, mostra aviso e as vagas ficam vazias; linha por função (`C`, `1L`… + nome); ⚠️ com `aria-label="Fora da preferência"`; vaga vazia mostra "sem leitor · escolher"; 🔒 alterna `aria-pressed` e vagas travadas não mudam em "Sugerir de novo"; escolher outro leitor no picker **trava** a vaga; o picker lista só leitores elegíveis (sem arquivados nem sem conta), tratando os indisponíveis como o `ScheduleForm` faz; vaga existente de leitor arquivado continua mostrando o nome, travada; 👁 abre o card com as escalas do leitor no mês (a atual marcada), contagem vs meta, média dos últimos 3 meses, função que mais faz, preferências e datas indisponíveis; filtros "Todas", "Com aviso (N)", "Travadas (N)"; o resumo do topo mostra "N de M vagas preenchidas · N fora da preferência · N sem leitor".
+- [ ] **Step 1: Write the failing tests:** lâmpada com missas e leitores preenche vagas e passa a `phase="suggested"`; sem missas, a lâmpada mostra "Crie as missas do mês primeiro" e não faz nada; sem leitores elegíveis, mostra aviso e as vagas ficam vazias; linha por função (`C`, `1L`… + nome); ⚠️ com `aria-label="Fora da preferência"`; vaga vazia mostra "sem leitor · escolher"; 🔒 alterna `aria-pressed` e vagas travadas não mudam em "Sugerir de novo"; escolher outro leitor no picker **trava** a vaga; o picker lista só leitores elegíveis (sem arquivados), tratando os indisponíveis como o `ScheduleForm` faz; vaga existente de leitor arquivado continua mostrando o nome, travada; 👁 abre o card com as escalas do leitor no mês (a atual marcada), contagem vs meta, média dos últimos 3 meses, função que mais faz, preferências e datas indisponíveis; filtros "Todas", "Com aviso (N)", "Travadas (N)"; o resumo do topo mostra "N de M vagas preenchidas · N fora da preferência · N sem leitor".
 - [ ] **Step 2: Run to verify fail** — `npx jest src/features/planning` → FAIL nos novos casos.
 - [ ] **Step 3: Implement** as ações do hook e os componentes (linhas do caderno: data na margem só na 1ª linha do dia, horário só na 1ª linha da missa; 👁 e 🔒 com área de toque ≥44px).
 - [ ] **Step 4: Run to verify pass** → PASS.

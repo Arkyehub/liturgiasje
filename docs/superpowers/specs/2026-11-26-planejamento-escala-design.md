@@ -24,7 +24,7 @@ Por quê: a escala boa é equilibrada (ninguém sobrecarregado, ninguém esqueci
 
 **Anti-objetivos (seria fracasso mesmo funcionando)**
 - A lâmpada **sobrescrever** ajuste manual, trava ou escala já publicada.
-- Escalar leitor indisponível, arquivado ou **sem conta vinculada**.
+- Escalar leitor indisponível ou arquivado. (Leitor ativo **sem conta vinculada** pode ser escalado: decisão do usuário em 26/11/2026.)
 - Sobrecarregar leitores engajados ou "compensar" novatos com enxurrada de escalas.
 - Alterar o banco por causa de um clique na lâmpada (sugestão só é gravada em "Salvar como rascunho").
 
@@ -52,6 +52,7 @@ Escolha do usuário: **A**. O módulo deve ser puro e independente de React para
 Visual: **caderno** — linhas pautadas, margem esquerda com linha vermelha fina, **data (número + dia da semana) em destaque na margem**, sem cartões. Funções abreviadas (C, 1L, 2L, L, P).
 
 ### 5.1 Visão do mês (antes da lâmpada)
+- O mês é escolhido primeiro: ao entrar, a página pergunta "Qual mês você vai planejar?" (atual, próximo — sugerido — e o seguinte) e só então lê os dados e verifica missas já publicadas; as setas ‹ › do cabeçalho continuam trocando de mês.
 - Cabeçalho: voltar, seletor de mês (‹ Dezembro 2026 ›), resumo ("25 missas · 82 vagas · 22 leitores aptos"), links **"Criar Missas Padrões no mês"** e **"+ Missa"**.
 - Lista: uma linha por missa: `data/dia · horário · funções abreviadas` (ex.: `19:00  C · L`; `09:00  C · 1L · 2L · P`) e descrição especial em âmbar abaixo quando houver. Data aparece só na 1ª missa do dia. Tocar na linha edita a missa.
 - Rodapé fixo: "N vagas sem leitor" + botão **lâmpada** (64px, âmbar).
@@ -84,7 +85,7 @@ Gera **texto** (não link — a sugestão só existe no aparelho de quem planeja
 ## 6. Regras da lâmpada
 
 **Elegibilidade (regras duras)**
-1. Leitor ativo: **não arquivado** e **com conta vinculada** (`authUserId` presente). Sem conta ⇒ nunca sugerido, nem aparece na troca manual desta página.
+1. Leitor ativo: **não arquivado** (`archivedAt` vazio), **com ou sem conta vinculada** — nem todos precisam usar o app, mas os coordenadores precisam escalá-los (decisão do usuário em 26/11/2026). Arquivado ⇒ nunca sugerido, nem aparece na troca manual desta página.
 2. **Indisponibilidade** (`unavailable_dates`) é regra fixa: nunca na data marcada.
 3. Um leitor não ocupa duas funções na **mesma missa**.
 4. Vagas **travadas** e missas já com leitor (inclusive de escala existente/publicada) não são alteradas.
@@ -118,11 +119,11 @@ O Planejamento é **outra visão do mesmo mês**, não um rascunho paralelo:
 
 ## 8. Dados usados (todos já existem)
 
-`profiles` (arquivado, conta vinculada, `preferences.day_preferences`), `schedule`/`schedule_slots` (histórico, `original_profile_id` ⇒ troca assumida/passada, confirmações), `unavailable_dates`. Nenhuma tabela/coluna nova. Os repositórios existentes (ex.: listagem de perfis, `makeGetProfilesUsage`, `makeListUnavailableByDate`, `makeListSchedulesForMonth`) cobrem parte; o builder deve confirmar se o histórico de 12 meses e as trocas por leitor exigem um novo método de **leitura** (sem alterar schema).
+`profiles` (arquivado, `preferences.day_preferences`; a conta vinculada não é exigida), `schedule`/`schedule_slots` (histórico, `original_profile_id` ⇒ troca assumida/passada, confirmações), `unavailable_dates`. Nenhuma tabela/coluna nova. Os repositórios existentes (ex.: listagem de perfis, `makeGetProfilesUsage`, `makeListUnavailableByDate`, `makeListSchedulesForMonth`) cobrem parte; o builder deve confirmar se o histórico de 12 meses e as trocas por leitor exigem um novo método de **leitura** (sem alterar schema).
 
 ## 9. Decisões já tomadas (resumo)
 
-Preferência = prioridade (⚠️ + editável); sem conta ⇒ não escalar; mesmo mês (sem rascunho paralelo); trava automática ao editar à mão; "Sugerir de novo" preserva travados; conta quem serviu de fato (passar a vaga não conta); média de 3 meses, novato entra na média, todo mês conta; função por 12 meses; compartilhar prévia por texto no WhatsApp; botão "Criar Missas Padrões no mês"; link "Detalhar"; lista estilo caderno com funções abreviadas; algoritmo no app (abordagem A).
+Preferência = prioridade (⚠️ + editável); leitor ativo é elegível com ou sem conta vinculada (arquivado não); mesmo mês (sem rascunho paralelo); trava automática ao editar à mão; "Sugerir de novo" preserva travados; conta quem serviu de fato (passar a vaga não conta); média de 3 meses, novato entra na média, todo mês conta; função por 12 meses; compartilhar prévia por texto no WhatsApp; botão "Criar Missas Padrões no mês"; link "Detalhar"; lista estilo caderno com funções abreviadas; algoritmo no app (abordagem A).
 
 ## 10. Deixado ao builder
 

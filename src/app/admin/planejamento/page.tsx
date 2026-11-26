@@ -9,6 +9,7 @@ import { useAuth } from "@/shared/hooks/useAuth"
 import { usePlanning } from "@/features/planning/hooks/usePlanning"
 import { NotebookList } from "@/features/planning/ui/NotebookList"
 import { PublishedNotice } from "@/features/planning/ui/PublishedNotice"
+import { MonthChooser } from "@/features/planning/ui/MonthChooser"
 import { PlanningHeader } from "@/features/planning/ui/PlanningHeader"
 import { PlanningFooter } from "@/features/planning/ui/PlanningFooter"
 import { otherMassTimes } from "@/features/planning/lib/massConflicts"
@@ -27,17 +28,21 @@ function Loading({ text }: { text: string }) {
   )
 }
 
+// Só alimenta usePlanningSave enquanto nenhum mês foi escolhido (ele fica inativo: loading verdadeiro).
+const IDLE_MONTH = new Date(0)
+
 type Confirm = { kind: "unpublish" } | { kind: "month"; delta: number }
 
 function PlanningScreen() {
-  const [month, setMonth] = useState(() => startOfMonth(new Date()))
+  // Nenhum mês até o admin escolher: sem mês não há leitura nem aviso de missas publicadas.
+  const [month, setMonth] = useState<Date | null>(null)
   const planning = usePlanning(month)
   const save = usePlanningSave({
-    month,
+    month: month ?? IDLE_MONTH,
     masses: planning.masses,
     removedMasses: planning.removedMasses,
     readerNames: planning.readerNames,
-    loading: planning.loading,
+    loading: planning.loading || month === null,
     error: planning.error,
     reload: planning.retry,
   })
@@ -64,6 +69,18 @@ function PlanningScreen() {
   const [sheet, setSheet] = useState<"new" | string | null>(null)
   const editing = sheet && sheet !== "new" ? planning.masses.find((m) => m.key === sheet && !m.readOnly) : undefined
   const sheetOpen = sheet === "new" || !!editing
+
+  // Antes de escolher o mês só aparece a escolha: sem cabeçalho de mês, lista, rodapé nem avisos.
+  if (!month) {
+    return (
+      <div className="min-h-screen bg-white font-sans text-stone-900">
+        <main className="mx-auto max-w-md">
+          <MonthChooser current={startOfMonth(new Date())} onChoose={setMonth} />
+        </main>
+      </div>
+    )
+  }
+
   const monthName = format(month, "MMMM", { locale: ptBR })
   const monthLabel = `${monthName.charAt(0).toUpperCase()}${monthName.slice(1)} ${format(month, "yyyy")}`
 
@@ -71,7 +88,7 @@ function PlanningScreen() {
   const changeMonth = (delta: number) => {
     if (save.saving) return
     if (save.dirty) setConfirm({ kind: "month", delta })
-    else setMonth((m) => addMonths(m, delta))
+    else setMonth((m) => (m ? addMonths(m, delta) : m))
   }
   // Missas publicadas incluídas: os leitores deixam de vê-las, então confirma antes de gravar.
   const requestSave = () => {
@@ -206,7 +223,7 @@ function PlanningScreen() {
             const { delta } = confirm
             setConfirm(null)
             setDetailOpen(false)
-            setMonth((m) => addMonths(m, delta))
+            setMonth((m) => (m ? addMonths(m, delta) : m))
           }}
           onCancel={() => setConfirm(null)}
         />
