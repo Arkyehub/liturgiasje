@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { useState } from "react"
 
@@ -39,13 +39,14 @@ it("move o foco para a ação segura (Cancelar) ao abrir", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Abrir" }))
   const dialog = await screen.findByRole("alertdialog", { name: "Salvar como rascunho?" })
   expect(dialog).toHaveAccessibleDescription("Missas publicadas voltarão a rascunho.")
-  expect(screen.getByRole("button", { name: "Cancelar" })).toHaveFocus()
+  await waitFor(() => expect(screen.getByRole("button", { name: "Cancelar" })).toHaveFocus())
 })
 
 it("mantém o foco preso no diálogo ao tabular", async () => {
   setup()
   await userEvent.click(screen.getByRole("button", { name: "Abrir" }))
   await screen.findByRole("alertdialog")
+  await waitFor(() => expect(screen.getByRole("button", { name: "Cancelar" })).toHaveFocus())
   const opener = screen.getByRole("button", { name: "Abrir", hidden: true })
   // A página fica fora da árvore de acessibilidade (inerte) enquanto o diálogo está aberto.
   expect(screen.queryByRole("button", { name: "Abrir" })).not.toBeInTheDocument()
@@ -65,7 +66,7 @@ it("Escape cancela e não confirma; o foco volta ao botão que abriu", async () 
   expect(onCancel).toHaveBeenCalledTimes(1)
   expect(onConfirm).not.toHaveBeenCalled()
   expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "Abrir" })).toHaveFocus()
+  await waitFor(() => expect(screen.getByRole("button", { name: "Abrir" })).toHaveFocus())
 })
 
 it("os botões chamam seus callbacks", async () => {

@@ -65,7 +65,7 @@ describe("PublishedNotice (informativo)", () => {
     await screen.findByRole("alertdialog")
     await userEvent.keyboard("{Escape}")
     expect(onAcknowledge).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole("button", { name: "Abrir" })).toHaveFocus()
+    await waitFor(() => expect(screen.getByRole("button", { name: "Abrir" })).toHaveFocus())
   })
 
   it("clicar fora não fecha", async () => {
