@@ -17,6 +17,8 @@ jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn(), info
 
 const DEC = new Date(2026, 11, 1)
 
+beforeEach(() => jest.clearAllMocks())
+
 const profile = (id: string, extra: Partial<Profile> = {}): Profile => ({
   id,
   fullName: `Leitor ${id}`,
@@ -78,6 +80,42 @@ test("loads the month as admin, 12 months of history before it and the month's u
   expect(listHistory).toHaveBeenCalledWith("2025-12-01", "2026-11-30")
   expect(listUnavailable).toHaveBeenCalledWith("2026-12-01", "2026-12-31")
   expect(result.current.unavailable).toEqual({ "2026-12-06": ["b"] })
+})
+
+test("with month=null the hook is idle: no reads, nothing loading, every action is a no-op", async () => {
+  setup([])
+  const { result } = renderHook(() => usePlanning(null))
+  await act(async () => {})
+  expect(makeListSchedulesForMonth).not.toHaveBeenCalled()
+  expect(makeListProfiles).not.toHaveBeenCalled()
+  expect(makeListSlotHistory).not.toHaveBeenCalled()
+  expect(makeListUnavailableForRange).not.toHaveBeenCalled()
+  expect(result.current).toMatchObject({ loading: false, error: false, publishedCount: 0, phase: "planning", masses: [], readers: [] })
+  act(() => {
+    result.current.createDefaults()
+    result.current.addMass({ key: "k", date: "2026-12-06", time: "07:00", description: "", wasPublished: false, readOnly: false, slots: [] })
+    result.current.runLamp()
+    result.current.retry()
+    result.current.acceptPublished()
+  })
+  await act(async () => {})
+  expect(result.current.masses).toEqual([])
+  expect(result.current.publishedDecision).toBe("pending")
+  expect(result.current.phase).toBe("planning")
+  expect(makeListSchedulesForMonth).not.toHaveBeenCalled()
+})
+
+test("going from idle to a chosen month loads that month exactly like before", async () => {
+  setup([])
+  const hook = renderHook(({ m }: { m: Date | null }) => usePlanning(m), { initialProps: { m: null as Date | null } })
+  await act(async () => {})
+  expect(listMonth).not.toHaveBeenCalled()
+  hook.rerender({ m: DEC })
+  expect(hook.result.current.loading).toBe(true)
+  await waitFor(() => expect(hook.result.current.loading).toBe(false))
+  expect(listMonth).toHaveBeenCalledWith(DEC, true)
+  expect(listHistory).toHaveBeenCalledWith("2025-12-01", "2026-11-30")
+  expect(listUnavailable).toHaveBeenCalledWith("2026-12-01", "2026-12-31")
 })
 
 test("only active readers with a linked account are eligible, with stats for each", async () => {

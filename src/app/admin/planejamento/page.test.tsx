@@ -74,18 +74,97 @@ beforeEach(() => {
 })
 afterEach(() => jest.useRealTimers())
 
+// A página abre sem mês: o teste escolhe o mês (por padrão o atual, dezembro de 2026) antes de qualquer leitura.
+async function openPage(optionName: RegExp = /^Dezembro 2026/) {
+  const view = render(<PlanejamentoPage />)
+  await userEvent.click(await screen.findByRole("button", { name: optionName }))
+  return view
+}
+
 test("a non-admin is sent back to the home page", async () => {
   asReader()
   setup()
   render(<PlanejamentoPage />)
   await waitFor(() => expect(push).toHaveBeenCalledWith("/"))
   expect(makeListSchedulesForMonth).not.toHaveBeenCalled()
+  expect(makeListProfiles).not.toHaveBeenCalled()
+  expect(makeListSlotHistory).not.toHaveBeenCalled()
+  expect(makeListUnavailableForRange).not.toHaveBeenCalled()
+  expect(screen.queryByText("Qual mês você vai planejar?")).not.toBeInTheDocument()
+})
+
+test("on entry no month is selected and nothing is read: the page asks which month to plan", async () => {
+  asAdmin()
+  setup([publishedMass("m1", "07:00:00")])
+  render(<PlanejamentoPage />)
+  expect(await screen.findByRole("heading", { name: "Qual mês você vai planejar?" })).toBeInTheDocument()
+  expect(makeListSchedulesForMonth).not.toHaveBeenCalled()
+  expect(makeListProfiles).not.toHaveBeenCalled()
+  expect(makeListSlotHistory).not.toHaveBeenCalled()
+  expect(makeListUnavailableForRange).not.toHaveBeenCalled()
+  // sem aviso de publicadas, sem cabeçalho de mês, sem rodapé/lâmpada, sem lista
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Mês anterior" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Sugerir escala" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("list", { name: "Missas do mês" })).not.toBeInTheDocument()
+  expect(push).not.toHaveBeenCalled()
+})
+
+test("the chooser offers the current month, the next one marked 'Sugerido' and the one after", async () => {
+  asAdmin()
+  setup()
+  render(<PlanejamentoPage />)
+  const current = await screen.findByRole("button", { name: /^Dezembro 2026/ })
+  const next = screen.getByRole("button", { name: /^Janeiro 2027/ })
+  const after = screen.getByRole("button", { name: /^Fevereiro 2027/ })
+  expect(screen.getAllByRole("button")).toHaveLength(3)
+  expect(within(next).getByText("Sugerido")).toBeInTheDocument()
+  expect(within(current).queryByText("Sugerido")).not.toBeInTheDocument()
+  expect(within(after).queryByText("Sugerido")).not.toBeInTheDocument()
+  // toque grande (>= 44px): classe min-h-14 = 56px
+  ;[current, next, after].forEach((b) => expect(b.className).toMatch(/min-h-1[1-9]|min-h-[2-9]\d/))
+})
+
+test("choosing the next month reads with that month's ranges and then shows the published notice", async () => {
+  asAdmin()
+  const listMonth = jest.fn().mockResolvedValue([{ ...publishedMass("m1", "07:00:00"), date: "2027-01-03", monthReference: "2027-01" }])
+  const listHistory = jest.fn().mockResolvedValue([])
+  const listUnavailable = jest.fn().mockResolvedValue({})
+  setup()
+  ;(makeListSchedulesForMonth as jest.Mock).mockReturnValue({ execute: listMonth })
+  ;(makeListSlotHistory as jest.Mock).mockReturnValue({ execute: listHistory })
+  ;(makeListUnavailableForRange as jest.Mock).mockReturnValue({ execute: listUnavailable })
+  render(<PlanejamentoPage />)
+  await userEvent.click(await screen.findByRole("button", { name: /^Janeiro 2027/ }))
+
+  const notice = await screen.findByRole("alertdialog")
+  expect(within(notice).getByText(/Existe 1 missa publicada em janeiro/)).toBeInTheDocument()
+  expect(listMonth).toHaveBeenCalledTimes(1)
+  expect(listMonth).toHaveBeenCalledWith(new Date(2027, 0, 1), true)
+  expect(listHistory).toHaveBeenCalledWith("2026-01-01", "2026-12-31")
+  expect(listUnavailable).toHaveBeenCalledWith("2027-01-01", "2027-01-31")
+  expect(screen.getByText("Janeiro 2027")).toBeInTheDocument()
+  expect(screen.queryByText("Qual mês você vai planejar?")).not.toBeInTheDocument()
+})
+
+test("after choosing a month the header arrows still change it", async () => {
+  asAdmin()
+  setup()
+  await openPage(/^Janeiro 2027/)
+  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
+  expect(screen.getByText("Janeiro 2027")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Próximo mês" }))
+  expect(screen.getByText("Fevereiro 2027")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Mês anterior" }))
+  await userEvent.click(screen.getByRole("button", { name: "Mês anterior" }))
+  expect(screen.getByText("Dezembro 2026")).toBeInTheDocument()
+  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
 })
 
 test("the admin sees the title, the month and the summary", async () => {
   asAdmin()
   setup()
-  render(<PlanejamentoPage />)
+  await openPage()
   expect(await screen.findByRole("heading", { name: "Planejamento de Escala" })).toBeInTheDocument()
   expect(screen.getByText("Dezembro 2026")).toBeInTheDocument()
   expect(await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")).toBeInTheDocument()
@@ -95,7 +174,7 @@ test("the admin sees the title, the month and the summary", async () => {
 test("creating the default masses on an empty December shows 25 masses / 82 slots in notebook lines", async () => {
   asAdmin()
   setup()
-  render(<PlanejamentoPage />)
+  await openPage()
   await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
 
   await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
@@ -120,7 +199,7 @@ test("creating the default masses on an empty December shows 25 masses / 82 slot
 test("with 2 published masses the notice offers to include them; including makes them editable", async () => {
   asAdmin()
   setup([publishedMass("m1", "07:00:00"), publishedMass("m2", "09:00:00")])
-  render(<PlanejamentoPage />)
+  await openPage()
   const notice = await screen.findByRole("alertdialog")
   expect(within(notice).getByText(/Existem 2 missas publicadas em dezembro/)).toBeInTheDocument()
   expect(within(notice).getByText(/voltarão a rascunho/)).toBeInTheDocument()
@@ -136,7 +215,7 @@ test("with 2 published masses the notice offers to include them; including makes
 test("keeping published masses leaves them read-only with a 'publicada' mark", async () => {
   asAdmin()
   setup([publishedMass("m1", "07:00:00"), publishedMass("m2", "09:00:00")])
-  render(<PlanejamentoPage />)
+  await openPage()
   const notice = await screen.findByRole("alertdialog")
   await userEvent.click(within(notice).getByRole("button", { name: "Manter somente leitura" }))
   expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
@@ -152,7 +231,7 @@ test("a failed month read shows an error with 'Tentar novamente' instead of an e
   const execute = jest.fn().mockRejectedValueOnce(new Error("timeout")).mockResolvedValue([publishedMass("m1", "07:00:00")])
   ;(makeListSchedulesForMonth as jest.Mock).mockReturnValue({ execute })
   jest.spyOn(console, "error").mockImplementation(() => {})
-  render(<PlanejamentoPage />)
+  await openPage()
 
   expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível carregar este mês.")
   expect(screen.queryByText(/Nenhuma missa neste mês/)).not.toBeInTheDocument()
@@ -172,7 +251,7 @@ test("the lamp on an empty month asks to create the masses first and keeps the n
   const { toast } = jest.requireMock("sonner") as { toast: Record<string, jest.Mock> }
   asAdmin()
   setup()
-  render(<PlanejamentoPage />)
+  await openPage()
   await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
   await userEvent.click(screen.getByRole("button", { name: "Sugerir escala" }))
   expect(toast.info).toHaveBeenCalledWith("Crie as missas do mês primeiro")
@@ -183,7 +262,7 @@ test("the lamp on an empty month asks to create the masses first and keeps the n
 test("after the lamp the page shows one line per role with the summary; 'Sugerir de novo' keeps a manual lock", async () => {
   asAdmin()
   setup()
-  render(<PlanejamentoPage />)
+  await openPage()
   await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
   await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
   await userEvent.click(screen.getByRole("button", { name: "Sugerir escala" }))
@@ -213,14 +292,14 @@ test("after the lamp the page shows one line per role with the summary; 'Sugerir
 const sonner = () => (jest.requireMock("sonner") as { toast: Record<string, jest.Mock> }).toast
 
 async function suggestDefaults() {
-  render(<PlanejamentoPage />)
+  await openPage()
   await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
   await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
   await userEvent.click(screen.getByRole("button", { name: "Sugerir escala" }))
 }
 
 async function suggestPublished() {
-  render(<PlanejamentoPage />)
+  await openPage()
   const notice = await screen.findByRole("alertdialog")
   await userEvent.click(within(notice).getByRole("button", { name: "Incluir no planejamento" }))
   await userEvent.click(screen.getByRole("button", { name: "Sugerir escala" }))
@@ -336,7 +415,7 @@ test("a failure after unpublishing says the masses stayed as draft and saving ag
 test("changing month with unsaved changes asks before discarding them", async () => {
   asAdmin()
   setup()
-  render(<PlanejamentoPage />)
+  await openPage()
   await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
 
   // sem mudanças: troca direto
@@ -393,7 +472,7 @@ test("while saving, the planning is inert and edits are ignored (no edit is lost
 test("the browser's leave-page prompt is armed only while there are unsaved changes", async () => {
   asAdmin()
   setup()
-  render(<PlanejamentoPage />)
+  await openPage()
   await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
   const leave = () => {
     const event = new Event("beforeunload", { cancelable: true })
@@ -416,7 +495,7 @@ test("the browser's leave-page prompt is armed only while there are unsaved chan
 test("the leave-page listener is removed on unmount", async () => {
   asAdmin()
   setup()
-  const { unmount } = render(<PlanejamentoPage />)
+  const { unmount } = await openPage()
   await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
   await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
   unmount()

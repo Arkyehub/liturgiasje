@@ -104,10 +104,13 @@ function withUniqueKeys(incoming: PlanMass[], existing: PlanMass[]): PlanMass[] 
   })
 }
 
-export function usePlanning(month: Date): UsePlanningResult {
+/**
+ * `month = null` é o estado ocioso (nenhum mês escolhido ainda): não lê nada, não carrega e toda ação é ignorada.
+ */
+export function usePlanning(month: Date | null): UsePlanningResult {
   // Chave estável: o efeito só recarrega quando o mês muda de fato.
-  const monthKey = format(month, "yyyy-MM")
-  const monthStart = useMemo(() => startOfMonth(new Date(`${monthKey}-01T00:00:00`)), [monthKey])
+  const monthKey = month ? format(month, "yyyy-MM") : null
+  const monthStart = useMemo(() => (monthKey ? startOfMonth(new Date(`${monthKey}-01T00:00:00`)) : null), [monthKey])
 
   // Mês cujos dados estão em memória; enquanto difere do mês pedido, está carregando.
   const [loadedKey, setLoadedKey] = useState<string | null>(null)
@@ -122,14 +125,16 @@ export function usePlanning(month: Date): UsePlanningResult {
   // Mês cuja leitura falhou (nulo = sem erro) e contador para "Tentar novamente".
   const [errorKey, setErrorKey] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
-  const error = errorKey === monthKey
-  const loading = !error && loadedKey !== monthKey
-  const ready = !loading && !error
+  const idle = monthKey === null
+  const error = !idle && errorKey === monthKey
+  const loading = !idle && !error && loadedKey !== monthKey
+  const ready = !idle && !loading && !error
   // Gravando: o plano fica congelado. `ready` continua valendo para leitura; `editable` guarda as edições.
   const [busy, setBusy] = useState(false)
   const editable = ready && !busy
 
   useEffect(() => {
+    if (!monthStart || !monthKey) return
     let cancelled = false
     const historyFrom = ymd(startOfMonth(subMonths(monthStart, 12)))
     const historyTo = ymd(endOfMonth(subMonths(monthStart, 1)))
@@ -178,19 +183,20 @@ export function usePlanning(month: Date): UsePlanningResult {
 
   // Também serve de recarga depois de salvar: volta a "carregando" para não editar dados velhos.
   const retry = useCallback(() => {
+    if (idle) return
     setLoadedKey(null)
     setErrorKey(null)
     setAttempt((a) => a + 1)
-  }, [])
+  }, [idle])
 
   // Durante a troca de mês (ou com erro) não exibe missas de outro estado.
   const masses = useMemo(() => (ready ? plan : []), [ready, plan])
-  const stats = useMemo(() => computeReaderStats(readers, history, monthStart), [readers, history, monthStart])
+  const stats = useMemo(() => (monthStart ? computeReaderStats(readers, history, monthStart) : {}), [readers, history, monthStart])
   const summary = useMemo(() => summarizePlan(masses), [masses])
   const publishedCount = useMemo(() => masses.filter((m) => m.wasPublished).length, [masses])
 
   const createDefaults = useCallback(() => {
-    if (!editable) return
+    if (!editable || !monthStart) return
     setPlan((prev) => {
       const defaults = buildDefaultMasses(monthStart, prev.map((m) => ({ date: m.date, time: normalizeTime(m.time) })))
       return [...prev, ...withUniqueKeys(defaults, prev)].sort(byDateTime)
@@ -229,14 +235,16 @@ export function usePlanning(month: Date): UsePlanningResult {
   )
 
   const acceptPublished = useCallback(() => {
+    if (idle) return
     setPlan((prev) => prev.map((m) => (m.wasPublished ? { ...m, readOnly: false } : m)))
     setPublishedDecision("included")
-  }, [])
+  }, [idle])
 
   const declinePublished = useCallback(() => {
+    if (idle) return
     setPlan((prev) => prev.map((m) => (m.wasPublished ? { ...m, readOnly: true } : m)))
     setPublishedDecision("kept")
-  }, [])
+  }, [idle])
 
   const phase: PlanningPhase = ready && suggested ? "suggested" : "planning"
 

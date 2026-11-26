@@ -52,6 +52,7 @@ Escolha do usuário: **A**. O módulo deve ser puro e independente de React para
 Visual: **caderno** — linhas pautadas, margem esquerda com linha vermelha fina, **data (número + dia da semana) em destaque na margem**, sem cartões. Funções abreviadas (C, 1L, 2L, L, P).
 
 ### 5.1 Visão do mês (antes da lâmpada)
+- O mês é escolhido primeiro: ao entrar, a página pergunta "Qual mês você vai planejar?" (atual, próximo — sugerido — e o seguinte) e só então lê os dados e verifica missas já publicadas; as setas ‹ › do cabeçalho continuam trocando de mês.
 - Cabeçalho: voltar, seletor de mês (‹ Dezembro 2026 ›), resumo ("25 missas · 82 vagas · 22 leitores aptos"), links **"Criar Missas Padrões no mês"** e **"+ Missa"**.
 - Lista: uma linha por missa: `data/dia · horário · funções abreviadas` (ex.: `19:00  C · L`; `09:00  C · 1L · 2L · P`) e descrição especial em âmbar abaixo quando houver. Data aparece só na 1ª missa do dia. Tocar na linha edita a missa.
 - Rodapé fixo: "N vagas sem leitor" + botão **lâmpada** (64px, âmbar).
