@@ -85,14 +85,24 @@ test.each([
 
 test.each([
   [{ code: 'PGRST202', message: 'x' }],
-  [{ code: '42883', message: 'x' }],
-  [{ message: 'Could not find the function public.plan_list' }],
-  [{ message: 'function plan_list(text[]) does not exist' }]
+  [{ code: 'PGRST202', message: 'Could not find the function public.plan_open(p_month, p_session) in the schema cache' }],
+  [{ code: '42883', message: 'function public.plan_list(text[]) does not exist' }],
+  [{ message: 'Could not find the function public.plan_list' }]
 ])('missing function %j becomes unavailable', async (cause) => {
   rpc.mockResolvedValue({ data: null, error: cause })
   const error = await repo.list(['2026-12']).catch(e => e)
   expect(error).toBeInstanceOf(PlanError)
   expect(error.code).toBe('unavailable')
+})
+
+test.each([
+  [{ code: '42P01', message: 'relation "schedule_plans" does not exist' }],
+  [{ code: '42703', message: 'column "x" does not exist' }],
+  [{ code: '42883', message: 'operator does not exist: text = uuid' }]
+])('non-function missing object %j becomes unknown', async (cause) => {
+  rpc.mockResolvedValue({ data: null, error: cause })
+  const error = await repo.list(['2026-12']).catch(e => e)
+  expect(error.code).toBe('unknown')
 })
 
 test('unknown errors become unknown', async () => {

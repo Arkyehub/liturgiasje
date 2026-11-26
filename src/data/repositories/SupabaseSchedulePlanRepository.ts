@@ -10,16 +10,16 @@ const KNOWN_CODES: PlanErrorCode[] = [
 function toPlanError(error: unknown): PlanError {
   const source = typeof error === "object" && error !== null ? (error as { code?: unknown; message?: unknown }) : {}
   const message = typeof source.message === "string" ? source.message : ""
+  const known = KNOWN_CODES.find(code => message.includes(code))
+  if (known) return new PlanError(known, error)
   if (
     source.code === "PGRST202" ||
-    source.code === "42883" ||
     message.includes("Could not find the function") ||
-    message.includes("does not exist")
+    /function\s+(public\.)?plan_\w+.*does not exist/.test(message)
   ) {
     return new PlanError("unavailable", error)
   }
-  const code = KNOWN_CODES.find(known => message.includes(known))
-  return new PlanError(code ?? "unknown", error)
+  return new PlanError("unknown", error)
 }
 
 export class SupabaseSchedulePlanRepository implements SchedulePlanRepository {
