@@ -13,7 +13,7 @@ import {
  * Lâmpada: sugestão de escala.
  *
  * Regras duras (nunca quebradas): indisponibilidade na data, um leitor por missa,
- * vagas travadas e missas readOnly intocadas.
+ * vagas travadas e missas readOnly intocadas (mas contam na carga, na meta e no espaçamento).
  *
  * Regras suaves = um custo global (menor é melhor), somado por leitor:
  *   - equilíbrio: W_BALANCE·(carga − meta)²  + W_OVER por vaga acima de ⌈meta⌉
@@ -183,11 +183,12 @@ export function suggestSchedule(input: SuggestInput): PlanMass[] {
 
   const cells: Cell[] = []
   input.masses.forEach((mass, massIdx) => {
-    if (mass.readOnly) return
+    // Missas readOnly entram como vagas fixas: contam na meta, na carga e no espaçamento,
+    // mas nunca são re-sugeridas (o retorno as devolve intactas).
     const weekend = weekendId(mass.date)
     const prefSlot = isPreferenceSlot(mass)
     mass.slots.forEach((slot, slotIdx) => {
-      cells.push({ massIdx, slotIdx, mass, role: slot.role, date: mass.date, weekend, prefSlot, locked: slot.locked })
+      cells.push({ massIdx, slotIdx, mass, role: slot.role, date: mass.date, weekend, prefSlot, locked: slot.locked || mass.readOnly })
     })
   })
 
@@ -206,7 +207,7 @@ export function suggestSchedule(input: SuggestInput): PlanMass[] {
 
   const ctx: Ctx = { input, readerById, target, groupTarget, unavailable, byReader: new Map(), inMass: new Map() }
 
-  // Travadas contam na carga e ocupam o leitor na missa.
+  // Travadas e missas readOnly contam na carga e ocupam o leitor na missa.
   for (const cell of cells) {
     const slot = cell.mass.slots[cell.slotIdx]
     if (cell.locked && slot.profileId) assign(ctx, slot.profileId, cell)

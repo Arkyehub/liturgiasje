@@ -89,9 +89,9 @@ describe("suggestSchedule", () => {
     const out = suggestSchedule(input([m1, readOnlyMass], [reader("A"), reader("B"), reader("C")]))
     expect(out[0].slots[0]).toEqual({ role: "C", profileId: "A", locked: true })
     expect(out[1]).toEqual(readOnlyMass)
-    // A travado conta como ocupado; vaga refeita nunca usa A
+    // A travado conta como ocupado; B já está na missa readOnly e conta na carga ⇒ C
     expect(out[0].slots[1].profileId).not.toBe("A")
-    expect(out[0].slots[1].profileId).toBe("B")
+    expect(out[0].slots[1].profileId).toBe("C")
   })
 
   it("entrada não é mutada e resultado é determinístico", () => {
@@ -233,6 +233,16 @@ describe("suggestSchedule — pontuação", () => {
       )
     )
     expect(out[0].slots[0]).toEqual({ role: "C", profileId: "A", locked: true })
+    expect(out[1].slots[0].profileId).toBe("B")
+  })
+
+  it("leitor de missa readOnly conta na carga e no espaçamento", () => {
+    const published = mass("pub", "2026-12-06", [slot("C", { profileId: "A" })], { time: "07:00", readOnly: true })
+    const out = suggestSchedule(
+      input([published, mass("m2", "2026-12-06", [slot("C")], { time: "09:00" })], [reader("A"), reader("B")])
+    )
+    expect(out[0]).toEqual(published)
+    // pelo nome seria A; A já lê na missa publicada do mesmo dia ⇒ B
     expect(out[1].slots[0].profileId).toBe("B")
   })
 
