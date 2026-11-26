@@ -233,8 +233,9 @@ test("'Prévia' opens WhatsApp with the encoded preview text", async () => {
   await suggestDefaults()
   await userEvent.click(screen.getByRole("button", { name: "Prévia pelo WhatsApp" }))
   expect(open).toHaveBeenCalledTimes(1)
-  const [url, target] = open.mock.calls[0]
+  const [url, target, features] = open.mock.calls[0]
   expect(target).toBe("_blank")
+  expect(features).toBe("noopener,noreferrer")
   expect(String(url).startsWith("https://wa.me/?text=")).toBe(true)
   const text = decodeURIComponent(String(url).slice("https://wa.me/?text=".length))
   expect(text).toContain("*PRÉVIA – Escala de Dezembro/2026 (não publicada)*")
@@ -387,4 +388,39 @@ test("while saving, the planning is inert and edits are ignored (no edit is lost
   await act(async () => release())
   await waitFor(() => expect(sonner().success).toHaveBeenCalledWith("Rascunho salvo."))
   await waitFor(() => expect(screen.getByRole("main")).not.toHaveAttribute("inert"))
+})
+
+test("the browser's leave-page prompt is armed only while there are unsaved changes", async () => {
+  asAdmin()
+  setup()
+  render(<PlanejamentoPage />)
+  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
+  const leave = () => {
+    const event = new Event("beforeunload", { cancelable: true })
+    window.dispatchEvent(event)
+    return event.defaultPrevented
+  }
+  expect(leave()).toBe(false)
+
+  await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
+  expect(leave()).toBe(true)
+
+  // Salvar zera as alterações pendentes: o aviso sai.
+  await userEvent.click(screen.getByRole("button", { name: "Sugerir escala" }))
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  await waitFor(() => expect(sonner().success).toHaveBeenCalledWith("Rascunho salvo."))
+  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
+  expect(leave()).toBe(false)
+})
+
+test("the leave-page listener is removed on unmount", async () => {
+  asAdmin()
+  setup()
+  const { unmount } = render(<PlanejamentoPage />)
+  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
+  await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
+  unmount()
+  const event = new Event("beforeunload", { cancelable: true })
+  window.dispatchEvent(event)
+  expect(event.defaultPrevented).toBe(false)
 })

@@ -46,6 +46,18 @@ function PlanningScreen() {
   useEffect(() => {
     setBusy(save.saving)
   }, [save.saving, setBusy])
+  // Alterações não salvas: o navegador mostra o aviso nativo ao fechar/recarregar a aba.
+  // Lacuna conhecida: não intercepta a navegação interna do app (links/voltar do Next.js); só trocar de mês pergunta.
+  const { dirty } = save
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    window.addEventListener("beforeunload", warn)
+    return () => window.removeEventListener("beforeunload", warn)
+  }, [dirty])
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   // "new" = criando; string = chave da missa em edição; null = fechado.
@@ -66,7 +78,8 @@ function PlanningScreen() {
     if (save.unpublishCount > 0) setConfirm({ kind: "unpublish" })
     else void save.saveDraft()
   }
-  const openPreview = () => window.open(`https://wa.me/?text=${encodeURIComponent(save.previewText())}`, "_blank")
+  // noopener/noreferrer: a aba do WhatsApp não ganha acesso a esta janela (nem ao referrer do painel admin).
+  const openPreview = () => window.open(`https://wa.me/?text=${encodeURIComponent(save.previewText())}`, "_blank", "noopener,noreferrer")
   const unpublishOne = save.unpublishCount === 1
 
   return (
