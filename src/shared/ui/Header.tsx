@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu"
-import { LogOut, User, Users, UserCircle, Download, ArrowLeft, BarChart3, Cake } from "lucide-react"
+import { LogOut, User, Users, UserCircle, Download, ArrowLeft, BarChart3, Cake, CalendarRange } from "lucide-react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 
@@ -229,6 +229,15 @@ export function Header({
                         <Link href="/admin/analise" className="flex w-full items-center gap-3">
                           <span className={menuIconClass}><BarChart3 className="h-[18px] w-[18px]" /></span>
                           <span>Análise de Usuários</span>
+                        </Link>
+                      }
+                    />
+                    <DropdownMenuItem
+                      className={menuItemClass}
+                      render={
+                        <Link href="/admin/planejamento" className="flex w-full items-center gap-3">
+                          <span className={menuIconClass}><CalendarRange className="h-[18px] w-[18px]" /></span>
+                          <span>Planejamento de Escala</span>
                         </Link>
                       }
                     />
