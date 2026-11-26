@@ -1,91 +1,99 @@
-# Planejamento compartilhado — design
+# Planejamentos por coordenador — design (v2)
 
-Data: 2026-11-26 · Status: aguardando aprovação · Estende: `docs/superpowers/specs/2026-11-26-planejamento-escala-design.md` (página `/admin/planejamento`, já em `preview`).
+Data: 2026-11-26 · Status: aguardando aprovação · Estende: `docs/superpowers/specs/2026-11-26-planejamento-escala-design.md` (página `/admin/planejamento`, já em `preview`). Esta versão substitui a v1 ("um planejamento compartilhado por mês").
 
 ## 1. Intenção
 
-Hoje o planejamento vive só no navegador de quem o criou e nada é gravado até "Salvar como rascunho". Os coordenadores querem **montar a escala em turnos, cada um no seu celular, vendo o mesmo planejamento**: quem criou, quem editou por último e há quanto tempo; e, enquanto um edita, o outro **só pode ver**, com a indicação "Somente Leitura".
-
-Por quê: a escala é feita com um mês de antecedência por mais de uma pessoa; sem isso, o trabalho se perde ao fechar o app e um coordenador não enxerga o que o outro fez.
+Hoje o planejamento vive só no navegador de quem o criou e nada é gravado até "Salvar como rascunho". Os coordenadores querem:
+- que o planejamento fique **no servidor e seja gravado a cada alteração**, para não perder trabalho e poder continuar em outro aparelho;
+- que **cada admin tenha o seu planejamento do mês** (vários admins podem ter um para o mesmo mês, mas **só um por admin**), mostrando **criado por / editado por e há quanto tempo**;
+- que **o planejamento de outro admin seja visto só em leitura** ("Somente Leitura", escrito na tela) e possa ser **copiado** para o planejamento do próprio admin, que então edita o dele;
+- que **escalas já publicadas nunca sejam feridas**: um admin faz metade do mês e publica, outro faz o resto e publica;
+- que os planejamentos **vençam em 30 dias** e sejam apagados do servidor.
 
 ## 2. Objetivos, não-objetivos, anti-objetivos
 
 **Objetivos**
-- O planejamento do mês fica no servidor e é **gravado a cada alteração** (lâmpada, cadeado, troca de leitor, criar/editar/remover missa, decisão sobre missas publicadas).
-- Cada planejamento mostra **criado por**, **editado por** e **há quanto tempo**.
-- **Uma pessoa edita por vez** (reserva). Quem chega depois abre em **Somente Leitura** (escrito na tela) e vê as mudanças do outro sem precisar reabrir.
-- A reserva **expira sozinha** se o aparelho some (bateria, aba fechada).
+- Tabela de planejamentos: no máximo **1 por admin por mês**; vários admins podem ter o seu para o mesmo mês.
+- Gravação a cada alteração (lâmpada, cadeado, troca de leitor, criar/editar/remover missa).
+- **Somente o dono edita.** Outros admins abrem em Somente Leitura e podem "Duplicar para mim".
+- O próprio dono em **dois aparelhos ao mesmo tempo** é impedido por uma reserva ("aberto em outro aparelho"), que expira sozinha.
+- **Validade de 30 dias** desde a última alteração; vencidos são apagados; a tela avisa "expira em X dias".
+- Missas publicadas aparecem **somente leitura** com alerta; para mexer nelas é preciso despublicá-las fora do planejamento (tela de Escala).
+- **Só uma versão vira escala real:** "Salvar como rascunho" avisa e, se confirmado, **substitui** o rascunho que já existia no mês.
 
 **Não-objetivos**
-- Edição simultânea e mesclagem de mudanças; tempo real (Realtime).
-- "Assumir à força" a edição (só expiração e fechamento resolvem).
-- Histórico/versões do planejamento; comentários; notificações push entre coordenadores.
-- Mudar o que "Salvar como rascunho" faz (continua o único passo que cria/atualiza missas reais).
+- Editar o planejamento de outro admin; edição simultânea; mesclagem; tempo real (Realtime); "assumir à força" a reserva.
+- **Despublicar missas a partir do planejamento** (a opção "incluir publicadas e voltar a rascunho" da v1 **sai**).
+- Histórico/versões do planejamento; comentários; notificações.
 
 **Anti-objetivos (falha mesmo funcionando)**
-- Um aparelho antigo ou "esquecido" sobrescrever o trabalho de outro.
-- Perder alteração sem avisar (falha de gravação precisa ser visível e travar novas edições).
-- A sugestão não confirmada alterar missas reais, despublicar missas ou gerar notificações antes de "Salvar como rascunho".
-- Um planejamento preso para sempre por uma reserva que não expira.
+- O planejamento alterar, despublicar ou notificar sobre missas publicadas.
+- Sobrescrever um rascunho existente sem avisar exatamente o que será substituído.
+- Um aparelho antigo sobrescrever o trabalho do mesmo dono; perder alteração sem aviso.
+- Apagar por validade um planejamento que está sendo usado; reserva presa para sempre.
 
 ## 3. Restrições
 
-- **Muda o banco**: tabela nova + funções no servidor. Migration em arquivo `migration_planejamento_compartilhado.sql` + `..._rollback.sql` na raiz, no padrão dos existentes. Preview: autorizado pelo usuário em 26/11/2026 ("pode fazer, tem permissão") — aplicar só depois de testar em ambiente isolado e conferir compatibilidade com o schema real. **Production: nenhuma migration sem autorização específica e plano de recuperação.** Nunca misturar migration com push sem verificar se há automação que a aplique (AGENTS.md).
-- Padrão de segurança do projeto: funções `SECURITY DEFINER`, `search_path` fixo, checagem `public.is_admin()`, `REVOKE ALL … FROM PUBLIC, anon`, `GRANT EXECUTE … TO authenticated`, RLS ligado e **sem acesso direto à tabela** (tudo por funções), como `save_schedule_batch`.
-- Cliente: Next.js 16 / React 19; o app não usa Realtime hoje e não vai usar. Mobile-first, pt-BR, estilo caderno já existente.
-- Production não tem `schedule_slots.original_profile_id` (irrelevante aqui, mas não pode ser pressuposto).
-- Validação conforme AGENTS.md: testes SQL no padrão de `tests/database/`, testes Jest, `tsc`, lint, build.
+- **Muda o banco**: tabela nova + funções no servidor, em `migration_planejamento_compartilhado.sql` + `..._rollback.sql` na raiz. Preview (projeto Supabase "Liturgia SJE (preview)"): autorizado pelo usuário em 26/11/2026; o teste isolado antes disso usa um branch do Supabase ou banco local, à escolha do builder; aplicar só depois de testar em ambiente isolado e conferir compatibilidade com o schema real. **Production: nenhuma migration sem autorização específica e plano de recuperação.** Nunca misturar migration com push sem verificar se há automação que a aplique (AGENTS.md).
+- Padrão de segurança do projeto: `SECURITY DEFINER`, `search_path` fixo, `public.is_admin()`, `REVOKE ALL … FROM PUBLIC, anon`, `GRANT EXECUTE … TO authenticated`, RLS ligado e **sem acesso direto à tabela** (tudo por funções), como `save_schedule_batch`.
+- **Sem rotina agendada nova:** a limpeza dos vencidos acontece nas próprias funções (ao listar/abrir).
+- Next.js 16 / React 19; sem Realtime; mobile-first, pt-BR, estilo caderno existente.
+- Production não tem `schedule_slots.original_profile_id` (não pressupor).
 
 ## 4. Abordagens consideradas
 
-1. **Um documento por mês + reserva com sinal (escolhida).** Tabela com uma linha por mês guarda o planejamento inteiro (JSON), criado/editado por, revisão e a reserva (quem, qual aparelho, último sinal). Funções no servidor conferem reserva e revisão a cada gravação. Leitores em Somente Leitura atualizam por consulta periódica. Simples, suficiente para turnos.
-2. **Idem com tempo real (Realtime).** Mudança aparece na hora, mas é mecanismo novo para o app, com configuração e políticas próprias, e quase nada ganha em trabalho por turnos.
-3. **Gravar direto nas missas de rascunho existentes.** Sem tabela do planejamento, mas cada toque criaria/alteraria missas reais (despublica as publicadas na hora, poluiria o histórico de atribuições). Contraria o desenho aprovado. Descartada.
-
-O usuário aprovou a **1**.
+1. **Um documento por (admin, mês) + reserva com sinal (escolhida).** Tabela com uma linha por planejamento: dono, mês, estado (JSON), revisão, validade e a reserva. Funções no servidor conferem dono, reserva e revisão a cada gravação. Somente Leitura de planejamentos alheios por consulta periódica.
+2. **O mesmo com tempo real.** Mais complexo (mecanismo que o app nunca usou) e sem ganho em trabalho por turnos/cópia. Descartada.
+3. **Gravar direto nas missas de rascunho existentes.** Cada toque alteraria missas reais; contraria o desenho aprovado. Descartada.
+4. **Planejamento único por mês com edição por turnos (v1).** Substituída pela escolha do usuário: um por admin + cópia.
 
 ## 5. Design
 
 ### 5.1 Dados
-Tabela `schedule_plans` (uma linha por mês): `month_reference` (yyyy-MM, único), `state` (jsonb: o documento do planejamento — missas com vagas, travas, avisos/motivos, fase "sugerido", decisão sobre publicadas, missas removidas; **não** guarda leitores, médias nem indisponibilidades, que são recalculados ao abrir), `status` (`em_andamento` | `concluido`), `revision` (bigint, +1 a cada gravação), `created_by`/`created_at`, `updated_by`/`updated_at` (ids de perfil; nomes vêm de `profiles.full_name`), `concluded_by`/`concluded_at`, e a reserva: `lock_profile_id`, `lock_session_id` (texto aleatório por aparelho/aba), `lock_heartbeat_at`. Limite de tamanho do `state` (ex.: 512 KB) validado no servidor.
+Tabela `schedule_plans`: `id`, `month_reference` (yyyy-MM), `owner_profile_id` (único junto com o mês), `state` (jsonb: apenas as missas **não publicadas** do planejamento, com vagas, travas, avisos/motivos, fase "sugerido" e missas removidas; **não** guarda missas publicadas, leitores, médias nem indisponibilidades — as publicadas e o resto são sempre tirados da realidade ao abrir), `status` (`em_andamento` | `concluido`), `revision`, `created_at`, `updated_at` (quem edita é sempre o dono), `expires_at` (= última alteração + 30 dias, renovado a cada gravação), `copied_from_owner_id` (opcional, para mostrar "copiado do planejamento de X"), `concluded_at`, e a reserva: `lock_session_id`, `lock_heartbeat_at`. Limite de tamanho do `state` (ex.: 512 KB) validado no servidor. Nomes vêm de `profiles.full_name` (perfil arquivado continua resolvendo).
 
-### 5.2 Reserva
-- Dona da reserva = (coordenador + `session_id`). **Dois aparelhos do mesmo coordenador também se excluem.**
-- Válida por **120 s** sem sinal; o aparelho aberto manda sinal a cada **30 s** (e ao voltar para a aba).
-- Liberada ao sair/fechar (melhor esforço) e ao concluir; a expiração é a rede de segurança.
-- Quem não consegue reservar abre em Somente Leitura e vê quem está com a reserva e o último sinal.
+### 5.2 Reserva (só do dono)
+Vale para o dono em **outro aparelho/aba** (`session_id` por aba, no `sessionStorage`; atualizar a página retoma a própria reserva). 120 s sem sinal expira; sinal a cada 30 s. Quem só **vê** o planejamento de outro nunca reserva.
 
-### 5.3 Funções no servidor (todas só para admin)
-`plan_list(months)` (até 12 meses por chamada; status, criado/editado por e quando, reserva viva) · `plan_open(month, session_id)` (abrir = pedir para editar: cria a linha se não existir — quem abre primeiro vira "criado por" —, tenta reservar, devolve plano + modo `edit`/`readonly` + dono da reserva; recusa abrir mês `concluido`, que exige `plan_reopen`) · `plan_save(month, session_id, request_id, expected_revision, state)` (só se for o dono vivo da reserva **e** a revisão bater; incrementa revisão, atualiza editado por/em e renova a reserva; se o mesmo `request_id` já foi aplicado devolve sucesso sem aplicar de novo, para repetir com segurança após falha de rede; erros distintos: reserva perdida, conflito de revisão, plano concluído) · `plan_reopen(month, session_id)` (único jeito de reabrir um mês `concluido`: zera o estado, volta a `em_andamento`, limpa `concluded_*`, o autor passa a ser quem reabriu e já fica com a reserva) · `plan_heartbeat(month, session_id)` · `plan_release(month, session_id)` · `plan_get(month)` (leitura para Somente Leitura; nunca cria linha nem reserva; sem linha devolve vazio) · `plan_conclude(month, session_id)` (após "Salvar como rascunho" com sucesso: `concluido`, libera a reserva).
+### 5.3 Funções no servidor (todas só para admin ativo)
+- `plan_list(months)` — até 12 meses; para cada mês, **todos os planejamentos** (dono, status, criado/editado há, validade, "copiado de", se está aberto em outro aparelho) e se o chamador já tem o seu; **apaga os vencidos** antes de responder.
+- `plan_open(month, session_id)` — abre/cria **o meu** planejamento do mês e reserva; recusa a edição se estiver `concluido` (exige `plan_reopen`) ou aberto em outro aparelho do mesmo dono (nesse caso devolve o planejamento para **leitura** e o último sinal).
+- `plan_get(plan_id)` — leitura de qualquer planejamento (Somente Leitura); não reserva.
+- `plan_copy(source_plan_id, session_id, overwrite)` — copia o estado de um planejamento (de outro admin) para o **meu** do mesmo mês (cria se não existir; se o meu já tem conteúdo, exige `overwrite = true`, que o app só envia após confirmação); registra "copiado de".
+- `plan_save(plan_id, session_id, request_id, expected_revision, state)` — só o dono com reserva viva e revisão correta; incrementa revisão, renova reserva e validade; mesmo `request_id` repetido devolve sucesso sem reaplicar. Erros distintos: reserva perdida, conflito de revisão, concluído, vencido.
+- `plan_heartbeat`, `plan_release`, `plan_conclude(plan_id)` (após "Salvar como rascunho"; **mantém o estado** para consulta e cópia), `plan_reopen(plan_id)` (volta a `em_andamento` **mantendo o estado**; a reconciliação com a realidade acontece ao abrir), `plan_discard(plan_id)` (o dono apaga o próprio planejamento para recomeçar).
 
 ### 5.4 Comportamento no app
-- **Escolha do mês** mostra, por mês: "Sem planejamento" · "Em andamento · criado por X · editado por Y há Z" · "Concluído · por X em dd/MM" · e "Em edição agora por Y" quando há reserva viva.
-- **Abrir como editor:** estado vem do servidor se houver `state`; senão parte das missas reais, como hoje. **Cada ação grava na hora**: gravações em fila (uma por vez, sempre a mais recente), sem perder a ordem.
-- **Indicador no topo:** "Salvando…" / "Salvo" / "Falhou — tentar de novo". Se falhar, novas edições ficam bloqueadas até resolver.
-- **Reserva perdida** (ficou ~2 min sem sinal e outro assumiu) ou **conflito de revisão:** o aparelho vira Somente Leitura com aviso e mostra o estado atual do servidor.
-- **Somente Leitura:** faixa fixa "SOMENTE LEITURA — <nome> está editando · última alteração há X"; lâmpada, "+ Missa", "Criar Missas Padrões", troca de leitor, cadeado, salvar e decisão sobre publicadas ficam desativados; as setas de mês continuam. Atualiza sozinho a cada ~20 s (só re-renderiza se a revisão mudou). Quando a reserva fica livre, aparece "Editar" para tentar assumir.
-- **Concluir:** "Salvar como rascunho" continua igual; ao dar certo, chama `plan_conclude`. **Reabrir um mês concluído** reinicia o planejamento a partir das missas reais (a mesma linha é reaproveitada: estado vazio, novo autor, `em_andamento`).
-- **Substitui** a confirmação ao trocar de mês e o aviso ao sair da página (não há mais trabalho não gravado), mantendo: esperar gravação pendente antes de trocar de mês.
-- O resto da página (lâmpada, regras, missas publicadas, salvar, prévia) não muda.
+- **Escolha do mês:** para cada mês, lista os planejamentos: "Meu planejamento · editado há 3 h · expira em 27 dias", "Maria · editado há 1 dia · expira em 29 dias [Ver] [Duplicar para mim]", ou "Criar meu planejamento". "Aberto em outro aparelho" aparece no próprio planejamento do dono.
+- **Abrir o meu:** estado do servidor, reconciliado com as missas reais (5.6). **Cada ação grava na hora**, em fila, com indicador "Salvando… / Salvo / Falhou" (falha trava novas edições).
+- **Abrir o de outro:** faixa fixa **"SOMENTE LEITURA — planejamento de <nome> · editado há X"**, todos os controles de edição desativados, atualização sozinha a cada ~20 s, botão **Duplicar para mim**. Se eu já tiver o meu do mês, pede confirmação ("isso substitui o seu planejamento de <mês>").
+- **Missas publicadas no mês:** ao abrir (meu ou de outro), alerta único: "Já existem N missas publicadas em <Mês> (datas…). Elas não podem ser alteradas no planejamento. Para mexer nelas, transforme-as em rascunho na tela de Escala." As missas ficam visíveis, marcadas "publicada" e somente leitura. A lâmpada **conta** os leitores delas na carga e no espaçamento (já é assim) para balancear o restante. A decisão "incluir/manter" e a despublicação **saem** do planejamento.
+- **Salvar como rascunho:** antes de gravar, o app compara com as missas reais do mês. A regra é **por data**: para cada data em que este planejamento tem missas, as **missas em rascunho** (não publicadas) dessa data que ele não contém ou que mudaram desde que foi aberto são substituídas pela versão do planejamento; rascunhos de datas em que o planejamento não tem missa **ficam intocados** (é o que permite a um admin cuidar de uma metade do mês e o outro da outra). Se houver algo a substituir, mostra: "Já existe uma escala em rascunho em <Mês> (N missas: datas…). Salvar vai **substituir** essas missas pelas deste planejamento nas datas <…>. Missas publicadas não serão tocadas." Só segue após confirmar; a substituição usa as revisões atuais para não falhar à toa. Nunca publica nem despublica. Ao dar certo, chama `plan_conclude` e recarrega das missas reais.
+- **Validade:** o dono vê "expira em X dias" no planejamento; cada gravação renova 30 dias; planejamento `concluido` também vence em 30 dias.
+- **Substitui** a confirmação ao trocar de mês e o aviso ao sair da página (não há trabalho não gravado); troca de mês espera a gravação pendente.
 
 ### 5.5 Segurança e falhas
-Tudo por funções com `is_admin()`; sem política de acesso direto; `session_id` é só identificador de aparelho, não segredo; erros devolvem códigos estáveis que o app converte em mensagens em pt-BR; `plan_save` nunca altera missas reais.
+Tudo por funções com `is_admin()`; sem política de acesso direto; só o dono grava no próprio planejamento (conferido no servidor); `session_id` é identificador de aparelho, não segredo; erros devolvem códigos estáveis convertidos em mensagens pt-BR; `plan_save` nunca altera missas reais.
 
-### 5.6 Regras de borda (resolvidas na revisão do desenho)
-- **Missas reais mudam por fora enquanto o planejamento está guardado** (troca pedida, leitor que se desvinculou, missa publicada/apagada pela tela de Escala): ao abrir como editor o app **reconcilia** o estado guardado com as missas reais. Para cada missa com `id`: se a revisão real é diferente da guardada, **vale a versão real** (as edições do planejamento nessa missa são descartadas) e o app mostra "A escala mudou fora do planejamento: <datas>"; missa real que sumiu sai do plano com o mesmo aviso; missa real nova entra como no carregamento normal. Indisponibilidades e leitores arquivados são recalculados (vaga de leitor arquivado continua visível e travada, como hoje). Assim um `id`/revisão velho nunca é usado para gravar, e "Salvar como rascunho" continua protegido pelo `expectedRevision` de sempre.
-- **Abrir = reservar.** Quem só quer olhar um mês com reserva viva de outro já cai em Somente Leitura; quem abre um mês livre reserva e, se não havia linha, vira "criado por" (mesmo sem editar nada; o mês aparece "Aberto por X, sem alterações"). Ver sem reservar só existe para quem encontrou a reserva ocupada.
-- **Mês concluído** não abre direto: a escolha do mês mostra "Concluído por X em dd/MM" e um botão explícito **Reabrir planejamento** (`plan_reopen`). Abrir sem querer nunca apaga o estado.
-- **"Salvar como rascunho" e `plan_conclude`** são duas chamadas: se o lote real foi gravado e `plan_conclude` falha (ou a aba fecha), o app tenta de novo algumas vezes; se mesmo assim ficar `em_andamento`, a reconciliação acima faz o próximo abrir descartar o estado antigo (as missas reais já são a verdade). Depois de salvar, a tela recarrega das missas reais.
-- **Falha de rede ao gravar:** repetição automática (até 3 tentativas, ~2 s e ~5 s) com o mesmo `request_id`; depois mostra "Falhou — tentar de novo" e trava edições. Se a reserva foi perdida (aparelho dormiu mais de ~2 min e outro assumiu), as alterações ainda não gravadas **não são aplicadas** e o app diz quantas ficaram de fora, em vez de falhar em silêncio.
-- **Gravação é substituição do documento inteiro**; juntar gravações pendentes em uma só (sempre a mais recente, com revisão esperada em sequência) e renovar a reserva a cada gravação é intencional.
-- **Atualizar a página** (F5) na mesma aba retoma a própria reserva: `session_id` fica no `sessionStorage` da aba; outra aba ou outro aparelho, mesmo do mesmo coordenador, continua excluído.
-- **Quem é quem:** coordenador = perfil com `role = 'admin'` e ativo; todos os admins veem todos os meses; o dono da reserva e os autores são `profiles.id`, obtido de `auth.uid()` via `profiles.auth_user_id`; as colunas apontam para `profiles(id)` com `ON DELETE SET NULL`; perfil arquivado continua resolvendo o nome.
+### 5.6 Regras de borda
+- **Reconciliação ao abrir o meu:** missas reais que mudaram por fora desde a última gravação (troca pedida, publicada/apagada, leitor arquivado): **vale a versão real** da missa (edições do planejamento nela são descartadas) com aviso "A escala mudou fora do planejamento: <datas>"; missa real nova entra normalmente; vagas de leitor arquivado continuam visíveis e travadas.
+- **Mês concluído** só reabre por botão explícito **Reabrir** (`plan_reopen`); abrir sem querer nunca apaga.
+- **`plan_conclude` falha** depois de salvar o rascunho: repetir algumas vezes; se persistir, a reconciliação do próximo abrir descarta o estado antigo.
+- **Falha de rede:** até 3 repetições (~2 s, ~5 s) com o mesmo `request_id`; depois "Falhou — tentar de novo". Se a reserva foi perdida, as alterações não gravadas **não são aplicadas** e o app diz quantas ficaram de fora.
+- **Gravação = documento inteiro**; juntar pendentes na mais recente é intencional.
+- **Missas publicadas nunca ficam no `state`:** são injetadas da realidade a cada abertura (somente leitura, contadas na carga e no espaçamento da lâmpada). Se uma missa do `state` foi publicada por outra pessoa, passa a valer a versão real publicada e a edição do planejamento naquela data é descartada com aviso; se foi despublicada por fora, vale a versão real (rascunho editável).
+- **"Duplicar para mim"** é uma cópia pura do `state` (travas e motivos incluídos); a reconciliação roda na primeira abertura: datas hoje publicadas vencem a cópia e são avisadas. Planejamentos `concluido` mantêm o estado, aparecem em "Ver" e podem ser copiados.
+- **Mesmo dono em outro aparelho:** o segundo aparelho abre o **próprio** planejamento em Somente Leitura com "aberto em outro aparelho", e ganha "Editar" quando a reserva liberar.
+- **Reserva perdida:** o app recarrega o estado do servidor em Somente Leitura (mostra quantas alterações ficaram de fora) e oferece "Editar"; conflito de revisão nunca é resolvido automaticamente.
+- **Aba duplicada** pode herdar o `session_id` do `sessionStorage` e furar a reserva; é lacuna aceita, pois a checagem de revisão ainda impede perder alterações (a segunda gravação recebe conflito).
+- **Quem é quem:** coordenador = perfil `role = 'admin'` ativo; todos os admins veem todos os planejamentos; dono = `profiles.id` obtido de `auth.uid()` via `profiles.auth_user_id`; FKs para `profiles(id)`.
 
 ## 6. Decisões do usuário
-Planejamento no servidor; um coordenador por vez com aviso "aberto em outro aparelho"; quem chega depois **vê em Somente Leitura**, escrito na tela, sem poder alterar; **gravar a cada alteração** (cadeado, trocar função, criar missa → na hora); mostrar criado por / editado por e há quanto tempo.
+Planejamento no servidor e gravado a cada alteração; **um por admin por mês**, vários admins podem ter o seu no mesmo mês; **validade de 30 dias**, depois apagado; **só uma versão vira rascunho; a seguinte sobrescreve, com aviso**; planejamento de outro admin **só em leitura (escrito "Somente Leitura") e pode ser copiado**, cada um edita o seu; **alerta de escalas publicadas, datas não manipuláveis até virarem rascunho**, permitindo que um admin faça e publique metade do mês e outro o restante, sem ferir o publicado; mostrar criado por / editado por e há quanto tempo.
 
 ## 7. Minhas chamadas (para conferir)
-Abordagem 1; reserva 120 s com sinal de 30 s; dois aparelhos do mesmo coordenador também se excluem; Somente Leitura atualiza a cada ~20 s; ao concluir o planejamento fica "Concluído" e reabrir recomeça das missas reais; sem "assumir à força"; indicador Salvando/Salvo/Falhou e bloqueio em falha; troca de mês espera a gravação pendente em vez de pedir confirmação; reconciliação com as missas reais ao abrir (versão real vence por missa, com aviso); abrir já reserva; reabrir mês concluído só por botão explícito; repetição segura de gravação com `request_id`; `session_id` no `sessionStorage`; coordenador = admin ativo; 12 meses por listagem.
+Abordagem 1; validade conta da **última alteração** e renova a cada gravação; limpeza dos vencidos ao listar (sem rotina agendada); reserva só impede o **mesmo dono** em dois aparelhos (120 s, sinal 30 s); Somente Leitura atualiza a cada ~20 s; "Duplicar para mim" substitui o meu planejamento do mês só com confirmação; "copiado de X" aparece; dono pode **Descartar** o seu; a despublicação a partir do planejamento **foi removida** (consequência da regra "publicadas não podem ser manipuladas"); aviso de substituição lista as datas dos rascunhos que serão trocados; reconciliação ao abrir (versão real vence por missa); mês concluído reabre só por botão; repetição segura com `request_id`; `session_id` no `sessionStorage`; coordenador = admin ativo; 12 meses por listagem; **substituição de rascunho por data** (rascunhos de datas que o planejamento não cobre ficam intocados); publicadas nunca entram no `state`; cópia pura do `state` com reconciliação ao abrir; concluído mantém o estado e reabre sem apagar; segundo aparelho do mesmo dono abre em leitura; aba duplicada é lacuna aceita.
 
 ## 8. Deixado ao builder
-Nomes de colunas/funções e códigos de erro exatos; formato do JSON do `state` (derivar de `PlanMass`); como liberar a reserva ao fechar (ex.: `pagehide` + chamada leve); estratégia de fila/coalescência das gravações; intervalo exato de polling; chave do advisory lock (não bloquear `save_schedule_batch` desnecessariamente); testes SQL (reservar, expirar, assumir após expirar, gravar sem reserva é recusado, conflito de revisão, não-admin recusado, concorrência) e testes Jest (fila, indicador, Somente Leitura, sinal, polling); como o app se comporta se as funções ainda não existirem no banco do ambiente (mensagem "indisponível", sem erro bruto); plano de recuperação da migration (rollback).
+Nomes de colunas/funções e códigos de erro; formato do JSON do `state` (derivar de `PlanMass`); como liberar a reserva ao fechar (ex.: `pagehide`); fila/coalescência das gravações; intervalo exato de polling; chave do advisory lock (não bloquear `save_schedule_batch` desnecessariamente); mecânica exata da comparação com as missas reais antes de salvar; testes SQL (reservar, expirar, dono vs. não dono, copiar com e sem `overwrite`, vencimento e limpeza, conflito de revisão, não-admin recusado, concorrência) e Jest (fila, indicador, Somente Leitura, cópia, alerta de publicadas, aviso de substituição, validade); como o app se comporta se as funções ainda não existirem no banco do ambiente (mensagem "indisponível", sem erro bruto); remoção do fluxo "incluir publicadas/despublicar" e dos testes que o fixam; migration de rollback.
