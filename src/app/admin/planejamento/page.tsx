@@ -31,8 +31,6 @@ function Loading({ text }: { text: string }) {
 // Só alimenta usePlanningSave enquanto nenhum mês foi escolhido (ele fica inativo: loading verdadeiro).
 const IDLE_MONTH = new Date(0)
 
-type Confirm = { kind: "unpublish" } | { kind: "month"; delta: number }
-
 function PlanningScreen() {
   // Nenhum mês até o admin escolher: sem mês não há leitura nem aviso de missas publicadas.
   const [month, setMonth] = useState<Date | null>(null)
@@ -42,6 +40,9 @@ function PlanningScreen() {
     masses: planning.masses,
     removedMasses: planning.removedMasses,
     readerNames: planning.readerNames,
+    planId: planning.planId,
+    session: planning.sessionId,
+    enabled: planning.mode === "edit",
     loading: planning.loading || month === null,
     error: planning.error,
     reload: planning.retry,
@@ -51,19 +52,7 @@ function PlanningScreen() {
   useEffect(() => {
     setBusy(save.saving)
   }, [save.saving, setBusy])
-  // Alterações não salvas: o navegador mostra o aviso nativo ao fechar/recarregar a aba.
-  // Lacuna conhecida: não intercepta a navegação interna do app (links/voltar do Next.js); só trocar de mês pergunta.
-  const { dirty } = save
-  useEffect(() => {
-    if (!dirty) return
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      event.returnValue = ""
-    }
-    window.addEventListener("beforeunload", warn)
-    return () => window.removeEventListener("beforeunload", warn)
-  }, [dirty])
-  const [confirm, setConfirm] = useState<Confirm | null>(null)
+  const [confirmReplace, setConfirmReplace] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   // "new" = criando; string = chave da missa em edição; null = fechado.
   const [sheet, setSheet] = useState<"new" | string | null>(null)
@@ -84,20 +73,26 @@ function PlanningScreen() {
   const monthName = format(month, "MMMM", { locale: ptBR })
   const monthLabel = `${monthName.charAt(0).toUpperCase()}${monthName.slice(1)} ${format(month, "yyyy")}`
 
-  // Trocar de mês descarta o planejamento em memória: com mudanças não salvas, pergunta antes.
+  // O planejamento é guardado a cada alteração: trocar de mês não perde nada, só é ignorado enquanto grava.
   const changeMonth = (delta: number) => {
     if (save.saving) return
-    if (save.dirty) setConfirm({ kind: "month", delta })
-    else setMonth((m) => (m ? addMonths(m, delta) : m))
+    setDetailOpen(false)
+    setMonth((m) => (m ? addMonths(m, delta) : m))
   }
-  // Missas publicadas incluídas: os leitores deixam de vê-las, então confirma antes de gravar.
-  const requestSave = () => {
-    if (save.unpublishCount > 0) setConfirm({ kind: "unpublish" })
-    else void save.saveDraft()
+  // Lê as missas reais agora: se salvar substituiria rascunhos existentes, confirma antes de gravar.
+  const requestSave = async () => {
+    try {
+      const { needsConfirm } = await save.prepareSave()
+      if (needsConfirm) setConfirmReplace(true)
+      else void save.saveDraft()
+    } catch {
+      // prepareSave já avisou o erro e nada foi gravado.
+    }
   }
   // noopener/noreferrer: a aba do WhatsApp não ganha acesso a esta janela (nem ao referrer do painel admin).
   const openPreview = () => window.open(`https://wa.me/?text=${encodeURIComponent(save.previewText())}`, "_blank", "noopener,noreferrer")
-  const unpublishOne = save.unpublishCount === 1
+  const replacementDates = (save.replacement?.dates ?? []).map((d) => format(new Date(`${d}T00:00:00`), "dd/MM")).join(", ")
+  const replacementCount = save.replacement?.count ?? 0
 
   return (
     <div className="min-h-screen bg-white pb-28 font-sans text-stone-900">
@@ -135,11 +130,6 @@ function PlanningScreen() {
           </div>
         ) : planning.phase === "suggested" ? (
           <>
-            {save.leftAsDraft && (
-              <p role="alert" className="mx-4 mb-2.5 rounded-2xl border border-red-100 bg-red-50 px-3 py-2.5 text-[13px] font-semibold text-red-700">
-                As missas ficaram em rascunho; salve novamente ou republique.
-              </p>
-            )}
             <SuggestionList
               masses={planning.masses}
               readers={planning.readers}
@@ -152,7 +142,7 @@ function PlanningScreen() {
               onToggleLock={planning.toggleLock}
               onSuggestAgain={planning.runLamp}
               saving={save.saving}
-              onSave={save.saving ? undefined : requestSave}
+              onSave={save.saving ? undefined : () => void requestSave()}
               onDetail={() => setDetailOpen(true)}
               onPreview={openPreview}
             />
@@ -198,34 +188,21 @@ function PlanningScreen() {
         />
       )}
 
-      {confirm?.kind === "unpublish" && (
+      {confirmReplace && save.replacement && (
         <ConfirmDialog
-          title={unpublishOne ? "Voltar a missa a rascunho?" : "Voltar as missas a rascunho?"}
-          message={`Ao salvar, os leitores deixam de ver ${unpublishOne ? "essa missa" : `essas ${save.unpublishCount} missas`} e os lembretes automáticos param até você republicar.`}
-          confirmLabel="Voltar a rascunho e salvar"
+          title="Substituir o rascunho existente?"
+          message={`Já existe uma escala em rascunho em ${monthName.charAt(0).toUpperCase()}${monthName.slice(1)} (${replacementCount} ${replacementCount === 1 ? "missa" : "missas"}: ${replacementDates}). Salvar vai substituir essas missas pelas deste planejamento. Missas publicadas não serão tocadas.`}
+          confirmLabel="Substituir e salvar"
           cancelLabel="Cancelar"
-          onConfirm={() => {
-            setConfirm(null)
-            void save.saveDraft()
-          }}
-          onCancel={() => setConfirm(null)}
-        />
-      )}
-
-      {confirm?.kind === "month" && (
-        <ConfirmDialog
-          title="Descartar alterações?"
-          message="As mudanças deste mês não foram salvas. Trocar de mês descarta a sugestão, as escolhas à mão e as missas criadas, editadas ou removidas."
-          confirmLabel="Descartar e trocar de mês"
-          cancelLabel="Continuar planejando"
           tone="danger"
           onConfirm={() => {
-            const { delta } = confirm
-            setConfirm(null)
-            setDetailOpen(false)
-            setMonth((m) => (m ? addMonths(m, delta) : m))
+            setConfirmReplace(false)
+            void save.saveDraft()
           }}
-          onCancel={() => setConfirm(null)}
+          onCancel={() => {
+            setConfirmReplace(false)
+            save.cancelSave()
+          }}
         />
       )}
 

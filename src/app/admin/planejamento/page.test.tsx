@@ -8,6 +8,7 @@ import {
   makeSaveScheduleBatch,
   makeUpdateMassesStatus,
 } from "@/main/factories/usecases/schedule"
+import { makeConcludePlan } from "@/main/factories/usecases/plans"
 import { makeListProfiles, makeListUnavailableForRange } from "@/main/factories/usecases/profiles"
 import type { Mass } from "@/domain/models/Schedule"
 import type { Profile } from "@/domain/models/Profile"
@@ -22,6 +23,7 @@ jest.mock("@/main/factories/usecases/schedule", () => ({
   makeSaveScheduleBatch: jest.fn(),
   makeUpdateMassesStatus: jest.fn(),
 }))
+jest.mock("@/main/factories/usecases/plans", () => ({ makeConcludePlan: jest.fn() }))
 jest.mock("@/main/factories/usecases/profiles", () => ({
   makeListProfiles: jest.fn(),
   makeListUnavailableForRange: jest.fn(),
@@ -50,8 +52,11 @@ const publishedMass = (id: string, time: string): Mass => ({
 
 let saveBatch: jest.Mock
 let updateStatus: jest.Mock
+let conclude: jest.Mock
 
 function setup(masses: Mass[] = []) {
+  conclude = jest.fn().mockResolvedValue(undefined)
+  ;(makeConcludePlan as jest.Mock).mockReturnValue({ execute: conclude })
   saveBatch = jest.fn().mockResolvedValue(undefined)
   updateStatus = jest.fn().mockResolvedValue(undefined)
   ;(makeSaveScheduleBatch as jest.Mock).mockReturnValue({ execute: saveBatch })
@@ -362,7 +367,8 @@ test("'Salvar como rascunho' without published masses saves the batch once, no c
   expect(removed).toEqual([])
   expect(updateStatus).not.toHaveBeenCalled()
   expect(sonner().success).toHaveBeenCalledWith("Rascunho salvo.")
-  await waitFor(() => expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(2))
+  expect(conclude).toHaveBeenCalledWith("plan-1", "sessao-teste")
+  await waitFor(() => expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(3)) // abertura + leitura do salvar + recarga
   expect(await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")).toBeInTheDocument()
 })
 
@@ -379,34 +385,76 @@ test("a schedule conflict shows its message and keeps the suggestion and the edi
   const after = within(screen.getByRole("list", { name: "Vagas sugeridas" })).getAllByRole("listitem").map((li) => li.textContent)
   expect(after).toEqual(before)
   expect(screen.getByRole("button", { name: "Salvar como rascunho" })).toBeEnabled()
-  expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(1)
+  expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(2) // abertura + leitura do salvar; sem recarga
+  expect(conclude).not.toHaveBeenCalled()
   ;(console.error as jest.Mock).mockRestore()
 })
 
-test("changing month with unsaved changes asks before discarding them", async () => {
+/** Rascunho real que o plano (criado do zero) não conhece, numa data coberta pelas missas padrão. */
+const strayDraft = (): Mass => ({
+  id: "r1",
+  date: "2026-12-06",
+  time: "17:30:00",
+  isPublished: false,
+  monthReference: "2026-12",
+  scheduleRevision: 8,
+  slots: [],
+})
+
+function setupWithStrayDraft() {
+  setup()
+  const execute = jest.fn().mockResolvedValueOnce([]).mockResolvedValue([strayDraft()])
+  ;(makeListSchedulesForMonth as jest.Mock).mockReturnValue({ execute })
+}
+
+test("saving over a real draft asks first, naming the month, count and dates, and writes nothing until confirmed", async () => {
+  asAdmin()
+  setupWithStrayDraft()
+  await suggestDefaults()
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  const dialog = await screen.findByRole("alertdialog")
+  expect(within(dialog).getByText("Substituir o rascunho existente?")).toBeInTheDocument()
+  expect(
+    within(dialog).getByText(
+      "Já existe uma escala em rascunho em Dezembro (1 missa: 06/12). Salvar vai substituir essas missas pelas deste planejamento. Missas publicadas não serão tocadas.",
+    ),
+  ).toBeInTheDocument()
+  expect(saveBatch).not.toHaveBeenCalled()
+
+  await userEvent.click(within(dialog).getByRole("button", { name: "Substituir e salvar" }))
+  await waitFor(() => expect(saveBatch).toHaveBeenCalledTimes(1))
+  const [entries, removed] = saveBatch.mock.calls[0]
+  expect(entries).toHaveLength(25)
+  expect(removed).toEqual([{ id: "r1", expectedRevision: 8 }])
+  expect(updateStatus).not.toHaveBeenCalled()
+  await waitFor(() => expect(conclude).toHaveBeenCalledTimes(1))
+})
+
+test("cancelling the replacement confirmation writes nothing and keeps the suggestion", async () => {
+  asAdmin()
+  setupWithStrayDraft()
+  await suggestDefaults()
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  const dialog = await screen.findByRole("alertdialog")
+  await userEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }))
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  expect(saveBatch).not.toHaveBeenCalled()
+  expect(conclude).not.toHaveBeenCalled()
+  expect(screen.getByRole("list", { name: "Vagas sugeridas" })).toBeInTheDocument()
+})
+
+test("changing month never asks to discard: the plan is saved as you go", async () => {
   asAdmin()
   setup()
   await openPage()
   await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
-
-  // sem mudanças: troca direto
-  await userEvent.click(screen.getByRole("button", { name: "Próximo mês" }))
-  expect(screen.getByText("Janeiro 2027")).toBeInTheDocument()
-  await userEvent.click(screen.getByRole("button", { name: "Mês anterior" }))
-  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
-
   await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
   await userEvent.click(screen.getByRole("button", { name: "Próximo mês" }))
-  let confirm = screen.getByRole("alertdialog")
-  expect(within(confirm).getByText(/não foram salvas/)).toBeInTheDocument()
-  await userEvent.click(within(confirm).getByRole("button", { name: "Continuar planejando" }))
-  expect(screen.getByText("Dezembro 2026")).toBeInTheDocument()
-  expect(screen.getByText("25 missas · 82 vagas · 2 leitores aptos")).toBeInTheDocument()
-
-  await userEvent.click(screen.getByRole("button", { name: "Mês anterior" }))
-  confirm = screen.getByRole("alertdialog")
-  await userEvent.click(within(confirm).getByRole("button", { name: "Descartar e trocar de mês" }))
-  expect(screen.getByText("Novembro 2026")).toBeInTheDocument()
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  expect(screen.getByText("Janeiro 2027")).toBeInTheDocument()
+  const event = new Event("beforeunload", { cancelable: true })
+  window.dispatchEvent(event)
+  expect(event.defaultPrevented).toBe(false)
   expect(saveBatch).not.toHaveBeenCalled()
 })
 
@@ -438,39 +486,4 @@ test("while saving, the planning is inert and edits are ignored (no edit is lost
   await act(async () => release())
   await waitFor(() => expect(sonner().success).toHaveBeenCalledWith("Rascunho salvo."))
   await waitFor(() => expect(screen.getByRole("main")).not.toHaveAttribute("inert"))
-})
-
-test("the browser's leave-page prompt is armed only while there are unsaved changes", async () => {
-  asAdmin()
-  setup()
-  await openPage()
-  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
-  const leave = () => {
-    const event = new Event("beforeunload", { cancelable: true })
-    window.dispatchEvent(event)
-    return event.defaultPrevented
-  }
-  expect(leave()).toBe(false)
-
-  await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
-  expect(leave()).toBe(true)
-
-  // Salvar zera as alterações pendentes: o aviso sai.
-  await userEvent.click(screen.getByRole("button", { name: "Sugerir escala" }))
-  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
-  await waitFor(() => expect(sonner().success).toHaveBeenCalledWith("Rascunho salvo."))
-  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
-  expect(leave()).toBe(false)
-})
-
-test("the leave-page listener is removed on unmount", async () => {
-  asAdmin()
-  setup()
-  const { unmount } = await openPage()
-  await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
-  await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
-  unmount()
-  const event = new Event("beforeunload", { cancelable: true })
-  window.dispatchEvent(event)
-  expect(event.defaultPrevented).toBe(false)
 })
