@@ -1,8 +1,9 @@
 "use client"
 
 import { useCallback, useRef, useState } from "react"
-import { startOfMonth } from "date-fns"
+import { format, startOfMonth } from "date-fns"
 import { toast } from "sonner"
+import type { RemovedMass } from "@/domain/models/Schedule"
 import { makeListSchedulesForMonth, makeSaveScheduleBatch } from "@/main/factories/usecases/schedule"
 import { makeConcludePlan } from "@/main/factories/usecases/plans"
 import { scheduleErrorMessage } from "@/features/schedule/scheduleErrorMessage"
@@ -43,35 +44,68 @@ const FALLBACK = "Não foi possível salvar o rascunho. Tente novamente."
 const READ_FALLBACK = "Não foi possível ler as missas do mês. Tente novamente."
 const CONCLUDE_ATTEMPTS = 3
 
+/**
+ * Missas reais que salvar apagaria: rascunhos substituídos (datas cobertas pelo plano) e missas removidas
+ * pelo plano cuja revisão real mudou. Removidas sem mudança são apagadas mas não listadas.
+ * `ids` identifica exatamente o que foi confirmado.
+ */
 interface Prepared {
+  monthKey: string
   realNow: PlanMass[]
+  /** Substituídos que o plano não contém: serão apagados. */
   replaced: PlanMass[]
+  /** Removidas de propósito que ainda existem como rascunho real: apagadas com a revisão atual. */
+  removedReal: PlanMass[]
+  /** O que a confirmação mostra: substituídos + removidas alteradas por outra pessoa. */
+  listed: PlanMass[]
   dates: string[]
+  ids: string
 }
+
+function compare(masses: PlanMass[], removedMasses: PlanMass[], realNow: PlanMass[], monthKey: string): Prepared {
+  const { replaced: replacedAll } = computeDraftReplacement(masses, realNow, removedMasses)
+  const inPlan = new Set(masses.flatMap((m) => (m.id ? [m.id] : [])))
+  const replaced = replacedAll.filter((m) => !(m.id && inPlan.has(m.id)))
+  const realById = new Map(realNow.flatMap((m) => (m.id ? [[m.id, m] as const] : [])))
+  const removedReal: PlanMass[] = []
+  const changed: PlanMass[] = []
+  for (const r of removedMasses) {
+    const real = r.id ? realById.get(r.id) : undefined
+    if (!real || real.wasPublished) continue
+    removedReal.push(real)
+    if (real.scheduleRevision !== r.scheduleRevision) changed.push(real)
+  }
+  const listed = [...replacedAll, ...changed]
+  const dates = [...new Set(listed.map((m) => m.date))].sort()
+  const ids = JSON.stringify([listed.map((m) => `${m.id}:${m.scheduleRevision}`).sort(), removedReal.map((m) => `${m.id}:${m.scheduleRevision}`).sort(), dates])
+  return { monthKey, realNow, replaced, removedReal, listed, dates, ids }
+}
+
+const CHANGED = "O planejamento mudou; confira e salve de novo."
 
 export function usePlanningSave({
   month, masses, removedMasses, readerNames, planId, session, enabled, loading, error, reload,
 }: UsePlanningSaveArgs): UsePlanningSaveResult {
   const ready = enabled && !loading && !error
+  const monthKey = format(month, "yyyy-MM")
+  const monthKeyRef = useRef(monthKey)
+  monthKeyRef.current = monthKey
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
   const preparedRef = useRef<Prepared | null>(null)
   const [replacement, setReplacement] = useState<UsePlanningSaveResult["replacement"]>(null)
 
-  const readAndCompare = useCallback(async (): Promise<Prepared> => {
-    const real = await makeListSchedulesForMonth().execute(startOfMonth(month), true)
-    const realNow = real.map(massToPlan)
-    const { replaced, dates } = computeDraftReplacement(masses, realNow, removedMasses)
-    return { realNow, replaced, dates }
-  }, [month, masses, removedMasses])
-
   const prepareSave = useCallback(async () => {
     if (!ready || savingRef.current) return { needsConfirm: false }
+    const key = monthKey
     try {
-      const prepared = await readAndCompare()
+      const real = await makeListSchedulesForMonth().execute(startOfMonth(month), true)
+      // O mês mudou durante a leitura: o resultado não vale mais.
+      if (monthKeyRef.current !== key) return { needsConfirm: false }
+      const prepared = compare(masses, removedMasses, real.map(massToPlan), key)
       preparedRef.current = prepared
-      const needsConfirm = prepared.replaced.length > 0
-      setReplacement(needsConfirm ? { count: prepared.replaced.length, dates: prepared.dates } : null)
+      const needsConfirm = prepared.listed.length > 0
+      setReplacement(needsConfirm ? { count: prepared.listed.length, dates: prepared.dates } : null)
       return { needsConfirm }
     } catch (err) {
       console.error("[Planejamento] Falha ao ler as missas reais:", err)
@@ -80,7 +114,7 @@ export function usePlanningSave({
       toast.error(scheduleErrorMessage(err, READ_FALLBACK))
       throw err
     }
-  }, [ready, readAndCompare])
+  }, [ready, month, monthKey, masses, removedMasses])
 
   const cancelSave = useCallback(() => {
     preparedRef.current = null
@@ -89,17 +123,23 @@ export function usePlanningSave({
 
   const saveDraft = useCallback(async () => {
     if (savingRef.current || !ready) return false
+    const prepared = preparedRef.current
+    if (!prepared) return false
+    // O que foi confirmado precisa ser exatamente o que será apagado agora.
+    const current = prepared.monthKey === monthKey ? compare(masses, removedMasses, prepared.realNow, monthKey) : null
+    if (!current || current.ids !== prepared.ids) {
+      preparedRef.current = null
+      setReplacement(null)
+      toast.error(CHANGED)
+      return false
+    }
     savingRef.current = true
     setSaving(true)
     try {
-      const prepared = preparedRef.current ?? (await readAndCompare())
-      const { entries, removed } = planToBatch(refreshRevisions(masses, prepared.realNow), removedMasses)
-      // Rascunhos reais substituídos que o plano não contém (nem já removeu) entram como exclusão, com a revisão de agora.
-      const inPlan = new Set(masses.flatMap((m) => (m.id ? [m.id] : [])))
-      const alreadyRemoved = new Set(removed.map((r) => r.id))
-      for (const m of prepared.replaced) {
-        if (m.id && !inPlan.has(m.id) && !alreadyRemoved.has(m.id)) removed.push({ id: m.id, expectedRevision: m.scheduleRevision })
-      }
+      const { entries } = planToBatch(refreshRevisions(masses, prepared.realNow), removedMasses)
+      const removed: RemovedMass[] = [...prepared.removedReal, ...prepared.replaced].flatMap((m) =>
+        m.id ? [{ id: m.id, expectedRevision: m.scheduleRevision }] : [],
+      )
       await makeSaveScheduleBatch().execute(entries, removed)
       preparedRef.current = null
       setReplacement(null)
@@ -125,7 +165,7 @@ export function usePlanningSave({
       savingRef.current = false
       setSaving(false)
     }
-  }, [ready, readAndCompare, masses, removedMasses, planId, session, reload])
+  }, [ready, monthKey, masses, removedMasses, planId, session, reload])
 
   const previewText = useCallback(() => {
     const names: PlanReader[] = Object.entries(readerNames).map(([id, fullName]) => ({ id, fullName, createdAt: "", dayPreferences: {} }))

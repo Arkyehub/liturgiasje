@@ -81,7 +81,7 @@ function setup(masses: Mass[], profiles: Profile[] = [profile("a"), profile("b")
   ;(makeConcludePlan as jest.Mock).mockReturnValue({ execute: conclude })
 }
 
-function usePage(month: Date, overrides: { planId?: string | null } = {}) {
+function usePage(month: Date, overrides: { planId?: string | null; enabled?: boolean } = {}) {
   const planning = usePlanning({ kind: "mine", month })
   const save = usePlanningSave({
     month,
@@ -90,7 +90,7 @@ function usePage(month: Date, overrides: { planId?: string | null } = {}) {
     readerNames: planning.readerNames,
     planId: "planId" in overrides ? overrides.planId! : planning.planId,
     session: planning.sessionId,
-    enabled: planning.mode === "edit",
+    enabled: overrides.enabled ?? planning.mode === "edit",
     loading: planning.loading,
     error: planning.error,
     reload: planning.retry,
@@ -214,29 +214,168 @@ test("a replaced draft that is also in the plan is updated, not deleted", async 
   expect(entries[0]).toMatchObject({ massId: "m1", massData: { expectedRevision: 5 } })
 })
 
-test("masses the plan removed on purpose are deleted once, with their real revision", async () => {
+test("a removed mass nobody else touched is deleted with its revision and is not listed in the confirmation", async () => {
+  setup([draft()])
+  const { result } = await load()
+  act(() => result.current.planning.removeMass("m1"))
+  let prep = { needsConfirm: true }
+  await act(async () => {
+    prep = await result.current.save.prepareSave()
+  })
+  expect(prep.needsConfirm).toBe(false)
+  expect(result.current.save.replacement).toBeNull()
+  await act(async () => {
+    await result.current.save.saveDraft()
+  })
+  const [entries, removed] = saveBatch.mock.calls[0]
+  expect(entries).toEqual([])
+  expect(removed).toEqual([{ id: "m1", expectedRevision: 3 }])
+})
+
+test("a removed mass edited by someone else is listed in the confirmation and deleted with the CURRENT real revision", async () => {
   setup([draft()])
   const { result } = await load()
   act(() => result.current.planning.removeMass("m1"))
   listMonth.mockResolvedValue([{ ...draft(), scheduleRevision: 6 }])
-
-  expect(await saveOk(result)).toBe(true)
-  const [entries, removed] = saveBatch.mock.calls[0]
-  expect(entries).toEqual([])
-  expect(removed).toHaveLength(1)
-  expect(removed[0]).toMatchObject({ id: "m1" })
-})
-
-test("saveDraft without a previous prepareSave reads the real masses itself", async () => {
-  setup([draft()])
-  const { result } = await load()
-  listMonth.mockResolvedValue([draft(), otherDraft(9)])
+  let prep = { needsConfirm: false }
+  await act(async () => {
+    prep = await result.current.save.prepareSave()
+  })
+  expect(prep.needsConfirm).toBe(true)
+  expect(result.current.save.replacement).toEqual({ count: 1, dates: ["2026-12-06"] })
   await act(async () => {
     await result.current.save.saveDraft()
   })
-  expect(saveBatch.mock.calls[0][1]).toEqual([{ id: "o1", expectedRevision: 9 }])
-  expect(listMonth).toHaveBeenCalledTimes(3) // abertura + leitura do salvar + recarga
-  await waitFor(() => expect(result.current.planning.loading).toBe(false))
+  expect(saveBatch.mock.calls[0][1]).toEqual([{ id: "m1", expectedRevision: 6 }])
+})
+
+test("removed masses that no longer exist or are published are skipped", async () => {
+  setup([draft()])
+  const { result } = await load()
+  act(() => result.current.planning.removeMass("m1"))
+  listMonth.mockResolvedValue([{ ...draft(), isPublished: true }])
+  await act(async () => {
+    await result.current.save.prepareSave()
+    await result.current.save.saveDraft()
+  })
+  expect(saveBatch.mock.calls[0][1]).toEqual([])
+  listMonth.mockResolvedValue([])
+  await act(async () => {
+    await result.current.save.prepareSave()
+    await result.current.save.saveDraft()
+  })
+  expect(saveBatch.mock.calls[1][1]).toEqual([])
+})
+
+test("saveDraft without a prepareSave writes nothing and returns false", async () => {
+  setup([draft()])
+  const { result } = await load()
+  listMonth.mockResolvedValue([draft(), otherDraft(9)])
+  let ok = true
+  await act(async () => {
+    ok = await result.current.save.saveDraft()
+  })
+  expect(ok).toBe(false)
+  expect(saveBatch).not.toHaveBeenCalled()
+  expect(listMonth).toHaveBeenCalledTimes(1)
+})
+
+test("if the plan stops covering the confirmed date between prepare and save, nothing is written", async () => {
+  setup([draft()])
+  const { result } = await load()
+  listMonth.mockResolvedValue([draft(), otherDraft(7)])
+  await act(async () => {
+    expect((await result.current.save.prepareSave()).needsConfirm).toBe(true)
+  })
+  act(() => result.current.planning.removeMass("m1")) // a data 06/12 deixa de ser coberta
+  let ok = true
+  await act(async () => {
+    ok = await result.current.save.saveDraft()
+  })
+  expect(ok).toBe(false)
+  expect(saveBatch).not.toHaveBeenCalled()
+  expect(conclude).not.toHaveBeenCalled()
+  expect(toast.error).toHaveBeenCalledWith("O planejamento mudou; confira e salve de novo.")
+  expect(result.current.save.replacement).toBeNull()
+})
+
+test("if the plan starts covering a date with a real draft after prepare, nothing is written", async () => {
+  setup([draft()])
+  const { result } = await load()
+  const other = { ...otherDraft(7), id: "o2", date: "2026-12-13" }
+  listMonth.mockResolvedValue([draft(), other])
+  await act(async () => {
+    expect((await result.current.save.prepareSave()).needsConfirm).toBe(false)
+  })
+  act(() =>
+    result.current.planning.addMass({ key: "n1", date: "2026-12-13", time: "07:00", description: "", slots: [{ role: "C", profileId: "", locked: false }] } as never),
+  )
+  let ok = true
+  await act(async () => {
+    ok = await result.current.save.saveDraft()
+  })
+  expect(ok).toBe(false)
+  expect(saveBatch).not.toHaveBeenCalled()
+  expect(toast.error).toHaveBeenCalledWith("O planejamento mudou; confira e salve de novo.")
+})
+
+test("a snapshot prepared for another month is never used", async () => {
+  setup([draft()])
+  const hook = await load()
+  listMonth.mockResolvedValue([draft(), otherDraft(7)])
+  await act(async () => {
+    await hook.result.current.save.prepareSave()
+  })
+  hook.rerender({ m: new Date(2027, 0, 1) })
+  await waitFor(() => expect(hook.result.current.planning.loading).toBe(false))
+  let ok = true
+  await act(async () => {
+    ok = await hook.result.current.save.saveDraft()
+  })
+  expect(ok).toBe(false)
+  expect(saveBatch).not.toHaveBeenCalled()
+})
+
+test("a prepareSave read that finishes after a month change is discarded", async () => {
+  setup([draft()])
+  const hook = await load()
+  let release: (m: Mass[]) => void = () => {}
+  listMonth.mockReturnValueOnce(new Promise<Mass[]>((r) => (release = r)))
+  let pending: Promise<{ needsConfirm: boolean }> = Promise.resolve({ needsConfirm: false })
+  act(() => {
+    pending = hook.result.current.save.prepareSave()
+  })
+  hook.rerender({ m: new Date(2027, 0, 1) })
+  await act(async () => {
+    release([draft(), otherDraft(7)])
+    await pending
+  })
+  expect(hook.result.current.save.replacement).toBeNull()
+  await waitFor(() => expect(hook.result.current.planning.loading).toBe(false))
+  let ok = true
+  await act(async () => {
+    ok = await hook.result.current.save.saveDraft()
+  })
+  expect(ok).toBe(false)
+  expect(saveBatch).not.toHaveBeenCalled()
+})
+
+test("if editing is disabled between prepare and save, nothing is written", async () => {
+  setup([draft()])
+  let enabled = true
+  const hook = renderHook(() => usePage(DEC, { enabled }))
+  await waitFor(() => expect(hook.result.current.planning.loading).toBe(false))
+  await act(async () => {
+    await hook.result.current.save.prepareSave()
+  })
+  enabled = false
+  hook.rerender()
+  let ok = true
+  await act(async () => {
+    ok = await hook.result.current.save.saveDraft()
+  })
+  expect(ok).toBe(false)
+  expect(saveBatch).not.toHaveBeenCalled()
 })
 
 test("after saving, the plan is concluded with its id and session and the month reloads", async () => {
@@ -319,6 +458,9 @@ test("double clicks save only once", async () => {
   const { result } = await load()
   let resolve: () => void = () => {}
   saveBatch.mockReturnValueOnce(new Promise<void>((r) => (resolve = r)))
+  await act(async () => {
+    await result.current.save.prepareSave()
+  })
 
   let first: Promise<boolean> = Promise.resolve(false)
   let second = true

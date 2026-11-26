@@ -53,6 +53,12 @@ function PlanningScreen() {
     setBusy(save.saving)
   }, [save.saving, setBusy])
   const [confirmReplace, setConfirmReplace] = useState(false)
+  // Leitura das missas reais em andamento (antes do aviso de substituição): o mês não pode mudar nesse intervalo.
+  const [preparing, setPreparing] = useState(false)
+  // Outro mês nunca herda a confirmação do anterior (o botão de mês já é ignorado nesses casos; isto é a rede de segurança).
+  useEffect(() => {
+    setConfirmReplace(false)
+  }, [month])
   const [detailOpen, setDetailOpen] = useState(false)
   // "new" = criando; string = chave da missa em edição; null = fechado.
   const [sheet, setSheet] = useState<"new" | string | null>(null)
@@ -75,18 +81,21 @@ function PlanningScreen() {
 
   // O planejamento é guardado a cada alteração: trocar de mês não perde nada, só é ignorado enquanto grava.
   const changeMonth = (delta: number) => {
-    if (save.saving) return
+    if (save.saving || preparing || confirmReplace) return
     setDetailOpen(false)
     setMonth((m) => (m ? addMonths(m, delta) : m))
   }
   // Lê as missas reais agora: se salvar substituiria rascunhos existentes, confirma antes de gravar.
   const requestSave = async () => {
+    setPreparing(true)
     try {
       const { needsConfirm } = await save.prepareSave()
       if (needsConfirm) setConfirmReplace(true)
       else void save.saveDraft()
     } catch {
       // prepareSave já avisou o erro e nada foi gravado.
+    } finally {
+      setPreparing(false)
     }
   }
   // noopener/noreferrer: a aba do WhatsApp não ganha acesso a esta janela (nem ao referrer do painel admin).

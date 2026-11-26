@@ -443,6 +443,34 @@ test("cancelling the replacement confirmation writes nothing and keeps the sugge
   expect(screen.getByRole("list", { name: "Vagas sugeridas" })).toBeInTheDocument()
 })
 
+test("changing month while the real masses are being read is ignored", async () => {
+  asAdmin()
+  setup()
+  await suggestDefaults()
+  let release: (m: Mass[]) => void = () => {}
+  const execute = jest.fn().mockReturnValueOnce(new Promise<Mass[]>((r) => (release = r))).mockResolvedValue([])
+  ;(makeListSchedulesForMonth as jest.Mock).mockReturnValue({ execute })
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  await waitFor(() => expect(execute).toHaveBeenCalledTimes(1))
+  await userEvent.click(screen.getByRole("button", { name: "Próximo mês", hidden: true }))
+  expect(screen.getByText("Dezembro 2026")).toBeInTheDocument()
+  await act(async () => release([]))
+  await waitFor(() => expect(saveBatch).toHaveBeenCalledTimes(1))
+  expect(saveBatch.mock.calls[0][0]).toHaveLength(25)
+})
+
+test("changing month while the replacement dialog is open is ignored and the dialog stays", async () => {
+  asAdmin()
+  setupWithStrayDraft()
+  await suggestDefaults()
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  const dialog = await screen.findByRole("alertdialog")
+  await userEvent.click(screen.getByRole("button", { name: "Próximo mês", hidden: true }))
+  expect(screen.getByRole("alertdialog")).toBe(dialog)
+  expect(screen.getByText("Dezembro 2026")).toBeInTheDocument()
+  expect(saveBatch).not.toHaveBeenCalled()
+})
+
 test("changing month never asks to discard: the plan is saved as you go", async () => {
   asAdmin()
   setup()
