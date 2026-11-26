@@ -175,3 +175,22 @@ test("a custom time from Outro reaches onSave", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Salvar missa" }))
   expect(onSave.mock.calls[0][0][0]).toMatchObject({ time: "20:10", key: "2026-12-08_20:10" })
 })
+
+test("a date typed outside the month shows an error and cannot be saved", async () => {
+  const { onSave } = setup()
+  pickDate("2026-11-30")
+  expect(screen.getByRole("alert")).toHaveTextContent("A data precisa estar neste mês (01/12 a 31/12).")
+  expect(screen.getByLabelText("Dia")).toBeInvalid()
+  expect(screen.getByRole("button", { name: "Salvar missa" })).toBeDisabled()
+  await userEvent.click(screen.getByRole("button", { name: "Salvar missa" }))
+  expect(onSave).not.toHaveBeenCalled()
+
+  pickDate("2027-01-01")
+  expect(screen.getByRole("button", { name: "Salvar missa" })).toBeDisabled()
+
+  pickDate("2026-12-31")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Salvar missa" })).toBeEnabled()
+  await userEvent.click(screen.getByRole("button", { name: "Salvar missa" }))
+  expect(onSave.mock.calls[0][0][0]).toMatchObject({ date: "2026-12-31" })
+})

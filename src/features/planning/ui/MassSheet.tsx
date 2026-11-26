@@ -57,7 +57,11 @@ export function MassSheet({ month, mass, existing, onSave, onRemove, onClose }: 
   const monthKey = format(month, "yyyy-MM")
   const isSunday = !!date && new Date(`${date}T00:00:00`).getDay() === 0
   const repeating = repeat && isSunday && !editing
-  const dates = !date ? [] : repeating ? sundaysOf(month) : [date]
+  const firstDay = `${monthKey}-01`
+  const lastDay = `${monthKey}-${String(getDaysInMonth(month)).padStart(2, "0")}`
+  // `min`/`max` do input não impedem uma data digitada fora do mês: uma missa assim sumiria da visão do mês.
+  const outOfMonth = !!date && (date.length !== 10 || date < firstDay || date > lastDay)
+  const dates = !date || outOfMonth ? [] : repeating ? sundaysOf(month) : [date]
   const conflicts = dates.filter((d) => existing.some((e) => e.date === d && e.time === time))
   const canSave = dates.length > 0 && roles.length > 0 && conflicts.length === 0
 
@@ -117,8 +121,10 @@ export function MassSheet({ month, mass, existing, onSave, onRemove, onClose }: 
             <input
               type="date"
               value={date}
-              min={`${monthKey}-01`}
-              max={`${monthKey}-${String(getDaysInMonth(month)).padStart(2, "0")}`}
+              min={firstDay}
+              max={lastDay}
+              aria-invalid={outOfMonth}
+              aria-describedby={outOfMonth ? "mass-date-error" : undefined}
               onChange={(e) => pickDate(e.target.value)}
               className="min-h-11 rounded-2xl border border-stone-300 bg-white px-3 text-[15px] font-semibold text-stone-900"
             />
@@ -182,6 +188,12 @@ export function MassSheet({ month, mass, existing, onSave, onRemove, onClose }: 
               />
               Repetir em todos os domingos do mês
             </label>
+          )}
+
+          {outOfMonth && (
+            <p id="mass-date-error" role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+              {`A data precisa estar neste mês (${br(firstDay)} a ${br(lastDay)}).`}
+            </p>
           )}
 
           {conflicts.length > 0 && (
