@@ -6,6 +6,7 @@ DROP FUNCTION IF EXISTS public.plan_conclude(uuid, text);
 DROP FUNCTION IF EXISTS public.plan_release(uuid, text);
 DROP FUNCTION IF EXISTS public.plan_heartbeat(uuid, text);
 DROP FUNCTION IF EXISTS public.plan_save(uuid, text, text, bigint, jsonb);
+DROP FUNCTION IF EXISTS public.plan_copy(uuid, text, boolean);
 DROP FUNCTION IF EXISTS public.plan_copy(uuid, boolean);
 DROP FUNCTION IF EXISTS public.plan_get(uuid);
 DROP FUNCTION IF EXISTS public.plan_open(text, text);

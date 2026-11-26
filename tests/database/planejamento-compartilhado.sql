@@ -31,10 +31,13 @@ DO $$ DECLARE f record; n int := 0; BEGIN
   IF n < 10 THEN RAISE EXCEPTION 'funcoes plan_* ausentes (%)', n; END IF;
 END $$;
 DO $$ DECLARE f text; r text; p text; BEGIN
-  FOREACH f IN ARRAY ARRAY['plan_list(text[])','plan_open(text,text)','plan_get(uuid)','plan_copy(uuid,boolean)',
+  FOREACH f IN ARRAY ARRAY['plan_list(text[])','plan_open(text,text)','plan_get(uuid)','plan_copy(uuid,text,boolean)',
     'plan_save(uuid,text,text,bigint,jsonb)','plan_heartbeat(uuid,text)','plan_release(uuid,text)',
     'plan_conclude(uuid,text)','plan_reopen(uuid,text)','plan_discard(uuid)'] LOOP
     IF NOT has_function_privilege('authenticated','public.'||f,'EXECUTE') THEN RAISE EXCEPTION 'authenticated sem EXECUTE em %', f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['plan_actor()','plan_item(public.schedule_plans,uuid,text)','plan_detail(public.schedule_plans,uuid,text)','plan_enter(uuid,uuid,text)'] LOOP
+    IF has_function_privilege('authenticated','public.'||f,'EXECUTE') OR has_function_privilege('anon','public.'||f,'EXECUTE') THEN RAISE EXCEPTION 'helper exposto: %', f; END IF;
   END LOOP;
   FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
     FOREACH p IN ARRAY ARRAY['SELECT','INSERT','UPDATE','DELETE'] LOOP
@@ -159,7 +162,7 @@ END $$;
 
 -- (7) plan_copy
 SET ROLE authenticated;
-SELECT public.plan_copy(:'pa', false) AS c \gset
+SELECT public.plan_copy(:'pa', 'sB1', false) AS c \gset
 SELECT set_config('t.c', :'c', false);
 DO $$ DECLARE c jsonb := current_setting('t.c'); BEGIN
   IF c->>'ownerName' <> 'Admin B' OR (c->>'isMine')::boolean IS NOT TRUE OR c->>'copiedFromName' <> 'Admin A'
@@ -177,14 +180,14 @@ SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a1'
 SELECT public.plan_save(:'pa','sA2','q2',1,'{"missas":[],"v":2}') AS rev \gset
 SELECT set_config('t.rev', :'rev', false);
 SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a2',false);
-SELECT pg_temp.expect_err(format('SELECT public.plan_copy(%L,false)',:'pa'),'plan_exists');
-SELECT public.plan_copy(:'pa', true) AS c2 \gset
+SELECT pg_temp.expect_err(format('SELECT public.plan_copy(%L,''sB1'',false)',:'pa'),'plan_exists');
+SELECT public.plan_copy(:'pa', 'sB1', true) AS c2 \gset
 SELECT set_config('t.c2', :'c2', false);
 DO $$ DECLARE c jsonb := current_setting('t.c2'); BEGIN
   IF c->'state' <> '{"missas":[],"v":2}'::jsonb OR c->>'id' <> current_setting('t.pb') THEN RAISE EXCEPTION 'overwrite: %', c; END IF;
 END $$;
-SELECT pg_temp.expect_err(format('SELECT public.plan_copy(%L,true)',:'pb'),'invalid_arguments');
-SELECT pg_temp.expect_err($$SELECT public.plan_copy(gen_random_uuid(),true)$$,'plan_not_found');
+SELECT pg_temp.expect_err(format('SELECT public.plan_copy(%L,''sB1'',true)',:'pb'),'invalid_arguments');
+SELECT pg_temp.expect_err($$SELECT public.plan_copy(gen_random_uuid(),'sB1',true)$$,'plan_not_found');
 RESET ROLE;
 
 -- (8) plan_list
@@ -290,5 +293,78 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.schedule_plans WHERE id=current_setting('t.pa')::uuid) THEN RAISE EXCEPTION 'discard de nao dono apagou'; END IF;
   IF EXISTS (SELECT 1 FROM public.schedule_plans WHERE id=current_setting('t.pb')::uuid) THEN RAISE EXCEPTION 'discard do dono nao apagou'; END IF;
 END $$;
+
+-- (13) rodada de correções
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a4',false);
+DO $$ BEGIN
+  BEGIN PERFORM public.plan_open('2028-03','x'); RAISE EXCEPTION 'leitor aceito';
+  EXCEPTION WHEN SQLSTATE '42501' THEN NULL; END;
+END $$;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a1',false);
+SELECT pg_temp.expect_err($$SELECT public.plan_list(NULL)$$,'invalid_arguments');
+SELECT pg_temp.expect_err(format('SELECT public.plan_open(''2028-03'',%L)',repeat('s',129)),'invalid_arguments');
+SELECT public.plan_open('2028-03','sA1') AS o1 \gset
+SELECT (:'o1'::jsonb)->'plan'->>'id' AS p3 \gset
+SELECT set_config('t.p3', :'p3', false);
+SELECT pg_temp.expect_err(format('SELECT public.plan_save(%L,''sA1'',%L,0,''{"a":1}'')',:'p3',repeat('r',129)),'invalid_arguments');
+SELECT pg_temp.expect_err(format('SELECT public.plan_copy(%L,%L,true)',:'p3',repeat('s',129)),'invalid_arguments');
+SELECT public.plan_save(:'p3','sA1','k1',0,'{"k":1}');
+-- cópia: destino reservado por outra sessão => plan_in_use, nada muda
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a2',false);
+SELECT public.plan_open('2028-03','sB2') AS o2 \gset
+SELECT (:'o2'::jsonb)->'plan'->>'id' AS pb3 \gset
+SELECT set_config('t.pb3', :'pb3', false);
+SELECT pg_temp.expect_err(format('SELECT public.plan_copy(%L,''sBx'',true)',:'p3'),'plan_in_use');
+RESET ROLE;
+DO $$ BEGIN
+  IF (SELECT state FROM public.schedule_plans WHERE id=current_setting('t.pb3')::uuid) IS NOT NULL THEN RAISE EXCEPTION 'plan_in_use alterou destino'; END IF;
+END $$;
+SET ROLE authenticated;
+-- mesma sessão: ok
+SELECT public.plan_copy(:'p3','sB2',false) AS cc \gset
+SELECT set_config('t.cc', :'cc', false);
+DO $$ BEGIN
+  IF current_setting('t.cc')::jsonb->'state' <> '{"k":1}'::jsonb THEN RAISE EXCEPTION 'copia mesma sessao: %', current_setting('t.cc'); END IF;
+END $$;
+-- origem some: plan_not_found e destino intacto
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a1',false);
+SELECT public.plan_discard(:'p3');
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a2',false);
+SELECT pg_temp.expect_err(format('SELECT public.plan_copy(%L,''sB2'',true)',:'p3'),'plan_not_found');
+RESET ROLE;
+DO $$ DECLARE sp public.schedule_plans; BEGIN
+  SELECT * INTO sp FROM public.schedule_plans WHERE id=current_setting('t.pb3')::uuid;
+  IF sp.state <> '{"k":1}'::jsonb OR sp.revision <> 1 OR sp.copied_from_owner_id IS NULL THEN RAISE EXCEPTION 'destino alterado por copia falha: %', sp; END IF;
+END $$;
+
+-- limpeza de vencidos respeita reserva viva
+INSERT INTO public.schedule_plans(month_reference,owner_profile_id,expires_at,lock_session_id,lock_heartbeat_at) VALUES
+ ('2028-04','d0000000-0000-0000-0000-0000000000a1', now() - interval '1 day','sA1', now()),
+ ('2028-04','d0000000-0000-0000-0000-0000000000a2', now() - interval '1 day', NULL, NULL),
+ ('2028-05','d0000000-0000-0000-0000-0000000000a2', now() - interval '1 day','sBz', now() - interval '500 seconds');
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a1',false);
+SELECT public.plan_list(ARRAY['2028-04','2028-05']) AS l3 \gset
+RESET ROLE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.schedule_plans WHERE month_reference='2028-04' AND owner_profile_id='d0000000-0000-0000-0000-0000000000a1') THEN RAISE EXCEPTION 'plano vencido com reserva viva foi apagado'; END IF;
+  IF EXISTS (SELECT 1 FROM public.schedule_plans WHERE month_reference='2028-04' AND owner_profile_id='d0000000-0000-0000-0000-0000000000a2') THEN RAISE EXCEPTION 'vencido sem reserva nao apagado'; END IF;
+  IF EXISTS (SELECT 1 FROM public.schedule_plans WHERE month_reference='2028-05') THEN RAISE EXCEPTION 'vencido com reserva morta nao apagado'; END IF;
+END $$;
+
+-- plan_save com reserva vencida mas nao assumida; plan_conclude de vencido
+INSERT INTO public.schedule_plans(month_reference,owner_profile_id,lock_session_id,lock_heartbeat_at) VALUES
+ ('2028-06','d0000000-0000-0000-0000-0000000000a1','sA1', now() - interval '600 seconds');
+SELECT id AS p6 FROM public.schedule_plans WHERE month_reference='2028-06' \gset
+SELECT set_config('t.p6', :'p6', false);
+SET ROLE authenticated;
+SELECT public.plan_save(:'p6','sA1','z1',0,'{"z":1}') AS zrev \gset
+SELECT CASE WHEN :zrev = 1 THEN 1 ELSE 1/0 END AS save_reserva_vencida_ok;
+RESET ROLE;
+UPDATE public.schedule_plans SET expires_at = now() - interval '1 hour', lock_heartbeat_at = now() WHERE id = :'p6';
+SET ROLE authenticated;
+SELECT pg_temp.expect_err(format('SELECT public.plan_conclude(%L,''sA1'')',:'p6'),'plan_expired');
+RESET ROLE;
 
 SELECT 'planejamento compartilhado passed' AS result;

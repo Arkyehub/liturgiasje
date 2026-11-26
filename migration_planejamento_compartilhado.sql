@@ -6,6 +6,11 @@
 -- Acesso somente por funções SECURITY DEFINER: RLS ligado, nenhuma policy, grants de tabela revogados.
 -- Cada função trava apenas a linha do plano (SELECT ... FOR UPDATE); não usa o lock global 13739001.
 -- Reserva viva = lock_heartbeat_at > now() - 120 s. Só o dono reserva e grava.
+-- Reserva vencida mas não assumida ainda vale em plan_save/plan_heartbeat/plan_conclude (a comparação é por
+-- lock_session_id; qualquer takeover o troca e a sessão antiga recebe plan_lock_lost: intencional).
+-- plan_copy não altera lock_*. Limpeza de vencidos nunca apaga plano com reserva viva (SKIP LOCKED, sem deadlock).
+
+DROP FUNCTION IF EXISTS public.plan_copy(uuid, boolean);  -- assinatura antiga (sem sessão)
 
 CREATE TABLE IF NOT EXISTS public.schedule_plans (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -100,7 +105,10 @@ BEGIN
   FOREACH m IN ARRAY p_months LOOP
     IF m IS NULL OR m !~ '^\d{4}-(0[1-9]|1[0-2])$' THEN RAISE EXCEPTION 'invalid_arguments'; END IF;
   END LOOP;
-  DELETE FROM public.schedule_plans WHERE expires_at < now();
+  DELETE FROM public.schedule_plans WHERE id IN (
+    SELECT id FROM public.schedule_plans
+     WHERE expires_at < now() AND (lock_heartbeat_at IS NULL OR lock_heartbeat_at <= now() - interval '120 seconds')
+     ORDER BY id FOR UPDATE SKIP LOCKED);
   SELECT COALESCE(jsonb_agg(public.plan_item(sp, me) ORDER BY sp.month_reference, sp.created_at, sp.id), '[]'::jsonb)
     INTO result
     FROM public.schedule_plans sp WHERE sp.month_reference = ANY(p_months);
@@ -125,8 +133,9 @@ BEGIN
     SELECT * INTO sp FROM public.schedule_plans
      WHERE month_reference = p_month AND owner_profile_id = me FOR UPDATE;
     IF FOUND THEN
-      IF sp.expires_at < now() THEN
-        DELETE FROM public.schedule_plans WHERE id = sp.id;  -- vencido: recomeça do zero
+      IF sp.expires_at < now() AND (sp.lock_heartbeat_at IS NULL
+         OR sp.lock_heartbeat_at <= now() - interval '120 seconds') THEN
+        DELETE FROM public.schedule_plans WHERE id = sp.id;  -- vencido e sem reserva viva: recomeça do zero
         CONTINUE;
       END IF;
       EXIT;
@@ -152,12 +161,16 @@ END $$;
 REVOKE ALL ON FUNCTION public.plan_get(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.plan_get(uuid) TO authenticated;
 
-CREATE OR REPLACE FUNCTION public.plan_copy(p_source uuid, p_overwrite boolean) RETURNS jsonb
+-- A origem é lida sem trava (FOR SHARE cruzaria com o FOR UPDATE do destino entre dois coordenadores) e relida
+-- depois de travar o destino; se sumiu ou venceu, plan_not_found sem tocar o destino.
+CREATE OR REPLACE FUNCTION public.plan_copy(p_source uuid, p_session text, p_overwrite boolean) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
 DECLARE me uuid; src public.schedule_plans; sp public.schedule_plans; tries int := 0;
 BEGIN
   me := public.plan_actor();
-  IF p_source IS NULL OR p_overwrite IS NULL THEN RAISE EXCEPTION 'invalid_arguments'; END IF;
+  IF p_source IS NULL OR p_overwrite IS NULL OR p_session IS NULL OR p_session = '' OR length(p_session) > 128 THEN
+    RAISE EXCEPTION 'invalid_arguments';
+  END IF;
   SELECT * INTO src FROM public.schedule_plans WHERE id = p_source AND expires_at >= now();
   IF NOT FOUND THEN RAISE EXCEPTION 'plan_not_found'; END IF;
   IF src.owner_profile_id = me THEN RAISE EXCEPTION 'invalid_arguments'; END IF;
@@ -170,25 +183,29 @@ BEGIN
     EXIT WHEN FOUND;
     IF tries >= 3 THEN RAISE EXCEPTION 'plan_not_found'; END IF;
   END LOOP;
+  IF sp.lock_heartbeat_at IS NOT NULL AND sp.lock_heartbeat_at > now() - interval '120 seconds'
+     AND sp.lock_session_id IS DISTINCT FROM p_session THEN
+    RAISE EXCEPTION 'plan_in_use';
+  END IF;
   IF sp.state IS NOT NULL AND sp.expires_at >= now() AND NOT p_overwrite THEN
     RAISE EXCEPTION 'plan_exists';
   END IF;
-  -- Releitura do estado da origem já com o plano do chamador travado.
-  SELECT * INTO src FROM public.schedule_plans WHERE id = p_source;
+  SELECT * INTO src FROM public.schedule_plans WHERE id = p_source AND expires_at >= now();
+  IF NOT FOUND THEN RAISE EXCEPTION 'plan_not_found'; END IF;
   UPDATE public.schedule_plans SET
       state = src.state,
       status = 'em_andamento',
       concluded_at = NULL,
-      revision = sp.revision + 1,      -- outro aparelho com reserva recebe conflito ao gravar
+      revision = sp.revision + 1,
       last_request_id = NULL,
       copied_from_owner_id = src.owner_profile_id,
       updated_at = now(),
       expires_at = now() + interval '30 days'
     WHERE id = sp.id RETURNING * INTO sp;
-  RETURN public.plan_detail(sp, me);
+  RETURN public.plan_detail(sp, me, p_session);
 END $$;
-REVOKE ALL ON FUNCTION public.plan_copy(uuid, boolean) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.plan_copy(uuid, boolean) TO authenticated;
+REVOKE ALL ON FUNCTION public.plan_copy(uuid, text, boolean) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.plan_copy(uuid, text, boolean) TO authenticated;
 
 -- Ordem das checagens: plano/dono, concluído, reserva, request_id repetido, revisão, vencido, tamanho.
 -- (concluído vem antes da reserva porque plan_conclude libera a reserva.)
@@ -197,7 +214,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
 DECLARE me uuid; sp public.schedule_plans;
 BEGIN
   me := public.plan_actor();
-  IF p_plan_id IS NULL OR p_session IS NULL OR p_session = '' OR p_request_id IS NULL OR p_request_id = ''
+  IF p_plan_id IS NULL OR p_session IS NULL OR p_session = '' OR p_request_id IS NULL OR p_request_id = '' OR length(p_request_id) > 128
      OR p_expected_revision IS NULL OR jsonb_typeof(p_state) IS DISTINCT FROM 'object' THEN
     RAISE EXCEPTION 'invalid_arguments';
   END IF;
@@ -262,6 +279,7 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'plan_not_found'; END IF;
   IF sp.owner_profile_id <> me THEN RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501'; END IF;
   IF sp.status = 'concluido' THEN RETURN; END IF;
+  IF sp.expires_at < now() THEN RAISE EXCEPTION 'plan_expired'; END IF;
   IF sp.lock_session_id IS DISTINCT FROM p_session THEN RAISE EXCEPTION 'plan_lock_lost'; END IF;
   UPDATE public.schedule_plans SET
       status = 'concluido', concluded_at = now(), lock_session_id = NULL, lock_heartbeat_at = NULL,
