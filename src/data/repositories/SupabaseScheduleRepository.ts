@@ -290,18 +290,27 @@ export class SupabaseScheduleRepository implements ScheduleRepository {
   }
 
   async listSlotHistory(fromDate: string, toDate: string): Promise<SlotHistoryRow[]> {
-    const { data, error } = await supabase
-      .from('schedule_slots')
-      // select('*') de propósito: original_profile_id não existe em todos os bancos (ex.: Production);
-      // nomear a coluna faria a consulta falhar. Linha sem a coluna => originalProfileId: null.
-      .select('*, mass:masses!inner(date, is_published)')
-      .eq('mass.is_published', true)
-      .gte('mass.date', fromDate)
-      .lte('mass.date', toDate)
+    // PostgREST limita a 1000 linhas por requisição e trunca em silêncio: pagina com order estável (id único).
+    const PAGE_SIZE = 1000
+    const rows: any[] = []
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from('schedule_slots')
+        // select('*') de propósito: original_profile_id não existe em todos os bancos (ex.: Production);
+        // nomear a coluna faria a consulta falhar. Linha sem a coluna => originalProfileId: null.
+        .select('*, mass:masses!inner(date, is_published)')
+        .eq('mass.is_published', true)
+        .gte('mass.date', fromDate)
+        .lte('mass.date', toDate)
+        .order('id', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1)
+      if (error) throw error
+      const page = data || []
+      rows.push(...page)
+      if (page.length < PAGE_SIZE) break
+    }
 
-    if (error) throw error
-
-    return (data || [])
+    return rows
       .filter((slot: any) => !!slot.profile_id)
       .map((slot: any) => {
         const mass = Array.isArray(slot.mass) ? slot.mass[0] : slot.mass

@@ -3,7 +3,7 @@ import { supabase } from '@/shared/api/supabase'
 jest.mock('@/shared/api/supabase', () => ({ supabase: { from: jest.fn() } }))
 
 type Builder = {
-  select: jest.Mock; eq: jest.Mock; gte: jest.Mock; lte: jest.Mock
+  select: jest.Mock; eq: jest.Mock; gte: jest.Mock; lte: jest.Mock; order: jest.Mock; range: jest.Mock
   then: (resolve: (value: unknown) => unknown) => unknown
 }
 const chain = (result: unknown): Builder => {
@@ -12,6 +12,8 @@ const chain = (result: unknown): Builder => {
     eq: jest.fn(() => builder),
     gte: jest.fn(() => builder),
     lte: jest.fn(() => builder),
+    order: jest.fn(() => builder),
+    range: jest.fn(() => builder),
     then: (resolve) => resolve(result)
   }
   return builder
@@ -55,4 +57,19 @@ test('row without original_profile_id column yields null and no error', async ()
 test('propagates database errors', async () => {
   ;(supabase.from as jest.Mock).mockReturnValue(chain({ error: new Error('denied'), data: null }))
   await expect(new SupabaseScheduleRepository().listSlotHistory('a', 'b')).rejects.toThrow('denied')
+})
+
+test('paginates with stable order and merges all pages', async () => {
+  const mk = (n: number, off: number) => Array.from({ length: n }, (_, i) => ({ id: `s${off + i}`, role: 'L', profile_id: 'p1', mass: { date: '2026-11-01', is_published: true } }))
+  const first = chain({ error: null, data: mk(1000, 0) })
+  const second = chain({ error: null, data: mk(3, 1000) })
+  ;(supabase.from as jest.Mock).mockReturnValueOnce(first).mockReturnValueOnce(second)
+
+  const rows = await new SupabaseScheduleRepository().listSlotHistory('2026-01-01', '2026-12-31')
+
+  expect(rows).toHaveLength(1003)
+  expect(first.order).toHaveBeenCalledWith('id', { ascending: true })
+  expect(first.range).toHaveBeenCalledWith(0, 999)
+  expect(second.range).toHaveBeenCalledWith(1000, 1999)
+  expect(supabase.from).toHaveBeenCalledTimes(2)
 })

@@ -15,10 +15,22 @@ export class SupabaseUnavailableRepository implements UnavailableRepository {
   }
 
   async listForRange(fromDate: string, toDate: string): Promise<Record<string, string[]>> {
-    const { data, error } = await supabase.from('unavailable_dates').select('date, profile_id').gte('date', fromDate).lte('date', toDate)
-    if (error) throw error
+    // PostgREST trunca em 1000 linhas sem erro: pagina com order estável (id único).
+    const PAGE_SIZE = 1000
     const byDate: Record<string, string[]> = {}
-    for (const row of data || []) (byDate[row.date] ||= []).push(row.profile_id)
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from('unavailable_dates')
+        .select('date, profile_id')
+        .gte('date', fromDate)
+        .lte('date', toDate)
+        .order('id', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1)
+      if (error) throw error
+      const page = data || []
+      for (const row of page) (byDate[row.date] ||= []).push(row.profile_id)
+      if (page.length < PAGE_SIZE) break
+    }
     return byDate
   }
 
