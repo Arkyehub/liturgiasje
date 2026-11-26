@@ -11,6 +11,7 @@ import { NotebookList } from "@/features/planning/ui/NotebookList"
 import { PublishedNotice } from "@/features/planning/ui/PublishedNotice"
 import { PlanningHeader } from "@/features/planning/ui/PlanningHeader"
 import { PlanningFooter } from "@/features/planning/ui/PlanningFooter"
+import { otherMassTimes } from "@/features/planning/lib/massConflicts"
 import { MassSheet } from "@/features/planning/ui/MassSheet"
 
 function Loading({ text }: { text: string }) {
@@ -72,7 +73,7 @@ function PlanningScreen() {
           key={editing?.key ?? "new"}
           month={month}
           mass={editing}
-          existing={planning.masses.filter((m) => m.key !== editing?.key).map((m) => ({ date: m.date, time: m.time }))}
+          existing={otherMassTimes(planning.masses, editing?.key)}
           onSave={(saved) => {
             if (editing) {
               const [m] = saved
