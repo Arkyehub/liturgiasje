@@ -60,6 +60,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
     'expiresAt', sp.expires_at,
     'copiedFromName', (SELECT full_name FROM public.profiles WHERE id = sp.copied_from_owner_id),
     'concludedAt', sp.concluded_at,
+    'hasContent', sp.state IS NOT NULL,
     'openElsewhere', (sp.lock_heartbeat_at IS NOT NULL
                       AND sp.lock_heartbeat_at > now() - interval '120 seconds'
                       AND (p_session IS NULL OR sp.lock_session_id IS DISTINCT FROM p_session))
@@ -192,6 +193,8 @@ BEGIN
   END IF;
   SELECT * INTO src FROM public.schedule_plans WHERE id = p_source AND expires_at >= now();
   IF NOT FOUND THEN RAISE EXCEPTION 'plan_not_found'; END IF;
+  -- Origem sem conteúdo (nunca gravada): copiar apagaria o trabalho do destino por nada.
+  IF src.state IS NULL THEN RAISE EXCEPTION 'plan_not_found'; END IF;
   UPDATE public.schedule_plans SET
       state = src.state,
       status = 'em_andamento',

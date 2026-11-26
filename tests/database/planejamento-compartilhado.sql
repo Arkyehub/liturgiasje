@@ -190,6 +190,60 @@ SELECT pg_temp.expect_err(format('SELECT public.plan_copy(%L,''sB1'',true)',:'pb
 SELECT pg_temp.expect_err($$SELECT public.plan_copy(gen_random_uuid(),'sB1',true)$$,'plan_not_found');
 RESET ROLE;
 
+-- (7b) origem sem conteúdo: hasContent falso, cópia recusada e destino intacto
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a1',false);
+SELECT public.plan_open('2028-07','sA1') AS o7 \gset
+SELECT (:'o7'::jsonb)->'plan'->>'id' AS p7 \gset
+SELECT set_config('t.p7', :'p7', false);
+SELECT set_config('t.o7', :'o7', false);
+DO $$ BEGIN
+  IF (current_setting('t.o7')::jsonb->'plan'->>'hasContent')::boolean IS NOT FALSE THEN RAISE EXCEPTION 'hasContent no plano recem aberto: %', current_setting('t.o7'); END IF;
+END $$;
+SELECT public.plan_list(ARRAY['2028-07']) AS l7 \gset
+SELECT set_config('t.l7', :'l7', false);
+DO $$ DECLARE it jsonb := current_setting('t.l7')::jsonb->0; BEGIN
+  IF jsonb_array_length(current_setting('t.l7')::jsonb) <> 1 OR (it->>'hasContent')::boolean IS NOT FALSE THEN RAISE EXCEPTION 'plan_list hasContent (vazio): %', current_setting('t.l7'); END IF;
+END $$;
+-- B sem plano em 2028-07: a cópia da origem vazia falha e não cria nada para B
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a2',false);
+SELECT pg_temp.expect_err(format('SELECT public.plan_copy(%L,''sB7'',false)',:'p7'),'plan_not_found');
+SELECT pg_temp.expect_err(format('SELECT public.plan_copy(%L,''sB7'',true)',:'p7'),'plan_not_found');
+RESET ROLE;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM public.schedule_plans WHERE month_reference='2028-07' AND owner_profile_id='d0000000-0000-0000-0000-0000000000a2') THEN RAISE EXCEPTION 'copia vazia criou plano para B'; END IF;
+END $$;
+-- B com conteúdo em 2028-07: a cópia (overwrite) da origem vazia não toca o destino
+SET ROLE authenticated;
+SELECT public.plan_open('2028-07','sB7') AS ob7 \gset
+SELECT (:'ob7'::jsonb)->'plan'->>'id' AS pb7 \gset
+SELECT set_config('t.pb7', :'pb7', false);
+SELECT public.plan_save(:'pb7','sB7','b7',0,'{"meu":"trabalho"}');
+SELECT pg_temp.expect_err(format('SELECT public.plan_copy(%L,''sB7'',true)',:'p7'),'plan_not_found');
+RESET ROLE;
+DO $$ DECLARE sp public.schedule_plans; BEGIN
+  SELECT * INTO sp FROM public.schedule_plans WHERE id=current_setting('t.pb7')::uuid;
+  IF sp.state <> '{"meu":"trabalho"}'::jsonb OR sp.revision <> 1 OR sp.copied_from_owner_id IS NOT NULL THEN RAISE EXCEPTION 'copia vazia alterou o destino: %', sp; END IF;
+END $$;
+-- depois de A gravar, hasContent vira verdadeiro e a cópia funciona
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a1',false);
+SELECT public.plan_save(:'p7','sA1','a7',0,'{"conteudo":1}');
+SELECT public.plan_list(ARRAY['2028-07']) AS l7b \gset
+SELECT set_config('t.l7b', :'l7b', false);
+DO $$ DECLARE r jsonb; BEGIN
+  FOR r IN SELECT * FROM jsonb_array_elements(current_setting('t.l7b')::jsonb) LOOP
+    IF (r->>'hasContent')::boolean IS NOT TRUE THEN RAISE EXCEPTION 'hasContent apos salvar: %', r; END IF;
+  END LOOP;
+END $$;
+SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a2',false);
+SELECT public.plan_copy(:'p7','sB7',true) AS c7 \gset
+SELECT set_config('t.c7', :'c7', false);
+DO $$ BEGIN
+  IF current_setting('t.c7')::jsonb->'state' <> '{"conteudo":1}'::jsonb OR (current_setting('t.c7')::jsonb->>'hasContent')::boolean IS NOT TRUE THEN RAISE EXCEPTION 'copia com conteudo: %', current_setting('t.c7'); END IF;
+END $$;
+RESET ROLE;
+
 -- (8) plan_list
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a1',false);
