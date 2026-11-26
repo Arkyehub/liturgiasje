@@ -6,8 +6,6 @@ export interface SchedulePlanRepository {
   get(planId: string): Promise<PlanDocument | null>
   copy(sourceId: string, session: string, overwrite: boolean): Promise<PlanDocument>
   save(planId: string, session: string, requestId: string, expectedRevision: number, state: unknown): Promise<number>
-  heartbeat(planId: string, session: string): Promise<void>
-  release(planId: string, session: string): Promise<void>
   conclude(planId: string, session: string): Promise<void>
   reopen(planId: string, session: string): Promise<PlanOpenResult>
   discard(planId: string): Promise<void>

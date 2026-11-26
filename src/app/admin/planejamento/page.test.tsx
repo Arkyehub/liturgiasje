@@ -67,7 +67,7 @@ let listPlans: jest.Mock
 const listItem = (extra: Partial<PlanListItem> = {}): PlanListItem => ({
   id: "o1", monthReference: "2026-12", ownerProfileId: "owner-2", ownerName: "Maria Teste", isMine: false, status: "em_andamento",
   createdAt: "2026-11-20T12:00:00Z", updatedAt: "2026-11-26T09:00:00Z", expiresAt: "2026-12-26T09:00:00Z",
-  copiedFromName: null, concludedAt: null, openElsewhere: false, hasContent: true, ...extra,
+  copiedFromName: null, concludedAt: null, hasContent: true, ...extra,
 })
 
 function setup(masses: Mass[] = [], plans: PlanListItem[] = []) {
@@ -499,7 +499,7 @@ test("the replacement dialog closes and resets when the plan leaves edit mode, w
   const view = await suggestDefaults()
   await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
   await screen.findByRole("alertdialog")
-  setSync({ mode: "readonly", lostChanges: 1, holderLastSeen: "2026-11-26T11:00:00Z" })
+  setSync({ mode: "readonly" })
   view.rerender(<PlanejamentoPage />)
   await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument())
   expect(saveBatch).not.toHaveBeenCalled()
@@ -656,29 +656,27 @@ test("'Trocar planejamento' stays disabled while the last save failed (leaving w
   expect(screen.getByRole("button", { name: /tentar de novo/i })).toBeInTheDocument()
 })
 
-test("a plan open on another device shows the banner with Editar, which reopens it, and locks the editing controls", async () => {
+test("a change brought from another device of the same owner shows a toast and keeps editing enabled", async () => {
   asAdmin()
   setup([draftMass("d1", "19:00:00")])
-  setSync({ mode: "readonly", holderLastSeen: "2026-11-26T11:00:00Z", plan: planDoc({ openElsewhere: true }) })
+  setSync({ mode: "edit", externalChange: { seq: 1, concluded: false, lost: 0 } })
   await openMine()
-  expect(screen.getByText("SOMENTE LEITURA")).toBeInTheDocument()
-  expect(screen.getByText(/Aberto em outro aparelho \(última atividade/)).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeDisabled()
-  expect(screen.queryByText("Salvo")).not.toBeInTheDocument()
-  await userEvent.click(screen.getByRole("button", { name: "Editar" }))
-  expect(syncReopen).toHaveBeenCalledTimes(1)
+  await waitFor(() => expect(sonner().info).toHaveBeenCalledWith("Planejamento atualizado: alterado em outro aparelho."))
+  expect(screen.queryByText("SOMENTE LEITURA")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeEnabled()
 })
 
-test("losing the reservation shows how many changes were left out and Editar reopens", async () => {
+test("a write conflict warns how many local edits were not applied", async () => {
   asAdmin()
   setup([draftMass("d1", "19:00:00")])
-  setSync({ mode: "readonly", lostChanges: 2, holderLastSeen: "2026-11-26T11:00:00Z" })
+  setSync({ mode: "edit", externalChange: { seq: 1, concluded: false, lost: 2 } })
   await openMine()
-  expect(screen.getByText("Você perdeu a reserva deste planejamento")).toBeInTheDocument()
-  expect(screen.getByText("2 alterações não foram salvas.")).toBeInTheDocument()
-  expect(screen.queryByText(/Aberto em outro aparelho \(/)).not.toBeInTheDocument()
-  await userEvent.click(screen.getByRole("button", { name: "Editar" }))
-  expect(syncReopen).toHaveBeenCalledTimes(1)
+  await waitFor(() =>
+    expect(sonner().warning).toHaveBeenCalledWith(
+      "Planejamento alterado em outro aparelho. 2 edições suas não foram aplicadas: refaça se necessário.",
+    ),
+  )
+  expect(screen.queryByText("SOMENTE LEITURA")).not.toBeInTheDocument()
 })
 
 test("a concluded plan shows 'Planejamento concluído' with Reabrir, read-only", async () => {

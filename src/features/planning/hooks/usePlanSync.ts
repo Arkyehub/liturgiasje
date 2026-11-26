@@ -3,50 +3,48 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PlanError, planErrorMessage } from "@/domain/models/SchedulePlan"
 import type { PlanDocument, PlanOpenResult } from "@/domain/models/SchedulePlan"
-import {
-  makeGetPlan,
-  makeHeartbeatPlan,
-  makeOpenPlan,
-  makeReleasePlan,
-  makeReopenPlan,
-  makeSavePlan
-} from "@/main/factories/usecases/plans"
+import { makeGetPlan, makeOpenPlan, makeReopenPlan, makeSavePlan } from "@/main/factories/usecases/plans"
 
 export type SyncStatus = "idle" | "saving" | "saved" | "failed"
 export type SyncMode = "idle" | "loading" | "edit" | "readonly" | "concluded" | "unavailable" | "error"
 
 export type PlanSyncTarget = { kind: "mine"; month: string } | { kind: "other"; planId: string } | null
 
+/** Mudança vinda de outro aparelho do mesmo dono (ou conflito de gravação). `seq` muda a cada ocorrência. */
+export interface ExternalChange {
+  seq: number
+  /** O servidor passou a ter a versão de outro aparelho que concluiu o planejamento. */
+  concluded: boolean
+  /** Alterações locais que não foram aplicadas porque outro aparelho gravou antes. */
+  lost: number
+}
+
 export interface UsePlanSyncResult {
   mode: SyncMode
   /** Documento atual do servidor (state cru). */
   plan: PlanDocument | null
-  holderLastSeen: string | null
   status: SyncStatus
-  /** Alterações descartadas porque a reserva foi perdida. */
-  lostChanges: number
   /** Mensagem do último erro que levou a `error`/`unavailable` (ou falha de reabertura). */
   error: string | null
+  /** Última mudança trazida de outro aparelho (para avisar o usuário). */
+  externalChange: ExternalChange | null
   /** Identificador desta aba (para ConcludePlan e afins). */
   sessionId: string
   /** Enfileira a gravação do estado; nunca lança nem bloqueia. */
   save(state: unknown): void
   /** Reenvia a gravação que falhou (mesmo request_id). */
   retrySave(): void
-  /** Concluído: reabre o plano. Somente leitura do mesmo dono: tenta reservar de novo. */
+  /** Concluído: reabre o plano. */
   reopen(): Promise<void>
-  /** Libera a reserva (melhor esforço). */
-  release(): void
   /**
-   * O servidor concluiu o planejamento (e já limpou a reserva): mata a fila, para o heartbeat, NÃO chama
-   * ReleasePlan, relê o documento e passa a `concluded`.
+   * O servidor concluiu o planejamento: mata a fila, relê o documento e passa a `concluded`.
    */
   markConcluded(): Promise<void>
 }
 
 const SESSION_KEY = "planejamento:session"
-const HEARTBEAT_MS = 30_000
-const POLL_MS = 20_000
+/** Intervalo da checagem de mudanças vindas de outro aparelho (só com a aba visível). */
+const POLL_MS = 30_000
 /** Esperas antes de cada repetição: 3 repetições, com o mesmo request_id. */
 const RETRY_DELAYS_MS = [2_000, 5_000, 5_000]
 
@@ -87,9 +85,8 @@ const codeOf = (e: unknown) => (e instanceof PlanError ? e.code : null)
 export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
   const [mode, setModeState] = useState<SyncMode>(target ? "loading" : "idle")
   const [plan, setPlanState] = useState<PlanDocument | null>(null)
-  const [holderLastSeen, setHolderLastSeen] = useState<string | null>(null)
   const [status, setStatus] = useState<SyncStatus>("idle")
-  const [lostChanges, setLostChanges] = useState(0)
+  const [externalChange, setExternalChange] = useState<ExternalChange | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState("")
 
@@ -101,16 +98,18 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
   const modeRef = useRef<SyncMode>(mode)
   const planRef = useRef<PlanDocument | null>(null)
   const revisionRef = useRef(0)
-  const holdingRef = useRef(false)
+  /** Ressincronizando depois de um conflito: edições feitas nesse intervalo são descartadas (o documento do servidor vence). */
+  const resyncRef = useRef(false)
+  const externalSeqRef = useRef(0)
   const failedRef = useRef(false)
   const pendingRef = useRef<Job | null>(null)
   const inflightRef = useRef<Job | null>(null)
   const pumpingRef = useRef(false)
   const pollingRef = useRef(false)
   const genRef = useRef(0)
-  /** Época da fila de gravação: qualquer troca de reserva/alvo a invalida (sendJob e pump param). */
+  /** Época da fila de gravação: qualquer troca de alvo/documento a invalida (sendJob e pump param). */
   const epochRef = useRef(0)
-  /** Tentativa de gravação em rede neste momento (para o release esperar o resultado). */
+  /** Tentativa de gravação em rede neste momento (para o flush esperar o resultado). */
   const activeRef = useRef<Promise<number> | null>(null)
   const timersRef = useRef(new Set<ReturnType<typeof setTimeout>>())
 
@@ -148,13 +147,11 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
   }, [])
 
   /**
-   * Libera a reserva. release() e o desmonte fazem UMA tentativa de melhor esforço de enviar o estado
-   * mais recente ainda não aplicado (sem repetições nem espera; erros engolidos) e só então chamam
-   * ReleasePlan. Depois disso a fila está morta e save() é ignorado.
+   * Ao sair da tela (desmonte do hook ou troca de alvo): UMA tentativa de melhor esforço de enviar o estado mais recente ainda
+   * não aplicado (sem repetições nem espera; erros engolidos). Depois disso a fila está morta e save() é ignorado.
    */
-  const releaseNow = useCallback(() => {
-    if (!holdingRef.current) return
-    holdingRef.current = false
+  const flushNow = useCallback(() => {
+    if (modeRef.current !== "edit") return
     const planId = planRef.current?.id
     if (!planId) return
     const session = sessionRef.current
@@ -164,28 +161,20 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
     const revision0 = revisionRef.current
     killQueue()
     void (async () => {
-      try {
-        let revision = revision0
-        let inflightApplied = false
-        if (active) {
-          try {
-            revision = await active
-            inflightApplied = true
-          } catch {
-            // a tentativa em rede falhou: o estado volta a ser candidato
-          }
-        }
-        const job = pend ?? (inflightApplied ? null : inflight)
-        if (job) {
-          try {
-            await makeSavePlan().execute(planId, session, job.requestId, revision, job.state)
-          } catch {
-            // melhor esforço
-          }
-        }
-      } finally {
+      let revision = revision0
+      let inflightApplied = false
+      if (active) {
         try {
-          await makeReleasePlan().execute(planId, session)
+          revision = await active
+          inflightApplied = true
+        } catch {
+          // a tentativa em rede falhou: o estado volta a ser candidato
+        }
+      }
+      const job = pend ?? (inflightApplied ? null : inflight)
+      if (job) {
+        try {
+          await makeSavePlan().execute(planId, session, job.requestId, revision, job.state)
         } catch {
           // melhor esforço
         }
@@ -193,19 +182,21 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
     })()
   }, [killQueue])
 
+  const announce = useCallback((concluded: boolean, lost: number) => {
+    setExternalChange({ seq: ++externalSeqRef.current, concluded, lost })
+  }, [])
+
   const applyOpen = useCallback(
     (result: PlanOpenResult) => {
       killQueue()
+      resyncRef.current = false
       revisionRef.current = result.plan.revision
       setPlan(result.plan)
-      setHolderLastSeen(result.holderLastSeen)
       setError(null)
       if (result.mode === "edit") {
-        holdingRef.current = true
         failedRef.current = false
         pendingRef.current = null
         inflightRef.current = null
-        setLostChanges(0)
         setStatus("idle")
       }
       setMode(result.mode)
@@ -213,62 +204,60 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
     [killQueue, setMode, setPlan]
   )
 
-  /** Recarrega o documento depois de perder a reserva/conflito (melhor esforço). */
-  const reloadPlan = useCallback(
-    async (gen: number, planId: string) => {
+  /**
+   * Outro aparelho gravou antes (conflito de revisão) ou concluiu o planejamento: a fila local é descartada e o
+   * documento do servidor passa a valer. As edições locais ainda não aplicadas são contadas e avisadas.
+   */
+  const adoptServerPlan = useCallback(
+    async (gen: number, planId: string, lost: number) => {
+      resyncRef.current = true
       try {
         const doc = await makeGetPlan().execute(planId)
-        if (gen !== genRef.current || !doc) return
+        if (gen !== genRef.current) return
+        if (!doc) {
+          setError(planErrorMessage(new PlanError("plan_not_found")))
+          setMode("error")
+          return
+        }
         revisionRef.current = doc.revision
         setPlan(doc)
+        setStatus("idle")
+        if (doc.status === "concluido") setMode("concluded")
+        announce(doc.status === "concluido", lost)
       } catch {
-        // mantém o documento anterior; o polling tenta de novo
+        // sem rede agora: a checagem periódica traz o documento depois
+      } finally {
+        if (gen === genRef.current) resyncRef.current = false
       }
     },
-    [setPlan]
-  )
-
-  /** Reserva perdida ou conflito de revisão: nada mais é gravado; vira somente leitura. */
-  const dropToReadonly = useCallback(
-    (gen: number, releaseReservation: boolean) => {
-      if (modeRef.current !== "edit") return
-      const lost = (inflightRef.current?.count ?? 0) + (pendingRef.current?.count ?? 0)
-      killQueue()
-      setLostChanges(lost)
-      setStatus("idle")
-      setMode("readonly")
-      const planId = planRef.current?.id
-      if (releaseReservation) releaseNow()
-      else holdingRef.current = false
-      if (planId) void reloadPlan(gen, planId)
-    },
-    [killQueue, releaseNow, reloadPlan, setMode]
+    [announce, setMode, setPlan]
   )
 
   const handleWriteError = useCallback(
     (gen: number, e: unknown): "retry" | "failed" | "stop" => {
       switch (codeOf(e)) {
-        case "plan_lock_lost":
-          dropToReadonly(gen, false)
+        case "plan_revision_conflict": {
+          const lost = (inflightRef.current?.count ?? 0) + (pendingRef.current?.count ?? 0)
+          const planId = planRef.current?.id
+          killQueue()
+          setStatus("idle")
+          if (planId) void adoptServerPlan(gen, planId, lost)
           return "stop"
-        case "plan_revision_conflict":
-          dropToReadonly(gen, true)
-          return "stop"
+        }
         case "plan_not_found":
         case "plan_expired":
           killQueue()
-          holdingRef.current = false
           setError(planErrorMessage(e))
           setStatus("idle")
           setMode("error")
           return "stop"
         case "plan_concluded": {
-          killQueue()
-          holdingRef.current = false
+          const lost = (inflightRef.current?.count ?? 0) + (pendingRef.current?.count ?? 0)
           const planId = planRef.current?.id
+          killQueue()
           setStatus("idle")
           setMode("concluded")
-          if (planId) void reloadPlan(gen, planId)
+          if (planId) void adoptServerPlan(gen, planId, lost)
           return "stop"
         }
         case null:
@@ -279,7 +268,7 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
           return "failed"
       }
     },
-    [dropToReadonly, killQueue, reloadPlan, setMode]
+    [adoptServerPlan, killQueue, setMode]
   )
 
   /** Envia o job (com repetições, mesmo request_id). Retorna true se foi aplicado. */
@@ -287,7 +276,7 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
     async (epoch: number, job: Job): Promise<boolean> => {
       const save = makeSavePlan()
       for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
-        if (epoch !== epochRef.current || modeRef.current !== "edit" || !holdingRef.current) return false
+        if (epoch !== epochRef.current || modeRef.current !== "edit") return false
         const planId = planRef.current?.id
         if (!planId) return false
         const call = save.execute(planId, sessionRef.current, job.requestId, revisionRef.current, job.state)
@@ -346,7 +335,7 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
 
   const save = useCallback(
     (state: unknown) => {
-      if (modeRef.current !== "edit" || !holdingRef.current || failedRef.current) return
+      if (modeRef.current !== "edit" || failedRef.current || resyncRef.current) return
       const prev = pendingRef.current
       pendingRef.current = { state, requestId: newId(), count: (prev?.count ?? 0) + 1 }
       setStatus("saving")
@@ -362,16 +351,11 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
     void pump()
   }, [pump])
 
-  const release = useCallback(() => {
-    releaseNow()
-  }, [releaseNow])
-
   const markConcluded = useCallback(async () => {
     const planId = planRef.current?.id
     if (modeRef.current !== "edit" || !planId) return
     const gen = genRef.current
-    // Sem ReleasePlan: o servidor já limpou a reserva ao concluir. Nada mais é gravado nem batido.
-    holdingRef.current = false
+    // Nada mais é gravado: o servidor já concluiu.
     killQueue()
     setStatus("idle")
     let doc: PlanDocument | null = null
@@ -389,15 +373,12 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
   }, [killQueue, setMode, setPlan])
 
   const reopen = useCallback(async () => {
-    const t = targetRef.current
     const gen = genRef.current
     const current = modeRef.current
     try {
       let result: PlanOpenResult | null = null
       if (current === "concluded" && planRef.current) {
         result = await makeReopenPlan().execute(planRef.current.id, sessionRef.current)
-      } else if (current === "readonly" && t?.kind === "mine") {
-        result = await makeOpenPlan().execute(t.month, sessionRef.current)
       }
       if (result && gen === genRef.current) applyOpen(result)
     } catch (e) {
@@ -415,15 +396,14 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
     const generation = genRef
     sessionRef.current = readSessionId()
     setSessionId(sessionRef.current)
-    holdingRef.current = false
     killQueue()
     pollingRef.current = false
+    resyncRef.current = false
     planRef.current = null
     revisionRef.current = 0
     setPlanState(null)
-    setHolderLastSeen(null)
     setStatus("idle")
-    setLostChanges(0)
+    setExternalChange(null)
     setError(null)
     if (!t) {
       setMode("idle")
@@ -454,51 +434,43 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
     }
     return () => {
       generation.current++
-      releaseNow()
+      flushNow()
       killQueue()
       timers.forEach(clearTimeout)
       timers.clear()
     }
-  }, [targetKey, applyOpen, killQueue, releaseNow, setMode, setPlan])
+  }, [targetKey, applyOpen, killQueue, flushNow, setMode, setPlan])
 
-  // Heartbeat: só em edit; também ao voltar a ficar visível.
+  // Checagem de mudanças de outro aparelho: a cada 30 s com a aba visível e ao voltar a ela (sem realtime).
+  // Em edição só aplica quando não há gravação pendente; se houver, o conflito de revisão resolve na gravação.
   useEffect(() => {
-    if (mode !== "edit") return
+    if (mode !== "edit" && mode !== "readonly" && mode !== "concluded") return
     const gen = genRef.current
-    const beat = () => {
+    const check = () => {
       const planId = planRef.current?.id
-      if (!planId || modeRef.current !== "edit" || !holdingRef.current) return
-      Promise.resolve(makeHeartbeatPlan().execute(planId, sessionRef.current)).catch(e => {
-        if (gen === genRef.current && codeOf(e) === "plan_lock_lost") dropToReadonly(gen, false)
-      })
-    }
-    const interval = setInterval(beat, HEARTBEAT_MS)
-    const onVisible = () => {
-      if (document.visibilityState === "visible") beat()
-    }
-    document.addEventListener("visibilitychange", onVisible)
-    return () => {
-      clearInterval(interval)
-      document.removeEventListener("visibilitychange", onVisible)
-    }
-  }, [mode, dropToReadonly])
-
-  // Leitura periódica: somente leitura (próprio ou de outro coordenador).
-  useEffect(() => {
-    if (mode !== "readonly") return
-    const gen = genRef.current
-    const interval = setInterval(() => {
-      const planId = planRef.current?.id
-      if (!planId || pollingRef.current) return
+      if (!planId || pollingRef.current || resyncRef.current) return
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return
+      if (modeRef.current === "edit" && (pendingRef.current || inflightRef.current || pumpingRef.current || failedRef.current)) return
       pollingRef.current = true
       makeGetPlan()
         .execute(planId)
         .then(
           doc => {
-            if (gen !== genRef.current || modeRef.current !== "readonly" || !doc) return
-            if (doc.revision !== planRef.current?.revision) {
+            if (gen !== genRef.current || !doc) return
+            const current = modeRef.current
+            if (current === "edit") {
+              // Gravou algo enquanto a leitura estava em andamento: não pisa na edição local.
+              if (pendingRef.current || inflightRef.current || pumpingRef.current || failedRef.current) return
+              if (doc.revision === revisionRef.current && doc.status !== "concluido") return
               revisionRef.current = doc.revision
               setPlan(doc)
+              if (doc.status === "concluido") setMode("concluded")
+              announce(doc.status === "concluido", 0)
+            } else if (current === "readonly" || current === "concluded") {
+              if (doc.revision !== revisionRef.current) {
+                revisionRef.current = doc.revision
+                setPlan(doc)
+              }
             }
           },
           () => {}
@@ -506,12 +478,20 @@ export function usePlanSync(target: PlanSyncTarget): UsePlanSyncResult {
         .finally(() => {
           pollingRef.current = false
         })
-    }, POLL_MS)
-    return () => clearInterval(interval)
-  }, [mode, setPlan])
+    }
+    const interval = setInterval(check, POLL_MS)
+    const onVisible = () => {
+      if (document.visibilityState === "visible") check()
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", onVisible)
+    }
+  }, [mode, announce, setMode, setPlan])
 
   return useMemo(
-    () => ({ mode, plan, holderLastSeen, status, lostChanges, error, sessionId, save, retrySave, reopen, release, markConcluded }),
-    [mode, plan, holderLastSeen, status, lostChanges, error, sessionId, save, retrySave, reopen, release, markConcluded]
+    () => ({ mode, plan, status, error, externalChange, sessionId, save, retrySave, reopen, markConcluded }),
+    [mode, plan, status, error, externalChange, sessionId, save, retrySave, reopen, markConcluded]
   )
 }

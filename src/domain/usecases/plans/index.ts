@@ -36,20 +36,6 @@ export class SavePlan {
   }
 }
 
-export class HeartbeatPlan {
-  constructor(private readonly planRepository: SchedulePlanRepository) {}
-  async execute(planId: string, session: string): Promise<void> {
-    return this.planRepository.heartbeat(planId, session)
-  }
-}
-
-export class ReleasePlan {
-  constructor(private readonly planRepository: SchedulePlanRepository) {}
-  async execute(planId: string, session: string): Promise<void> {
-    return this.planRepository.release(planId, session)
-  }
-}
-
 export class ConcludePlan {
   constructor(private readonly planRepository: SchedulePlanRepository) {}
   async execute(planId: string, session: string): Promise<void> {

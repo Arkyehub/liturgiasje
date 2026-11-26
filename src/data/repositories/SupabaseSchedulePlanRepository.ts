@@ -3,8 +3,8 @@ import { PlanDocument, PlanError, PlanErrorCode, PlanListItem, PlanOpenResult } 
 import { SchedulePlanRepository } from "@/domain/repositories/SchedulePlanRepository"
 
 const KNOWN_CODES: PlanErrorCode[] = [
-  "forbidden", "invalid_arguments", "plan_not_found", "plan_lock_lost", "plan_revision_conflict",
-  "plan_concluded", "plan_expired", "plan_too_large", "plan_exists", "plan_in_use"
+  "forbidden", "invalid_arguments", "plan_not_found", "plan_revision_conflict",
+  "plan_concluded", "plan_expired", "plan_too_large", "plan_exists"
 ]
 
 function toPlanError(error: unknown): PlanError {
@@ -54,14 +54,6 @@ export class SupabaseSchedulePlanRepository implements SchedulePlanRepository {
       p_state: state
     })
     return Number(revision)
-  }
-
-  async heartbeat(planId: string, session: string): Promise<void> {
-    await this.call("plan_heartbeat", { p_plan_id: planId, p_session: session })
-  }
-
-  async release(planId: string, session: string): Promise<void> {
-    await this.call("plan_release", { p_plan_id: planId, p_session: session })
   }
 
   async conclude(planId: string, session: string): Promise<void> {

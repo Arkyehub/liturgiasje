@@ -15,7 +15,7 @@ import { ROLE_ORDER } from "../lib/format"
 import { parsePlanState, serializePlanState } from "../lib/planState"
 import { reconcilePlan, type ReconcileNotice } from "../lib/reconcilePlan"
 import type { PlanDocument } from "@/domain/models/SchedulePlan"
-import { usePlanSync, type PlanSyncTarget, type SyncMode, type SyncStatus } from "./usePlanSync"
+import { usePlanSync, type ExternalChange, type PlanSyncTarget, type SyncMode, type SyncStatus } from "./usePlanSync"
 
 /** Qual planejamento abrir: o meu (editável) ou o de outro coordenador (somente leitura). */
 export type PlanTarget = { kind: "mine"; month: Date } | { kind: "other"; month: Date; planId: string }
@@ -58,10 +58,10 @@ export interface UsePlanningResult {
   /** Estado da sincronização com o servidor (spec 5.4). */
   mode: SyncMode
   syncStatus: SyncStatus
-  lostChanges: number
+  /** Última mudança trazida de outro aparelho do mesmo dono (ou conflito de gravação): o app avisa o usuário. */
+  externalChange: ExternalChange | null
   notices: ReconcileNotice[]
   ownerName: string | null
-  holderLastSeen: string | null
   /** Verdadeiro quando o planejamento não pode ser editado (modo diferente de "edit"). */
   readOnly: boolean
   sessionId: string
@@ -70,7 +70,7 @@ export interface UsePlanningResult {
   syncError: string | null
   retrySave(): void
   reopen(): Promise<void>
-  /** O servidor concluiu o planejamento (depois de salvar): a sincronização passa a `concluded` sem liberar a reserva. */
+  /** O servidor concluiu o planejamento (depois de salvar): a sincronização passa a `concluded`. */
   markConcluded(): Promise<void>
   syncPlan: PlanDocument | null
 }
@@ -391,11 +391,10 @@ export function usePlanning(target: PlanTarget | null): UsePlanningResult {
     setBusy,
     mode,
     syncStatus: sync.status,
-    lostChanges: sync.lostChanges,
+    externalChange: sync.externalChange,
     // Avisos de reconciliação só no modo de edição: em leitura/concluído/outro o plano é só exibido.
     notices: mode === "edit" ? notices : [],
     ownerName: sync.plan?.ownerName ?? null,
-    holderLastSeen: sync.holderLastSeen,
     readOnly: mode !== "edit",
     sessionId: sync.sessionId,
     planId: sync.plan?.id ?? null,

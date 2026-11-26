@@ -32,7 +32,6 @@ function plan(over: Partial<PlanListItem>): PlanListItem {
     expiresAt: "2026-12-26T09:00:00Z",
     copiedFromName: null,
     concludedAt: null,
-    openElsewhere: false,
     hasContent: true,
     ...over
   }
@@ -74,11 +73,11 @@ it("lista uma vez os 3 meses e marca o seguinte como Sugerido; sem plano mostra 
   expect(onOpenMine).toHaveBeenCalledWith(new Date(2026, 11, 1))
 })
 
-it("meu planejamento mostra tempos, aviso de outro aparelho e Abrir", async () => {
-  const { onOpenMine } = setup([plan({ openElsewhere: true })])
+it("meu planejamento mostra tempos e Abrir, sem aviso de outro aparelho", async () => {
+  const { onOpenMine } = setup([plan({})])
   const dez = await screen.findByRole("region", { name: /Dezembro 2026/ })
   expect(dez).toHaveTextContent("Meu planejamento · editado há 3 horas · expira em 30 dias")
-  expect(dez).toHaveTextContent("Aberto em outro aparelho")
+  expect(dez).not.toHaveTextContent("outro aparelho")
   expect(within(dez).queryByRole("button", { name: /Criar meu planejamento/ })).not.toBeInTheDocument()
   await userEvent.click(within(dez).getByRole("button", { name: /Abrir/ }))
   expect(onOpenMine).toHaveBeenCalledWith(new Date(2026, 11, 1))
@@ -152,15 +151,6 @@ it("cancelar a confirmação de duplicar não copia", async () => {
   await userEvent.click(within(dez).getByRole("button", { name: /Duplicar para mim/ }))
   await userEvent.click(await screen.findByRole("button", { name: "Cancelar" }))
   expect(mockCopy).not.toHaveBeenCalled()
-})
-
-it("plan_in_use na cópia mostra a mensagem e não abre", async () => {
-  mockCopy.mockRejectedValue(new PlanError("plan_in_use"))
-  const { onOpenMine } = setup([plan({ id: "o1", isMine: false })])
-  const dez = await screen.findByRole("region", { name: /Dezembro 2026/ })
-  await userEvent.click(within(dez).getByRole("button", { name: /Duplicar para mim/ }))
-  expect(await screen.findByRole("alert")).toHaveTextContent("Este planejamento está em uso em outra sessão.")
-  expect(onOpenMine).not.toHaveBeenCalled()
 })
 
 it("Descartar confirma, chama DiscardPlan e recarrega a lista", async () => {
