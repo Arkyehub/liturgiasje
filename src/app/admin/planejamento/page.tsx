@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { format, startOfMonth } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import { useAuth } from "@/shared/hooks/useAuth"
 import { usePlanning, type PlanTarget } from "@/features/planning/hooks/usePlanning"
 import { NotebookList } from "@/features/planning/ui/NotebookList"
@@ -75,6 +76,22 @@ function PlanningScreen() {
   useEffect(() => {
     setBusy(save.saving)
   }, [save.saving, setBusy])
+  // Outro aparelho do mesmo dono gravou (ou concluiu) o planejamento: a tela já foi atualizada; só avisa.
+  const { externalChange } = planning
+  useEffect(() => {
+    if (!externalChange) return
+    if (externalChange.lost > 0) {
+      toast.warning(
+        externalChange.lost === 1
+          ? "Planejamento alterado em outro aparelho. Sua última edição não foi aplicada: refaça se necessário."
+          : `Planejamento alterado em outro aparelho. ${externalChange.lost} edições suas não foram aplicadas: refaça se necessário.`,
+      )
+    } else if (externalChange.concluded) {
+      toast.info("Planejamento concluído em outro aparelho.")
+    } else {
+      toast.info("Planejamento atualizado: alterado em outro aparelho.")
+    }
+  }, [externalChange])
   const [confirmReplace, setConfirmReplace] = useState(false)
   // Leitura das missas reais em andamento (antes do aviso de substituição): o planejamento não pode ser trocado nesse intervalo.
   const [preparing, setPreparing] = useState(false)
@@ -133,7 +150,6 @@ function PlanningScreen() {
   if (!planning.loading && (planning.mode === "edit" || planning.mode === "readonly" || planning.mode === "concluded")) {
     if (target.kind === "other") bannerReason = "other-owner"
     else if (planning.mode === "concluded") bannerReason = "concluded"
-    else if (planning.mode === "readonly") bannerReason = planning.lostChanges > 0 ? "lost-lock" : "other-device"
   }
   const publishedDates = planning.masses.filter((m) => m.readOnly).map((m) => m.date)
   const showPublishedNotice =
@@ -184,8 +200,7 @@ function PlanningScreen() {
         <ReadOnlyBanner
           reason={bannerReason}
           ownerName={planning.ownerName}
-          lastSeen={bannerReason === "other-owner" ? (planning.syncPlan?.updatedAt ?? null) : planning.holderLastSeen}
-          lostChanges={planning.lostChanges}
+          lastSeen={planning.syncPlan?.updatedAt ?? null}
           onReopen={bannerReason === "other-owner" ? undefined : () => void planning.reopen()}
         />
       )}

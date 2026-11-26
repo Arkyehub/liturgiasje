@@ -3,15 +3,13 @@
 import { formatDistanceToNowStrict } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
-export type ReadOnlyReason = "other-owner" | "other-device" | "lost-lock" | "concluded"
+export type ReadOnlyReason = "other-owner" | "concluded"
 
 interface ReadOnlyBannerProps {
   reason: ReadOnlyReason
   ownerName: string | null
   lastSeen: string | null
-  /** Alterações que ficaram de fora ao perder a reserva. */
-  lostChanges?: number
-  /** Ação do botão: "Editar" (outro aparelho/reserva perdida) ou "Reabrir" (concluído). */
+  /** Ação do botão "Reabrir" (planejamento concluído). */
   onReopen?: () => void
 }
 
@@ -23,7 +21,7 @@ function ago(iso: string | null) {
 }
 
 /** Faixa fixa que avisa que o planejamento não pode ser editado agora e por quê. */
-export function ReadOnlyBanner({ reason, ownerName, lastSeen, lostChanges = 0, onReopen }: ReadOnlyBannerProps) {
+export function ReadOnlyBanner({ reason, ownerName, lastSeen, onReopen }: ReadOnlyBannerProps) {
   const seen = ago(lastSeen)
   let line: string
   let action: string | null = null
@@ -32,15 +30,6 @@ export function ReadOnlyBanner({ reason, ownerName, lastSeen, lostChanges = 0, o
   if (reason === "other-owner") {
     line = `Planejamento de ${ownerName ?? "outro coordenador"}${seen ? ` · editado ${seen}` : ""}`
     extra = "Para editar, use Duplicar para mim."
-  } else if (reason === "other-device") {
-    line = `Aberto em outro aparelho${seen ? ` (última atividade ${seen})` : ""}`
-    action = "Editar"
-  } else if (reason === "lost-lock") {
-    line = "Você perdeu a reserva deste planejamento"
-    if (lostChanges > 0) {
-      extra = lostChanges === 1 ? "1 alteração não foi salva." : `${lostChanges} alterações não foram salvas.`
-    }
-    action = "Editar"
   } else {
     line = "Planejamento concluído"
     action = "Reabrir"

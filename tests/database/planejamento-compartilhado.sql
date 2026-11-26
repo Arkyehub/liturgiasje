@@ -88,8 +88,8 @@ SELECT set_config('t.pa', :'pa', false);
 SELECT public.plan_open('2026-12','sA2') AS r2 \gset
 SELECT set_config('t.r2', :'r2', false);
 DO $$ DECLARE r jsonb := current_setting('t.r2'); BEGIN
-  IF r->>'mode' <> 'readonly' OR r->>'holderLastSeen' IS NULL THEN RAISE EXCEPTION 'open outro aparelho: %', r; END IF;
-  IF (r->'plan'->>'openElsewhere')::boolean IS NOT TRUE THEN RAISE EXCEPTION 'openElsewhere: %', r; END IF;
+  IF r->>'mode' <> 'edit' OR r->'plan'->>'id' <> current_setting('t.pa') THEN RAISE EXCEPTION 'open outro aparelho: %', r; END IF;
+  IF r->'plan' ? 'openElsewhere' OR r ? 'holderLastSeen' THEN RAISE EXCEPTION 'campos de reserva ainda expostos: %', r; END IF;
 END $$;
 SELECT public.plan_open('2026-12','sA1') AS r3 \gset
 SELECT set_config('t.r3', :'r3', false);
@@ -103,16 +103,15 @@ DO $$ BEGIN
   IF (SELECT count(*) FROM public.schedule_plans WHERE month_reference='2026-12') <> 1 THEN RAISE EXCEPTION 'plan_open duplicou o plano'; END IF;
 END $$;
 
--- (4) reserva vencida (121 s) é assumida por outra sessão
-UPDATE public.schedule_plans SET lock_heartbeat_at = now() - interval '121 seconds' WHERE id = :'pa';
+-- (4) sem reserva: qualquer sessão do dono grava (a revisão protege contra gravação concorrente)
+SELECT public.plan_save(:'pa','sA1','q0',0,'{"a":0}') AS rev0 \gset
+SELECT set_config('t.rev0', :'rev0', false);
+DO $$ BEGIN IF current_setting('t.rev0')::bigint <> 1 THEN RAISE EXCEPTION 'save de outra sessao: %', current_setting('t.rev0'); END IF; END $$;
+SELECT pg_temp.expect_err(format('SELECT public.plan_save(%L,''sA2'',''q0b'',0,''{"a":9}'')',:'pa'),'plan_revision_conflict');
+RESET ROLE;
+-- volta o plano ao estado inicial para os testes seguintes
+UPDATE public.schedule_plans SET revision = 0, state = NULL, last_request_id = NULL WHERE id = :'pa';
 SET ROLE authenticated;
-SELECT public.plan_open('2026-12','sA2') AS r4 \gset
-SELECT set_config('t.r4', :'r4', false);
-DO $$ DECLARE r jsonb := current_setting('t.r4'); BEGIN
-  IF r->>'mode' <> 'edit' THEN RAISE EXCEPTION 'takeover: %', r; END IF;
-END $$;
--- a sessão antiga perdeu a reserva
-SELECT pg_temp.expect_err(format('SELECT public.plan_save(%L,''sA1'',''q0'',0,''{"a":1}'')',:'pa'),'plan_lock_lost');
 
 -- (5) plan_save
 SELECT pg_temp.expect_err(format('SELECT public.plan_save(%L,''sA2'',''q1'',5,''{"a":1}'')',:'pa'),'plan_revision_conflict');
@@ -157,7 +156,6 @@ DO $$ BEGIN IF NOT current_setting('t.nulo')::boolean THEN RAISE EXCEPTION 'plan
 RESET ROLE;
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM public.schedule_plans WHERE owner_profile_id='d0000000-0000-0000-0000-0000000000a2') THEN RAISE EXCEPTION 'plan_get criou plano para B'; END IF;
-  IF (SELECT lock_session_id FROM public.schedule_plans WHERE id=current_setting('t.pa')::uuid) <> 'sA2' THEN RAISE EXCEPTION 'plan_get mexeu na reserva'; END IF;
 END $$;
 
 -- (7) plan_copy
@@ -256,16 +254,13 @@ DO $$ DECLARE l jsonb := current_setting('t.l'); a jsonb; b jsonb; BEGIN
   SELECT x INTO a FROM jsonb_array_elements(l) x WHERE x->>'ownerName'='Admin A';
   SELECT x INTO b FROM jsonb_array_elements(l) x WHERE x->>'ownerName'='Admin B';
   IF (a->>'isMine')::boolean IS NOT TRUE OR (b->>'isMine')::boolean IS NOT FALSE THEN RAISE EXCEPTION 'isMine: %', l; END IF;
-  IF (a->>'openElsewhere')::boolean IS NOT TRUE THEN RAISE EXCEPTION 'reserva viva de A: %', a; END IF;
-  IF (b->>'openElsewhere')::boolean IS NOT FALSE THEN RAISE EXCEPTION 'B sem reserva: %', b; END IF;
+  IF a ? 'openElsewhere' OR b ? 'openElsewhere' THEN RAISE EXCEPTION 'openElsewhere ainda exposto: %', l; END IF;
   IF b->>'copiedFromName' <> 'Admin A' THEN RAISE EXCEPTION 'copiedFromName: %', b; END IF;
 END $$;
 SELECT public.plan_list(ARRAY[]::text[]) AS lv \gset
 SELECT set_config('t.lv', :'lv', false);
 DO $$ BEGIN IF current_setting('t.lv')::jsonb <> '[]'::jsonb THEN RAISE EXCEPTION 'lista vazia: %', current_setting('t.lv'); END IF; END $$;
 RESET ROLE;
--- reserva vencida => openElsewhere falso
-UPDATE public.schedule_plans SET lock_heartbeat_at = now() - interval '121 seconds' WHERE id = :'pa';
 -- vencidos são apagados; os demais ficam
 INSERT INTO public.schedule_plans(month_reference,owner_profile_id,expires_at) VALUES
  ('2027-01','d0000000-0000-0000-0000-0000000000a2', now() - interval '1 second'),
@@ -275,7 +270,6 @@ SELECT public.plan_list(ARRAY['2026-12','2027-01','2027-02']) AS l2 \gset
 SELECT set_config('t.l2', :'l2', false);
 DO $$ DECLARE l jsonb := current_setting('t.l2'); BEGIN
   IF jsonb_array_length(l) <> 3 THEN RAISE EXCEPTION 'list2: %', l; END IF;
-  IF EXISTS (SELECT 1 FROM jsonb_array_elements(l) x WHERE (x->>'openElsewhere')::boolean) THEN RAISE EXCEPTION 'openElsewhere com reserva vencida: %', l; END IF;
 END $$;
 RESET ROLE;
 DO $$ BEGIN
@@ -287,12 +281,11 @@ END $$;
 -- (9) conclude / save / open / reopen
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a1',false);
-SELECT pg_temp.expect_err(format('SELECT public.plan_conclude(%L,''outra'')',:'pa'),'plan_lock_lost');
-SELECT public.plan_conclude(:'pa','sA2');
+SELECT public.plan_conclude(:'pa','outra');
 RESET ROLE;
 DO $$ DECLARE sp public.schedule_plans; BEGIN
   SELECT * INTO sp FROM public.schedule_plans WHERE id=current_setting('t.pa')::uuid;
-  IF sp.status <> 'concluido' OR sp.concluded_at IS NULL OR sp.lock_session_id IS NOT NULL OR sp.lock_heartbeat_at IS NOT NULL THEN RAISE EXCEPTION 'conclude: %', sp; END IF;
+  IF sp.status <> 'concluido' OR sp.concluded_at IS NULL THEN RAISE EXCEPTION 'conclude: %', sp; END IF;
   IF sp.state <> '{"missas":[],"v":2}'::jsonb THEN RAISE EXCEPTION 'conclude perdeu o state'; END IF;
 END $$;
 SET ROLE authenticated;
@@ -310,7 +303,6 @@ DO $$ DECLARE r jsonb := current_setting('t.r6'); BEGIN
 END $$;
 RESET ROLE;
 DO $$ BEGIN
-  IF (SELECT lock_session_id FROM public.schedule_plans WHERE id=current_setting('t.pa')::uuid) <> 'sA9' THEN RAISE EXCEPTION 'reopen nao reservou'; END IF;
   IF (SELECT concluded_at FROM public.schedule_plans WHERE id=current_setting('t.pa')::uuid) IS NOT NULL THEN RAISE EXCEPTION 'concluded_at nao limpo'; END IF;
 END $$;
 
@@ -321,20 +313,18 @@ SELECT pg_temp.expect_err(format('SELECT public.plan_save(%L,''sA9'',''q4'',2,''
 RESET ROLE;
 UPDATE public.schedule_plans SET expires_at = now() + interval '10 days' WHERE id = :'pa';
 
--- (12) release idempotente e heartbeat com sessão errada
+-- (12) heartbeat e release são no-ops (compatibilidade); só o dono os chama
 SET ROLE authenticated;
-SELECT public.plan_heartbeat(:'pa','sA9');
-SELECT pg_temp.expect_err(format('SELECT public.plan_heartbeat(%L,''errada'')',:'pa'),'plan_lock_lost');
-SELECT public.plan_release(:'pa','errada');
+SELECT public.plan_heartbeat(:'pa','qualquer');
+SELECT public.plan_release(:'pa','qualquer');
+SELECT public.plan_release(:'pa','qualquer');
+SELECT public.plan_release(gen_random_uuid(),'qualquer');
+SELECT pg_temp.expect_err(format('SELECT public.plan_heartbeat(%L,'''')',:'pa'),'invalid_arguments');
+SELECT pg_temp.expect_err($$SELECT public.plan_heartbeat(gen_random_uuid(),'x')$$,'plan_not_found');
 RESET ROLE;
-DO $$ BEGIN IF (SELECT lock_session_id FROM public.schedule_plans WHERE id=current_setting('t.pa')::uuid) <> 'sA9' THEN RAISE EXCEPTION 'release de sessao errada liberou'; END IF; END $$;
-SET ROLE authenticated;
-SELECT public.plan_release(:'pa','sA9');
-SELECT public.plan_release(:'pa','sA9');
-SELECT public.plan_release(gen_random_uuid(),'sA9');
-SELECT pg_temp.expect_err(format('SELECT public.plan_heartbeat(%L,''sA9'')',:'pa'),'plan_lock_lost');
-RESET ROLE;
-DO $$ BEGIN IF (SELECT lock_session_id FROM public.schedule_plans WHERE id=current_setting('t.pa')::uuid) IS NOT NULL THEN RAISE EXCEPTION 'release nao liberou'; END IF; END $$;
+DO $$ BEGIN
+  IF (SELECT revision FROM public.schedule_plans WHERE id=current_setting('t.pa')::uuid) <> 2 THEN RAISE EXCEPTION 'heartbeat/release alteraram o plano'; END IF;
+END $$;
 
 -- (11) discard: só o dono
 SET ROLE authenticated;
@@ -364,22 +354,15 @@ SELECT set_config('t.p3', :'p3', false);
 SELECT pg_temp.expect_err(format('SELECT public.plan_save(%L,''sA1'',%L,0,''{"a":1}'')',:'p3',repeat('r',129)),'invalid_arguments');
 SELECT pg_temp.expect_err(format('SELECT public.plan_copy(%L,%L,true)',:'p3',repeat('s',129)),'invalid_arguments');
 SELECT public.plan_save(:'p3','sA1','k1',0,'{"k":1}');
--- cópia: destino reservado por outra sessão => plan_in_use, nada muda
+-- cópia: destino aberto em outra sessão não bloqueia mais
 SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a2',false);
 SELECT public.plan_open('2028-03','sB2') AS o2 \gset
 SELECT (:'o2'::jsonb)->'plan'->>'id' AS pb3 \gset
 SELECT set_config('t.pb3', :'pb3', false);
-SELECT pg_temp.expect_err(format('SELECT public.plan_copy(%L,''sBx'',true)',:'p3'),'plan_in_use');
-RESET ROLE;
-DO $$ BEGIN
-  IF (SELECT state FROM public.schedule_plans WHERE id=current_setting('t.pb3')::uuid) IS NOT NULL THEN RAISE EXCEPTION 'plan_in_use alterou destino'; END IF;
-END $$;
-SET ROLE authenticated;
--- mesma sessão: ok
-SELECT public.plan_copy(:'p3','sB2',false) AS cc \gset
+SELECT public.plan_copy(:'p3','sBx',false) AS cc \gset
 SELECT set_config('t.cc', :'cc', false);
 DO $$ BEGIN
-  IF current_setting('t.cc')::jsonb->'state' <> '{"k":1}'::jsonb THEN RAISE EXCEPTION 'copia mesma sessao: %', current_setting('t.cc'); END IF;
+  IF current_setting('t.cc')::jsonb->'state' <> '{"k":1}'::jsonb THEN RAISE EXCEPTION 'copia: %', current_setting('t.cc'); END IF;
 END $$;
 -- origem some: plan_not_found e destino intacto
 SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a1',false);
@@ -392,31 +375,30 @@ DO $$ DECLARE sp public.schedule_plans; BEGIN
   IF sp.state <> '{"k":1}'::jsonb OR sp.revision <> 1 OR sp.copied_from_owner_id IS NULL THEN RAISE EXCEPTION 'destino alterado por copia falha: %', sp; END IF;
 END $$;
 
--- limpeza de vencidos respeita reserva viva
-INSERT INTO public.schedule_plans(month_reference,owner_profile_id,expires_at,lock_session_id,lock_heartbeat_at) VALUES
- ('2028-04','d0000000-0000-0000-0000-0000000000a1', now() - interval '1 day','sA1', now()),
- ('2028-04','d0000000-0000-0000-0000-0000000000a2', now() - interval '1 day', NULL, NULL),
- ('2028-05','d0000000-0000-0000-0000-0000000000a2', now() - interval '1 day','sBz', now() - interval '500 seconds');
+-- limpeza de vencidos: apaga todos os vencidos, mantém os válidos
+INSERT INTO public.schedule_plans(month_reference,owner_profile_id,expires_at) VALUES
+ ('2028-04','d0000000-0000-0000-0000-0000000000a1', now() - interval '1 day'),
+ ('2028-05','d0000000-0000-0000-0000-0000000000a2', now() - interval '1 day');
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','c0000000-0000-0000-0000-0000000000a1',false);
 SELECT public.plan_list(ARRAY['2028-04','2028-05']) AS l3 \gset
 RESET ROLE;
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.schedule_plans WHERE month_reference='2028-04' AND owner_profile_id='d0000000-0000-0000-0000-0000000000a1') THEN RAISE EXCEPTION 'plano vencido com reserva viva foi apagado'; END IF;
-  IF EXISTS (SELECT 1 FROM public.schedule_plans WHERE month_reference='2028-04' AND owner_profile_id='d0000000-0000-0000-0000-0000000000a2') THEN RAISE EXCEPTION 'vencido sem reserva nao apagado'; END IF;
-  IF EXISTS (SELECT 1 FROM public.schedule_plans WHERE month_reference='2028-05') THEN RAISE EXCEPTION 'vencido com reserva morta nao apagado'; END IF;
+  IF EXISTS (SELECT 1 FROM public.schedule_plans WHERE month_reference IN ('2028-04','2028-05')) THEN RAISE EXCEPTION 'vencidos nao apagados'; END IF;
 END $$;
 
--- plan_save com reserva vencida mas nao assumida; plan_conclude de vencido
-INSERT INTO public.schedule_plans(month_reference,owner_profile_id,lock_session_id,lock_heartbeat_at) VALUES
- ('2028-06','d0000000-0000-0000-0000-0000000000a1','sA1', now() - interval '600 seconds');
-SELECT id AS p6 FROM public.schedule_plans WHERE month_reference='2028-06' \gset
-SELECT set_config('t.p6', :'p6', false);
+-- plan_open de plano vencido recria um plano vazio; plan_conclude de vencido falha
+INSERT INTO public.schedule_plans(month_reference,owner_profile_id,expires_at,state,revision) VALUES
+ ('2028-06','d0000000-0000-0000-0000-0000000000a1', now() - interval '1 hour','{"velho":1}',3);
 SET ROLE authenticated;
-SELECT public.plan_save(:'p6','sA1','z1',0,'{"z":1}') AS zrev \gset
-SELECT CASE WHEN :zrev = 1 THEN 1 ELSE 1/0 END AS save_reserva_vencida_ok;
+SELECT public.plan_open('2028-06','sA1') AS o6 \gset
+SELECT set_config('t.o6', :'o6', false);
+DO $$ DECLARE r jsonb := current_setting('t.o6'); BEGIN
+  IF r->>'mode' <> 'edit' OR (r->'plan'->>'revision')::bigint <> 0 OR jsonb_typeof(r->'plan'->'state') <> 'null' THEN RAISE EXCEPTION 'open de vencido: %', r; END IF;
+END $$;
 RESET ROLE;
-UPDATE public.schedule_plans SET expires_at = now() - interval '1 hour', lock_heartbeat_at = now() WHERE id = :'p6';
+UPDATE public.schedule_plans SET expires_at = now() - interval '1 hour' WHERE month_reference = '2028-06';
+SELECT id AS p6 FROM public.schedule_plans WHERE month_reference = '2028-06' \gset
 SET ROLE authenticated;
 SELECT pg_temp.expect_err(format('SELECT public.plan_conclude(%L,''sA1'')',:'p6'),'plan_expired');
 RESET ROLE;

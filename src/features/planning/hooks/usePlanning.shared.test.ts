@@ -116,10 +116,10 @@ describe("abertura (spec 5.4/5.6)", () => {
 
   test("exposes the shared plan fields", async () => {
     setup([])
-    setSync({ plan: planDoc({ id: "plan-9", ownerName: "Maria" }), holderLastSeen: "2026-11-26T10:00:00Z", status: "saved", lostChanges: 2 })
+    setSync({ plan: planDoc({ id: "plan-9", ownerName: "Maria" }), status: "saved", externalChange: { seq: 3, concluded: false, lost: 2 } })
     const { result } = await load()
     expect(result.current).toMatchObject({
-      planId: "plan-9", ownerName: "Maria", holderLastSeen: "2026-11-26T10:00:00Z", syncStatus: "saved", lostChanges: 2, sessionId: "sessao-teste",
+      planId: "plan-9", ownerName: "Maria", syncStatus: "saved", externalChange: { seq: 3, concluded: false, lost: 2 }, sessionId: "sessao-teste",
     })
     expect(result.current.syncPlan?.id).toBe("plan-9")
     act(() => result.current.retrySave())

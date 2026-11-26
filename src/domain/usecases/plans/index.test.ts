@@ -1,9 +1,9 @@
-import { ListPlans, OpenPlan, GetPlan, CopyPlan, SavePlan, HeartbeatPlan, ReleasePlan, ConcludePlan, ReopenPlan, DiscardPlan } from '.'
+import { ListPlans, OpenPlan, GetPlan, CopyPlan, SavePlan, ConcludePlan, ReopenPlan, DiscardPlan } from '.'
 import { SchedulePlanRepository } from '@/domain/repositories/SchedulePlanRepository'
 
 const repo = {
   list: jest.fn(), open: jest.fn(), get: jest.fn(), copy: jest.fn(), save: jest.fn(),
-  heartbeat: jest.fn(), release: jest.fn(), conclude: jest.fn(), reopen: jest.fn(), discard: jest.fn()
+  conclude: jest.fn(), reopen: jest.fn(), discard: jest.fn()
 }
 const repository = repo as unknown as SchedulePlanRepository
 
@@ -15,8 +15,6 @@ test.each([
   ['get', new GetPlan(repository), ['p']],
   ['copy', new CopyPlan(repository), ['p', 's', false]],
   ['save', new SavePlan(repository), ['p', 's', 'r', 1, { a: 1 }]],
-  ['heartbeat', new HeartbeatPlan(repository), ['p', 's']],
-  ['release', new ReleasePlan(repository), ['p', 's']],
   ['conclude', new ConcludePlan(repository), ['p', 's']],
   ['reopen', new ReopenPlan(repository), ['p', 's']],
   ['discard', new DiscardPlan(repository), ['p']]

@@ -5,7 +5,7 @@ jest.mock('@/shared/api/supabase', () => ({ supabase: { rpc: jest.fn(), from: je
 
 const rpc = supabase.rpc as jest.Mock
 const repo = new SupabaseSchedulePlanRepository()
-const item = { id: 'p1', monthReference: '2026-12', ownerProfileId: 'o', ownerName: 'Ana', isMine: true, status: 'em_andamento', createdAt: 'a', updatedAt: 'b', expiresAt: 'c', copiedFromName: null, concludedAt: null, openElsewhere: false, hasContent: true }
+const item = { id: 'p1', monthReference: '2026-12', ownerProfileId: 'o', ownerName: 'Ana', isMine: true, status: 'em_andamento', createdAt: 'a', updatedAt: 'b', expiresAt: 'c', copiedFromName: null, concludedAt: null, hasContent: true }
 const doc = { ...item, revision: 3, state: { a: 1 } }
 
 beforeEach(() => jest.clearAllMocks())
@@ -22,7 +22,7 @@ test('list returns [] when data is null', async () => {
 })
 
 test('open calls plan_open', async () => {
-  const result = { mode: 'edit', holderLastSeen: null, plan: doc }
+  const result = { mode: 'edit', plan: doc }
   rpc.mockResolvedValue({ data: result, error: null })
   expect(await repo.open('2026-12', 's1')).toEqual(result)
   expect(rpc).toHaveBeenCalledWith('plan_open', { p_month: '2026-12', p_session: 's1' })
@@ -48,18 +48,14 @@ test('save returns new revision', async () => {
   expect(rpc).toHaveBeenCalledWith('plan_save', { p_plan_id: 'p1', p_session: 's1', p_request_id: 'r1', p_expected_revision: 3, p_state: { a: 2 } })
 })
 
-test.each([
-  ['heartbeat', 'plan_heartbeat'],
-  ['release', 'plan_release'],
-  ['conclude', 'plan_conclude']
-] as const)('%s calls %s', async (method, fn) => {
+test('conclude calls plan_conclude', async () => {
   rpc.mockResolvedValue({ data: null, error: null })
-  await repo[method]('p1', 's1')
-  expect(rpc).toHaveBeenCalledWith(fn, { p_plan_id: 'p1', p_session: 's1' })
+  await repo.conclude('p1', 's1')
+  expect(rpc).toHaveBeenCalledWith('plan_conclude', { p_plan_id: 'p1', p_session: 's1' })
 })
 
 test('reopen calls plan_reopen', async () => {
-  const result = { mode: 'edit', holderLastSeen: null, plan: doc }
+  const result = { mode: 'edit', plan: doc }
   rpc.mockResolvedValue({ data: result, error: null })
   expect(await repo.reopen('p1', 's1')).toEqual(result)
   expect(rpc).toHaveBeenCalledWith('plan_reopen', { p_plan_id: 'p1', p_session: 's1' })
@@ -72,12 +68,12 @@ test('discard calls plan_discard', async () => {
 })
 
 test.each([
-  'forbidden', 'invalid_arguments', 'plan_not_found', 'plan_lock_lost', 'plan_revision_conflict',
-  'plan_concluded', 'plan_expired', 'plan_too_large', 'plan_exists', 'plan_in_use'
+  'forbidden', 'invalid_arguments', 'plan_not_found', 'plan_revision_conflict',
+  'plan_concluded', 'plan_expired', 'plan_too_large', 'plan_exists'
 ])('maps %s error message to PlanError code', async (code) => {
   const cause = { message: `${code}`, code: 'P0001' }
   rpc.mockResolvedValue({ data: null, error: cause })
-  const error = await repo.heartbeat('p1', 's1').catch(e => e)
+  const error = await repo.conclude('p1', 's1').catch(e => e)
   expect(error).toBeInstanceOf(PlanError)
   expect(error.code).toBe(code)
   expect(error.cause).toBe(cause)
@@ -112,7 +108,7 @@ test('unknown errors become unknown', async () => {
 })
 
 test('planErrorMessage gives distinct pt-BR texts', () => {
-  const codes = ['plan_lock_lost', 'plan_revision_conflict', 'plan_expired', 'plan_too_large', 'plan_in_use', 'plan_concluded', 'plan_exists', 'plan_not_found', 'forbidden', 'unavailable', 'unknown'] as const
+  const codes = ['plan_revision_conflict', 'plan_expired', 'plan_too_large', 'plan_concluded', 'plan_exists', 'plan_not_found', 'forbidden', 'unavailable', 'unknown'] as const
   const messages = codes.map(code => planErrorMessage(new PlanError(code)))
   expect(new Set(messages).size).toBe(codes.length)
   expect(planErrorMessage(new PlanError('unavailable'))).toBe('Planejamento compartilhado indisponível neste ambiente.')

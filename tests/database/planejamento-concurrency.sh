@@ -1,7 +1,7 @@
 #!/bin/bash
 # Concorrência de plan_*: sessões psql paralelas contra um PostgreSQL DESCARTÁVEL (socket Unix, sem rede).
 # Pré-requisito: banco com fixture, schema, fixture-policies, migration_archive_profiles e
-# migration_planejamento_compartilhado já aplicados. Cria dados sintéticos próprios (prefixo e0/f0).
+# migration_planejamento_compartilhado e migration_planejamento_sem_reserva já aplicados. Cria dados sintéticos próprios (prefixo e0/f0).
 # Uso: PG_LOCAL_SOCKET_DIR=<dir> PG_LOCAL_DB=<banco> [PG_LOCAL_USER=postgres] tests/database/planejamento-concurrency.sh
 set -u
 SOCK=${PG_LOCAL_SOCKET_DIR:?defina PG_LOCAL_SOCKET_DIR}
@@ -22,15 +22,15 @@ call() { # call <session-tag> <sql>  -> última linha de saída (ou o erro)
   P -At -c "SET ROLE authenticated; SELECT set_config('request.jwt.claim.sub','$A',false); $2" 2>&1 | grep -v "^CONTEXT" | tail -1
 }
 
-# 1) plan_open paralelo, mesmo plano, sessões diferentes: exatamente um edit
+# 1) plan_open paralelo, mesmo plano, sessões diferentes: todos entram em edit e há uma única linha
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 for i in $(seq 1 $N); do
   ( call x "SELECT public.plan_open('2029-01','s$i')->>'mode'" > "$tmp/open$i" ) &
 done; wait
-edits=$(cat "$tmp"/open* | grep -c '^edit$'); ro=$(cat "$tmp"/open* | grep -c '^readonly$')
-[ "$edits" = 1 ] && [ "$ro" = $((N-1)) ] || fail "plan_open: edit=$edits readonly=$ro ($(cat "$tmp"/open* | tr '\n' ' '))"
+edits=$(cat "$tmp"/open* | grep -c '^edit$')
+[ "$edits" = "$N" ] || fail "plan_open: edit=$edits ($(cat "$tmp"/open* | tr '\n' ' '))"
 [ "$(P -At -c "SELECT count(*) FROM public.schedule_plans WHERE month_reference='2029-01'")" = 1 ] || fail "plan_open duplicou linha"
-echo "PASS plan_open: 1 edit, $((N-1)) readonly"
+echo "PASS plan_open: $N edit, 1 linha"
 
 # 2) plan_save paralelo com a mesma revisão esperada: exatamente um sucesso
 PID=$(call x "SELECT public.plan_open('2029-02','sv')->'plan'->>'id'")

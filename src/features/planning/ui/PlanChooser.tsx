@@ -171,7 +171,6 @@ export function PlanChooser({ current, session, onOpenMine, onViewOther }: PlanC
                         Concluído por {mine.ownerName} em {format(new Date(mine.concludedAt), "dd/MM")}
                       </p>
                     )}
-                    {mine.openElsewhere && <p className="text-xs font-bold text-amber-700">Aberto em outro aparelho</p>}
                     <div className="flex flex-wrap gap-2">
                       {mine.status === "concluido" ? (
                         <button type="button" disabled={busy} onClick={() => void reopen(mine, month)} className={solid}>

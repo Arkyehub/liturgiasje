@@ -97,3 +97,14 @@ Abordagem 1; validade conta da **última alteração** e renova a cada gravaçã
 
 ## 8. Deixado ao builder
 Nomes de colunas/funções e códigos de erro; formato do JSON do `state` (derivar de `PlanMass`); como liberar a reserva ao fechar (ex.: `pagehide`); fila/coalescência das gravações; intervalo exato de polling; chave do advisory lock (não bloquear `save_schedule_batch` desnecessariamente); mecânica exata da comparação com as missas reais antes de salvar; testes SQL (reservar, expirar, dono vs. não dono, copiar com e sem `overwrite`, vencimento e limpeza, conflito de revisão, não-admin recusado, concorrência) e Jest (fila, indicador, Somente Leitura, cópia, alerta de publicadas, aviso de substituição, validade); como o app se comporta se as funções ainda não existirem no banco do ambiente (mensagem "indisponível", sem erro bruto); remoção do fluxo "incluir publicadas/despublicar" e dos testes que o fixam; migration de rollback.
+
+## Revisão v2.1 (2026-11-26): sem reserva por aparelho
+
+**Decisão do usuário** depois de testar no Preview: fechar o app deixava a reserva presa por até 120 s e o próprio dono via "aberto em outro aparelho" no mesmo celular. Este ajuste **substitui** as seções de reserva acima (colunas `lock_*`, heartbeat de 30 s, "aberto em outro aparelho", "perdi a reserva").
+
+- O dono abre o seu planejamento de qualquer aparelho, a qualquer momento. Não há reserva, heartbeat nem liberação; `plan_heartbeat` e `plan_release` ficam como no-ops no servidor só para aplicativos já publicados. Os parâmetros de sessão continuam nas assinaturas e são ignorados; as colunas `lock_*` ficam sem uso.
+- A proteção contra gravações concorrentes é a revisão otimista (`plan_revision_conflict`) e a idempotência por `request_id`.
+- **Checagem de mudanças** (sem Realtime): a cada 30 s com a aba visível e ao voltar a ela, lê só o documento. Em edição, aplica a versão mais nova apenas se não houver gravação pendente, e avisa "Planejamento atualizado: alterado em outro aparelho". Se outro aparelho concluiu o planejamento, passa a Concluído.
+- **Conflito na gravação** (dois aparelhos editando ao mesmo tempo): o documento do servidor vence, as edições locais ainda não aplicadas são descartadas e o app avisa quantas foram. Não há mesclagem por campo (o autosave grava o plano inteiro).
+- Somente Leitura continua só para planejamento de outro coordenador e para planejamento concluído.
+- Migration incremental: `migration_planejamento_sem_reserva.sql` (substitui funções; zera `lock_*`; não apaga dados).

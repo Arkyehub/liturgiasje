@@ -9,7 +9,6 @@ import type { UsePlanSyncResult } from "./usePlanSync"
 export const syncSave = jest.fn()
 export const syncRetrySave = jest.fn()
 export const syncReopen = jest.fn().mockResolvedValue(undefined)
-export const syncRelease = jest.fn()
 export const syncMarkConcluded = jest.fn().mockResolvedValue(undefined)
 
 export const planDoc = (extra: Partial<PlanDocument> = {}): PlanDocument => ({
@@ -24,7 +23,6 @@ export const planDoc = (extra: Partial<PlanDocument> = {}): PlanDocument => ({
   expiresAt: "2027-01-01T00:00:00Z",
   copiedFromName: null,
   concludedAt: null,
-  openElsewhere: false,
   hasContent: true,
   revision: 1,
   state: null,
@@ -34,15 +32,13 @@ export const planDoc = (extra: Partial<PlanDocument> = {}): PlanDocument => ({
 const base = (): UsePlanSyncResult => ({
   mode: "edit",
   plan: planDoc(),
-  holderLastSeen: null,
   status: "idle",
-  lostChanges: 0,
+  externalChange: null,
   error: null,
   sessionId: "sessao-teste",
   save: syncSave,
   retrySave: syncRetrySave,
   reopen: syncReopen,
-  release: syncRelease,
   markConcluded: syncMarkConcluded,
 })
 
@@ -56,7 +52,6 @@ export function resetSync() {
   syncSave.mockClear()
   syncRetrySave.mockClear()
   syncReopen.mockClear()
-  syncRelease.mockClear()
   syncMarkConcluded.mockClear()
   current = base()
 }
