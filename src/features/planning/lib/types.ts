@@ -72,9 +72,10 @@ export interface PlanSummary {
   locked: number
 }
 
+/** Elegível = perfil ativo (não arquivado), com ou sem conta vinculada: quem não usa o app também é escalado pelos coordenadores. */
 export function eligibleReaders(profiles: Profile[]): PlanReader[] {
   return profiles
-    .filter((p) => !p.archivedAt && !!p.authUserId)
+    .filter((p) => !p.archivedAt)
     .map((p) => ({
       id: p.id,
       fullName: p.fullName,

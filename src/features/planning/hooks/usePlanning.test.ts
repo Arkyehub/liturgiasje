@@ -118,11 +118,24 @@ test("going from idle to a chosen month loads that month exactly like before", a
   expect(listUnavailable).toHaveBeenCalledWith("2026-12-01", "2026-12-31")
 })
 
-test("only active readers with a linked account are eligible, with stats for each", async () => {
+test("every active reader is eligible, with or without a linked account; archived ones are not; stats for each", async () => {
   setup([], [profile("a"), profile("b", { archivedAt: "2026-01-01" }), profile("c", { authUserId: null })])
   const { result } = await load()
-  expect(result.current.readers.map((r) => r.id)).toEqual(["a"])
-  expect(Object.keys(result.current.stats)).toEqual(["a"])
+  expect(result.current.readers.map((r) => r.id)).toEqual(["a", "c"])
+  expect(Object.keys(result.current.stats)).toEqual(["a", "c"])
+})
+
+test("the lamp suggests an active reader without a linked account, never an archived one", async () => {
+  setup(
+    [mass("m1", "2026-12-08", "19:00:00", false, [slot("s1", "m1", "C", "")])],
+    [profile("x", { archivedAt: "2026-01-01" }), profile("y", { authUserId: null })],
+  )
+  const { result } = await load()
+  act(() => result.current.runLamp())
+  expect(result.current.masses[0].slots[0].profileId).toBe("y")
+  // a escolha à mão também aceita o leitor sem conta e recusa o arquivado
+  act(() => result.current.setSlotReader("m1", 0, "x"))
+  expect(result.current.masses[0].slots[0].profileId).toBe("y")
 })
 
 test("maps existing masses: filled slots locked, time as HH:mm, published masses read-only", async () => {
@@ -332,7 +345,7 @@ test("runLamp is a no-op while loading", async () => {
 
 test("runLamp with no eligible readers warns and leaves the slots empty", async () => {
   const { toast } = jest.requireMock("sonner") as { toast: Record<string, jest.Mock> }
-  setup([draftSunday()], [profile("x", { archivedAt: "2026-01-01" }), profile("y", { authUserId: null })])
+  setup([draftSunday()], [profile("x", { archivedAt: "2026-01-01" }), profile("y", { archivedAt: "2026-02-01", authUserId: null })])
   const { result } = await load()
   act(() => result.current.runLamp())
   expect(toast.warning).toHaveBeenCalledWith(expect.stringMatching(/Nenhum leitor apto/))

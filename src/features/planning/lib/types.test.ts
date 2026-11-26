@@ -15,7 +15,7 @@ describe("roleGroup", () => {
 })
 
 describe("eligibleReaders", () => {
-  it("devolve só ativos com conta vinculada", () => {
+  it("devolve os ativos (não arquivados), com ou sem conta vinculada", () => {
     const profiles: Profile[] = [
       { ...base, id: "a", fullName: "Ativo", authUserId: "u1", preferences: { day_preferences: { "0": ["09:00"] } } },
       { ...base, id: "b", fullName: "Arquivado", authUserId: "u2", archivedAt: "2026-02-01T00:00:00Z" },
@@ -23,7 +23,7 @@ describe("eligibleReaders", () => {
       { ...base, id: "d", fullName: "Admin", role: "admin", authUserId: "u4" },
     ]
     const r = eligibleReaders(profiles)
-    expect(r.map((x) => x.id)).toEqual(["a", "d"])
+    expect(r.map((x) => x.id)).toEqual(["a", "c", "d"])
     expect(r[0].dayPreferences).toEqual({ "0": ["09:00"] })
     expect(r[1].dayPreferences).toEqual({})
     expect(r[0].createdAt).toBe("2026-01-01T00:00:00Z")

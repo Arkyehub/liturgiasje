@@ -171,6 +171,21 @@ test("the admin sees the title, the month and the summary", async () => {
   expect(push).not.toHaveBeenCalled()
 })
 
+test("the reader count includes active readers without a linked account and excludes archived ones", async () => {
+  asAdmin()
+  setup()
+  ;(makeListProfiles as jest.Mock).mockReturnValue({
+    execute: jest.fn().mockResolvedValue([
+      profile("a"),
+      { ...profile("b"), authUserId: null },
+      { ...profile("c"), archivedAt: "2026-01-01" },
+      { ...profile("d"), authUserId: null, archivedAt: "2026-01-01" },
+    ]),
+  })
+  await openPage()
+  expect(await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")).toBeInTheDocument()
+})
+
 test("creating the default masses on an empty December shows 25 masses / 82 slots in notebook lines", async () => {
   asAdmin()
   setup()

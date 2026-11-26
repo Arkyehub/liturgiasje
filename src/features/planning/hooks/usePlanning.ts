@@ -22,7 +22,7 @@ export type PlanningPhase = "planning" | "suggested"
 export interface UsePlanningResult {
   masses: PlanMass[]
   readers: PlanReader[]
-  /** Nome de TODOS os perfis (inclusive arquivados/sem conta) para exibir vagas já gravadas. */
+  /** Nome de TODOS os perfis (inclusive arquivados) para exibir vagas já gravadas. */
   readerNames: Record<string, string>
   stats: Record<string, ReaderStats>
   unavailable: Record<string, string[]>
@@ -255,7 +255,7 @@ export function usePlanning(month: Date | null): UsePlanningResult {
       return
     }
     if (readers.length === 0) {
-      toast.warning("Nenhum leitor apto (ativo e com conta vinculada): as vagas ficaram sem leitor.")
+      toast.warning("Nenhum leitor apto (ativos, com ou sem conta vinculada): as vagas ficaram sem leitor.")
     }
     setPlan((prev) => suggestSchedule({ masses: prev, readers, stats, unavailable }))
     setSuggested(true)
@@ -265,7 +265,7 @@ export function usePlanning(month: Date | null): UsePlanningResult {
     (massKey: string, slotIndex: number, profileId: string) => {
       if (!editable) return
       const reader = readers.find((r) => r.id === profileId)
-      if (!reader) return // arquivado, sem conta ou desconhecido
+      if (!reader) return // arquivado ou desconhecido
       setPlan((prev) =>
         prev.map((m) => {
           const slot = m.slots[slotIndex]
