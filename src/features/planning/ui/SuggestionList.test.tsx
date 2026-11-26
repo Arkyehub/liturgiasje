@@ -310,3 +310,22 @@ test("the reader card shows 'Por quê' only on the ESTA row", async () => {
   expect(items[1]).not.toHaveTextContent("Por quê")
   expect(items[1]).not.toHaveTextContent("Escolhido à mão")
 })
+
+test("a slot with a pending swap shows the 'troca pendente' badge and cannot be picked or unlocked", () => {
+  const masses: PlanMass[] = [
+    {
+      ...MASSES[0],
+      slots: [
+        { role: "C", profileId: "ana", locked: true, isSwapRequested: true },
+        { role: "L", profileId: "bia", locked: true },
+      ],
+    },
+  ]
+  const { rows } = setup({ masses })
+  const [pending, normal] = rows()
+  expect(within(pending).getByRole("img", { name: "Troca pendente" })).toBeInTheDocument()
+  expect(within(pending).getByRole("button", { name: /Ana Ribeiro/ })).toBeDisabled()
+  expect(within(pending).getByRole("button", { name: "Destravar leitor" })).toBeDisabled()
+  expect(within(normal).queryByRole("img", { name: "Troca pendente" })).not.toBeInTheDocument()
+  expect(within(normal).getByRole("button", { name: /Bia Souza/ })).toBeEnabled()
+})

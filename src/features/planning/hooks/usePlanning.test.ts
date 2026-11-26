@@ -397,3 +397,22 @@ test("switching month returns to phase 'planning'", async () => {
   await waitFor(() => expect(hook.result.current.loading).toBe(false))
   expect(hook.result.current.phase).toBe("planning")
 })
+
+test("a slot with a pending swap request is carried into the plan, stays locked and cannot be unlocked or replaced", async () => {
+  setup([
+    mass("m1", "2026-12-08", "19:00:00", false, [
+      { ...slot("s1", "m1", "C", "a"), isSwapRequested: true },
+      slot("s2", "m1", "L", "b"),
+    ]),
+  ])
+  const { result } = await load()
+  expect(result.current.masses[0].slots[0]).toEqual({ id: "s1", role: "C", profileId: "a", locked: true, isSwapRequested: true })
+  expect(result.current.masses[0].slots[1]).not.toHaveProperty("isSwapRequested")
+
+  act(() => result.current.toggleLock("m1", 0))
+  expect(result.current.masses[0].slots[0].locked).toBe(true)
+  act(() => result.current.setSlotReader("m1", 0, "b"))
+  expect(result.current.masses[0].slots[0]).toMatchObject({ profileId: "a", locked: true })
+  act(() => result.current.runLamp())
+  expect(result.current.masses[0].slots[0]).toMatchObject({ profileId: "a", locked: true, isSwapRequested: true })
+})

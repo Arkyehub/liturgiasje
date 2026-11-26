@@ -75,4 +75,9 @@ describe("planToBatch", () => {
     )
     expect(r.unpublishIds).toEqual(["a"])
   })
+
+  it("isSwapRequested não vai para o lote: só id, função e leitor", () => {
+    const m = mass({ id: "m1", slots: [{ id: UUID, role: "C", profileId: "p1", locked: true, isSwapRequested: true }] })
+    expect(planToBatch([m], []).entries[0].slots).toEqual([{ id: UUID, role: "C", profileId: "p1" }])
+  })
 })

@@ -30,6 +30,8 @@ export interface PlanSlot {
   role: RoleCode
   profileId: string // "" = vazia
   locked: boolean
+  /** Há um pedido de troca pendente nesta vaga (spec §11): fica travada e destacada. */
+  isSwapRequested?: boolean
   warning?: "outside-preference"
   reason?: string
 }

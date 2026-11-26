@@ -31,6 +31,15 @@ export function OutsidePreferenceIcon() {
   )
 }
 
+/** Selo de troca pendente (spec §11): a vaga continua travada até o pedido ser resolvido. */
+export function SwapPendingBadge() {
+  return (
+    <span role="img" aria-label="Troca pendente" className="inline-flex shrink-0 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-800">
+      <span aria-hidden="true">troca pendente</span>
+    </span>
+  )
+}
+
 const iconButton =
   "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors active:bg-stone-100 disabled:opacity-40 disabled:active:bg-transparent"
 
@@ -48,10 +57,12 @@ export function SuggestionRow({
 }: SuggestionRowProps) {
   const dd = mass.date.slice(8, 10)
   const empty = slot.profileId === ""
+  const swapPending = !!slot.isSwapRequested
+  const frozen = mass.readOnly || swapPending
   return (
     <li
       data-date={mass.date}
-      className={`flex min-h-11 items-center border-b ${lastOfDay ? "border-stone-400" : "border-stone-100"}`}
+      className={`flex min-h-11 items-center border-b ${lastOfDay ? "border-stone-400" : "border-stone-100"} ${swapPending ? "bg-amber-50" : ""}`}
     >
       <div className="flex w-[72px] shrink-0 items-baseline gap-1 pl-4 pr-2">
         {showDate && (
@@ -78,10 +89,11 @@ export function SuggestionRow({
             <button
               type="button"
               onClick={onPick}
-              disabled={mass.readOnly}
+              disabled={frozen}
               className="flex min-h-11 min-w-0 flex-1 items-center gap-1.5 text-left text-stone-900 transition-colors active:text-stone-600 disabled:cursor-default"
             >
               <span className="truncate text-sm font-semibold">{name}</span>
+              {swapPending && <SwapPendingBadge />}
               {slot.warning === "outside-preference" && <OutsidePreferenceIcon />}
             </button>
             <button type="button" aria-label="Ver escalas do leitor no mês" onClick={onView} className={iconButton}>
@@ -92,7 +104,7 @@ export function SuggestionRow({
               aria-label={slot.locked ? "Destravar leitor" : "Travar leitor"}
               aria-pressed={slot.locked}
               onClick={onToggleLock}
-              disabled={mass.readOnly}
+              disabled={frozen}
               className={iconButton}
             >
               {slot.locked ? (

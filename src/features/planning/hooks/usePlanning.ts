@@ -68,6 +68,8 @@ export function massToPlan(mass: Mass): PlanMass {
       role: s.role as RoleCode,
       profileId: s.profileId ?? "",
       locked: !!s.profileId,
+      // Só presente quando verdadeiro: o plano de quem não tem troca pendente não muda.
+      ...(s.isSwapRequested ? { isSwapRequested: true } : {}),
     }))
   return {
     key: mass.id,
@@ -246,7 +248,7 @@ export function usePlanning(month: Date): UsePlanningResult {
       setPlan((prev) =>
         prev.map((m) => {
           const slot = m.slots[slotIndex]
-          if (m.key !== massKey || m.readOnly || !slot) return m
+          if (m.key !== massKey || m.readOnly || !slot || slot.isSwapRequested) return m
           if (unavailable[m.date]?.includes(profileId)) return m
           if (m.slots.some((s, i) => i !== slotIndex && s.profileId === profileId)) return m
           const { warning: _w, reason: _r, ...rest } = slot
@@ -265,7 +267,7 @@ export function usePlanning(month: Date): UsePlanningResult {
     setPlan((prev) =>
       prev.map((m) => {
         const slot = m.slots[slotIndex]
-        if (m.key !== massKey || m.readOnly || !slot || slot.profileId === "") return m
+        if (m.key !== massKey || m.readOnly || !slot || slot.profileId === "" || slot.isSwapRequested) return m
         return { ...m, slots: m.slots.map((s, i) => (i === slotIndex ? { ...s, locked: !s.locked } : s)) }
       }),
     )
