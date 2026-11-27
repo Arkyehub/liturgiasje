@@ -272,6 +272,7 @@ function PlanningScreen() {
               monthName={monthName}
               onSetReader={planning.setSlotReader}
               onToggleLock={planning.toggleLock}
+              onEditMass={readOnly ? undefined : setSheet}
               onSuggestAgain={planning.runLamp}
               saving={save.saving}
               readOnly={readOnly}

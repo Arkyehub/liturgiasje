@@ -375,3 +375,38 @@ test("rascunho existente ganha a tag RASC e linha laranja leve; publicada, PUBL 
   expect(published[0]).toHaveTextContent("PUBL")
   expect(lines.filter((li) => li.textContent?.includes("PUBL"))).toHaveLength(1)
 })
+
+describe("editar missa pelo horário (depois da lâmpada)", () => {
+  it("só a 1ª linha de cada missa editável tem o botão, e ele reporta a chave da missa", async () => {
+    const onEditMass = jest.fn()
+    setup({ onEditMass })
+    const edits = screen.getAllByRole("button", { name: /^Editar missa de/ })
+    expect(edits.map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Editar missa de 01/12 às 19:00",
+      "Editar missa de 06/12 às 07:00",
+      "Editar missa de 06/12 às 09:00",
+    ])
+    await userEvent.click(edits[1])
+    expect(onEditMass).toHaveBeenCalledWith("sun7")
+    // tocar no nome continua trocando o leitor (não abre a edição da missa)
+    onEditMass.mockClear()
+    await userEvent.click(screen.getAllByRole("button", { name: /Ana Ribeiro/ })[0])
+    expect(onEditMass).not.toHaveBeenCalled()
+  })
+
+  it("sem callback não há botão de editar", () => {
+    setup()
+    expect(screen.queryByRole("button", { name: /^Editar missa de/ })).not.toBeInTheDocument()
+  })
+
+  it("missa publicada não oferece editar", () => {
+    const masses: PlanMass[] = [{ ...MASSES[0], id: "m1", wasPublished: true, readOnly: true }, MASSES[1]]
+    setup({ masses, onEditMass: jest.fn() })
+    expect(screen.getAllByRole("button", { name: /^Editar missa de/ }).map((b) => b.getAttribute("aria-label"))).toEqual(["Editar missa de 06/12 às 07:00"])
+  })
+
+  it("plano somente leitura não oferece editar", () => {
+    setup({ readOnly: true, onEditMass: jest.fn() })
+    expect(screen.queryByRole("button", { name: /^Editar missa de/ })).not.toBeInTheDocument()
+  })
+})

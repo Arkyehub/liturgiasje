@@ -20,6 +20,8 @@ interface SuggestionListProps {
   monthName: string // ex.: "dezembro"
   onSetReader: (massKey: string, slotIndex: number, profileId: string) => void
   onToggleLock: (massKey: string, slotIndex: number) => void
+  /** Toque no horário de uma missa: abre a edição dela (remover missa ou funções). Sem callback, não há o botão. */
+  onEditMass?: (massKey: string) => void
   onSuggestAgain: () => void
   /** Sem callback, o botão fica desabilitado. */
   onSave?: () => void
@@ -55,6 +57,7 @@ export function SuggestionList({
   monthName,
   onSetReader,
   onToggleLock,
+  onEditMass,
   onSuggestAgain,
   onSave,
   onDetail,
@@ -152,6 +155,7 @@ export function SuggestionList({
                   onPick={() => setPicking(ref)}
                   onView={() => setViewing(ref)}
                   onToggleLock={() => onToggleLock(ref.massKey, ref.slotIndex)}
+                  onEditMass={onEditMass ? () => onEditMass(line.mass.key) : undefined}
                   readOnly={readOnly}
                 />
               </Fragment>

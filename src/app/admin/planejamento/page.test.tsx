@@ -918,3 +918,38 @@ test("leitura das configurações falhou: a dica explica (não diz que não há 
   await userEvent.click(await screen.findByRole("button", { name: "Tentar novamente" }))
   await waitFor(() => expect(settingsGet).toHaveBeenCalledTimes(2))
 })
+
+// ---- Editar/remover missa e função depois da lâmpada ----
+test("depois da lâmpada: tocar no horário abre a edição; remover missa tira a missa da lista", async () => {
+  asAdmin()
+  setup()
+  await suggestDefaults()
+  const before = screen.getByText(/missas · .* vagas/).textContent
+  expect(before).toContain("25 missas")
+  await userEvent.click(screen.getByRole("button", { name: "Editar missa de 01/12 às 19:00" }))
+  await userEvent.click(await screen.findByRole("button", { name: "Remover missa" }))
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Editar missa de 01/12 às 19:00" })).not.toBeInTheDocument())
+  expect(screen.getByText(/missas · .* vagas/).textContent).toContain("24 missas")
+  expect(screen.getByRole("list", { name: "Vagas sugeridas" })).toBeInTheDocument() // continua na lista depois da lâmpada
+})
+
+test("depois da lâmpada: desmarcar uma função na edição da missa remove só aquela vaga", async () => {
+  asAdmin()
+  setup()
+  await suggestDefaults()
+  const slotsText = () => screen.getByText(/missas · .* vagas/).textContent as string
+  expect(slotsText()).toContain("82 vagas")
+  await userEvent.click(screen.getByRole("button", { name: "Editar missa de 06/12 às 07:00" }))
+  await userEvent.click(await screen.findByRole("checkbox", { name: "P - Preces" }))
+  await userEvent.click(screen.getByRole("button", { name: /Salvar missa/ }))
+  await waitFor(() => expect(slotsText()).toContain("81 vagas"))
+  expect(slotsText()).toContain("25 missas")
+})
+
+test("em somente leitura o horário não vira botão de editar", async () => {
+  asAdmin()
+  setup([draftMass("d1", "19:00:00")])
+  setSync({ mode: "concluded", plan: planDoc({ status: "concluido", concludedAt: "2026-11-25T10:00:00Z" }) })
+  await openMine()
+  expect(screen.queryByRole("button", { name: /^Editar missa de/ })).not.toBeInTheDocument()
+})
