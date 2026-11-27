@@ -1,5 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react"
-import { usePlanning } from "./usePlanning"
+import { usePlanning, type PlanningSettings } from "./usePlanning"
+import { SAMPLE_STANDARD } from "../lib/testFixtures"
+import { DEFAULT_LAMP_RULES } from "@/domain/models/PlannerSettings"
+import { suggestSchedule } from "../lib/suggestSchedule"
 import { makeListSchedulesForMonth, makeListSlotHistory } from "@/main/factories/usecases/schedule"
 import { makeListProfiles, makeListUnavailableForRange } from "@/main/factories/usecases/profiles"
 import type { Mass } from "@/domain/models/Schedule"
@@ -14,6 +17,10 @@ jest.mock("@/main/factories/usecases/profiles", () => ({
   makeListProfiles: jest.fn(),
   makeListUnavailableForRange: jest.fn(),
 }))
+jest.mock("../lib/suggestSchedule", () => {
+  const actual = jest.requireActual("../lib/suggestSchedule")
+  return { ...actual, suggestSchedule: jest.fn(actual.suggestSchedule) }
+})
 jest.mock("./usePlanSync", () => jest.requireActual("./planSyncTestDouble"))
 jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() } }))
 
@@ -73,8 +80,10 @@ function setup(masses: Mass[], profiles: Profile[] = [profile("a"), profile("b")
   ;(makeListUnavailableForRange as jest.Mock).mockReturnValue({ execute: listUnavailable })
 }
 
-async function load(month = DEC) {
-  const hook = renderHook(() => usePlanning({ kind: "mine", month }))
+const SETTINGS: PlanningSettings = { standardMasses: SAMPLE_STANDARD, lampRules: DEFAULT_LAMP_RULES, loaded: true }
+
+async function load(month = DEC, settings: PlanningSettings = SETTINGS) {
+  const hook = renderHook(() => usePlanning({ kind: "mine", month }, settings))
   await waitFor(() => expect(hook.result.current.loading).toBe(false))
   return hook
 }
@@ -167,15 +176,58 @@ test("createDefaults fills December 2026 with 25 masses / 82 slots on an empty m
   expect(result.current.summary.totalSlots).toBe(82)
 })
 
-test("createDefaults does not duplicate an existing mass whose time came from Postgres as HH:mm:ss", async () => {
+test("createDefaults is blocked when the list already has masses (draft or published): lista em branco só", async () => {
   setup([mass("m1", "2026-12-06", "07:00:00", false, [slot("s1", "m1", "C", "")])])
   const { result } = await load()
+  expect(result.current.canCreateDefaults).toBe(false)
+  expect(result.current.createDefaultsHint).toBe("not-empty")
   act(() => result.current.createDefaults())
-  expect(result.current.masses).toHaveLength(25)
-  expect(result.current.masses.filter((m) => m.date === "2026-12-06" && m.time === "07:00")).toHaveLength(1)
-  // continua em ordem cronológica
-  const order = result.current.masses.map((m) => `${m.date}_${m.time}`)
-  expect(order).toEqual([...order].sort())
+  expect(result.current.masses).toHaveLength(1)
+})
+
+test("createDefaults has nothing to create and says why when the coordinator has no standard masses", async () => {
+  setup([])
+  const { result } = await load(DEC, { ...SETTINGS, standardMasses: [] })
+  expect(result.current.canCreateDefaults).toBe(false)
+  expect(result.current.createDefaultsHint).toBe("no-standard")
+  act(() => result.current.createDefaults())
+  expect(result.current.masses).toEqual([])
+})
+
+test("createDefaults waits for the settings to load", async () => {
+  setup([])
+  const { result } = await load(DEC, { ...SETTINGS, loaded: false })
+  expect(result.current.canCreateDefaults).toBe(false)
+  expect(result.current.createDefaultsHint).toBeNull()
+  act(() => result.current.createDefaults())
+  expect(result.current.masses).toEqual([])
+})
+
+test("createDefaults uses exactly what the coordinator configured", async () => {
+  setup([])
+  const { result } = await load(DEC, { ...SETTINGS, standardMasses: [{ weekday: 3, time: "06:30", roles: ["C", "P"] }] })
+  expect(result.current.canCreateDefaults).toBe(true)
+  act(() => result.current.createDefaults())
+  expect(result.current.masses.map((m) => `${m.date} ${m.time}`)).toEqual([
+    "2026-12-02 06:30", "2026-12-09 06:30", "2026-12-16 06:30", "2026-12-23 06:30", "2026-12-30 06:30",
+  ])
+  expect(result.current.canCreateDefaults).toBe(false) // agora a lista não está em branco
+})
+
+test("runLamp passes the coordinator's rules to the suggestion and waits for the settings", async () => {
+  setup([])
+  const spy = suggestSchedule as jest.Mock
+  spy.mockClear()
+  const rules = { ...DEFAULT_LAMP_RULES, balance: false, history: false }
+  const { result } = await load(DEC, { ...SETTINGS, lampRules: rules })
+  act(() => result.current.createDefaults())
+  act(() => result.current.runLamp())
+  expect(spy).toHaveBeenCalled() // o atualizador do setState pode rodar mais de uma vez
+  spy.mock.calls.forEach(([input]: [{ rules: unknown }]) => expect(input.rules).toEqual(rules))
+  spy.mockClear()
+  const notLoaded = await load(DEC, { ...SETTINGS, loaded: false })
+  act(() => notLoaded.result.current.runLamp())
+  expect(spy).not.toHaveBeenCalled()
 })
 
 test("published masses stay read-only and untouched by edits", async () => {
@@ -269,31 +321,31 @@ test("a failed read is an error state (not an empty month); createDefaults/addMa
   ;(console.error as jest.Mock).mockRestore()
 })
 
-test("editing a new mass's time and creating defaults again keeps keys unique; update/remove touch one mass", async () => {
+test("editing a new mass's time keeps keys unique; update/remove touch one mass", async () => {
   setup([])
   const { result } = await load()
   act(() => result.current.createDefaults())
   act(() => result.current.updateMass("2026-12-06_07:00", { time: "08:00" }))
-  act(() => result.current.createDefaults())
+  act(() => result.current.createDefaults()) // lista não está mais em branco: nada acontece
 
   const keys = result.current.masses.map((m) => m.key)
-  expect(result.current.masses).toHaveLength(26)
+  expect(result.current.masses).toHaveLength(25)
   expect(new Set(keys).size).toBe(keys.length)
   const sunday = result.current.masses.filter((m) => m.date === "2026-12-06")
-  expect(sunday.map((m) => m.time)).toEqual(["07:00", "08:00", "09:00", "11:00", "19:00"])
-  const recreated = sunday.find((m) => m.time === "07:00") as { key: string }
-  expect(recreated.key).not.toBe("2026-12-06_07:00")
+  expect(sunday.map((m) => m.time)).toEqual(["08:00", "09:00", "11:00", "19:00"])
+  const edited = sunday.find((m) => m.time === "08:00") as { key: string }
+  expect(edited.key).toBe("2026-12-06_07:00")
 
   act(() => result.current.updateMass("2026-12-06_07:00", { description: "editada" }))
   expect(result.current.masses.filter((m) => m.description === "editada").map((m) => m.time)).toEqual(["08:00"])
 
   act(() => result.current.removeMass("2026-12-06_07:00"))
-  expect(result.current.masses).toHaveLength(25)
-  expect(result.current.masses.filter((m) => m.date === "2026-12-06").map((m) => m.time)).toEqual(["07:00", "09:00", "11:00", "19:00"])
+  expect(result.current.masses).toHaveLength(24)
+  expect(result.current.masses.filter((m) => m.date === "2026-12-06").map((m) => m.time)).toEqual(["09:00", "11:00", "19:00"])
 
   // addMass com chave já usada também recebe chave nova
   act(() =>
-    result.current.addMass({ key: recreated.key, date: "2026-12-06", time: "10:00", description: "", wasPublished: false, readOnly: false, slots: [] }),
+    result.current.addMass({ key: edited.key, date: "2026-12-06", time: "10:00", description: "", wasPublished: false, readOnly: false, slots: [] }),
   )
   const after = result.current.masses.map((m) => m.key)
   expect(new Set(after).size).toBe(after.length)

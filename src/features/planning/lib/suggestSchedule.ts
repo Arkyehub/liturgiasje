@@ -9,6 +9,7 @@ import {
 } from "./types"
 import { isOutsidePreference, isPreferenceSlot, prefersMass } from "./slotPreference"
 import { ROLE_LABEL, targetLabel } from "./format"
+import { DEFAULT_LAMP_RULES, type LampRules } from "@/domain/models/PlannerSettings"
 
 /*
  * Lâmpada: sugestão de escala.
@@ -17,25 +18,41 @@ import { ROLE_LABEL, targetLabel } from "./format"
  * vagas travadas e missas readOnly intocadas (mas contam na carga, na meta e no espaçamento).
  *
  * Regras suaves = um custo global (menor é melhor), somado por leitor:
- *   - equilíbrio: W_BALANCE·(carga − meta)²  + W_OVER por vaga acima de ⌈meta⌉
- *     meta = vagas do mês ÷ leitores elegíveis, deslocada (±MAX_AVG_BIAS) pela média
+ *   - equilíbrio: balance·(carga − meta)²  + over por vaga acima de ⌈meta⌉
+ *     meta = vagas do mês ÷ leitores elegíveis, deslocada (±avgBias) pela média
  *     mensal do leitor em relação à do grupo (abaixo da média ⇒ meta um pouco maior)
- *   - preferência: W_PREF_MISS por vaga em dia/horário de preferência que o leitor não marcou
- *   - afinidade: W_AFFINITY·(1 − proporção do grupo de função)
- *   - distribuição: W_SAME_DAY por missa extra no mesmo dia; W_WEEKEND por par de fins de
+ *   - preferência: prefMiss por vaga em dia/horário de preferência que o leitor não marcou
+ *   - afinidade: affinity·(1 − proporção do grupo de função)
+ *   - distribuição: sameDay por missa extra no mesmo dia; weekend por par de fins de
  *     semana seguidos
+ * Cada regra suave pode ser desligada (SuggestInput.rules): o peso dela vira 0. Sem `rules`, todas ligadas.
  * A rodada gulosa escolhe, para cada vaga (da mais restrita para a menos), o candidato de
  * menor custo marginal; a rodada de melhoria aplica transferências e trocas que baixam o custo.
  */
 
-const W_BALANCE = 10
-const W_OVER = 40
-const W_PREF_MISS = 30
-const W_AFFINITY = 4
-const W_SAME_DAY = 35
-const W_WEEKEND = 6
-/** < 0,5 para que a diferença de metas entre dois leitores fique < 1 e o spread ≤ 1 se mantenha. */
-const MAX_AVG_BIAS = 0.4
+interface Weights {
+  balance: number
+  over: number
+  prefMiss: number
+  affinity: number
+  sameDay: number
+  weekend: number
+  /** < 0,5 para que a diferença de metas entre dois leitores fique < 1 e o spread ≤ 1 se mantenha. */
+  avgBias: number
+}
+
+/** Pesos efetivos: cada regra suave desligada zera o seu peso (as regras duras não são configuráveis). */
+function weightsFor(rules: LampRules): Weights {
+  return {
+    balance: rules.balance ? 10 : 0,
+    over: rules.balance ? 40 : 0,
+    prefMiss: rules.preferences ? 30 : 0,
+    affinity: rules.affinity ? 4 : 0,
+    sameDay: rules.sameDay ? 35 : 0,
+    weekend: rules.weekends ? 6 : 0,
+    avgBias: rules.history ? 0.4 : 0,
+  }
+}
 const EPS = 1e-9
 const MAX_SWEEPS = 200
 
@@ -66,6 +83,8 @@ interface Cell {
 
 interface Ctx {
   input: SuggestInput
+  rules: LampRules
+  w: Weights
   readerById: Map<string, PlanReader>
   target: Map<string, number>
   groupTarget: number
@@ -78,10 +97,10 @@ interface Ctx {
 
 function cellCost(ctx: Ctx, reader: PlanReader, cell: Cell): number {
   let c = 0
-  if (cell.prefSlot && !prefersMass(reader, cell.mass)) c += W_PREF_MISS
+  if (cell.prefSlot && !prefersMass(reader, cell.mass)) c += ctx.w.prefMiss
   const group = roleGroup(cell.role)
   const share = group ? (ctx.input.stats[reader.id]?.roleShare?.[group] ?? 0) : 0
-  c += W_AFFINITY * (1 - share)
+  c += ctx.w.affinity * (1 - share)
   return c
 }
 
@@ -91,7 +110,7 @@ function readerCost(ctx: Ctx, readerId: string, cells: Cell[]): number {
   if (!reader) return 0
   const t = ctx.target.get(readerId) ?? ctx.groupTarget
   const load = cells.length
-  let c = W_BALANCE * (load - t) * (load - t) + W_OVER * Math.max(0, load - Math.ceil(t - EPS))
+  let c = ctx.w.balance * (load - t) * (load - t) + ctx.w.over * Math.max(0, load - Math.ceil(t - EPS))
   const perDay = new Map<string, number>()
   const weekends = new Set<number>()
   for (const cell of cells) {
@@ -99,8 +118,8 @@ function readerCost(ctx: Ctx, readerId: string, cells: Cell[]): number {
     perDay.set(cell.date, (perDay.get(cell.date) ?? 0) + 1)
     if (cell.weekend !== null) weekends.add(cell.weekend)
   }
-  for (const n of perDay.values()) c += W_SAME_DAY * (n - 1)
-  for (const w of weekends) if (weekends.has(w + 7)) c += W_WEEKEND
+  for (const n of perDay.values()) c += ctx.w.sameDay * (n - 1)
+  for (const w of weekends) if (weekends.has(w + 7)) c += ctx.w.weekend
   return c
 }
 
@@ -138,15 +157,15 @@ function unassign(ctx: Ctx, readerId: string, cell: Cell): void {
 
 function buildReason(ctx: Ctx, reader: PlanReader, cell: Cell): string {
   const parts: string[] = []
-  if (cell.prefSlot) parts.push(prefersMass(reader, cell.mass) ? "Preferência neste horário" : "Fora da preferência de dia/horário")
+  if (cell.prefSlot && ctx.rules.preferences) parts.push(prefersMass(reader, cell.mass) ? "Preferência neste horário" : "Fora da preferência de dia/horário")
   const load = cellsOf(ctx, reader.id).length
   parts.push(`${load} ${load === 1 ? "leitura" : "leituras"} no mês (meta ${targetLabel(ctx.groupTarget)})`)
   const stats = ctx.input.stats[reader.id]
   const avg = stats?.monthlyAverage
   const groupAvg = groupAverage(ctx.input)
-  if (avg !== undefined && avg < groupAvg - 0.5) parts.push("média abaixo do grupo")
+  if (ctx.rules.history && avg !== undefined && avg < groupAvg - 0.5) parts.push("média abaixo do grupo")
   const group = roleGroup(cell.role)
-  if (group && (stats?.roleShare?.[group] ?? 0) >= 0.5) parts.push(`costuma fazer ${ROLE_LABEL[cell.role]}`)
+  if (ctx.rules.affinity && group && (stats?.roleShare?.[group] ?? 0) >= 0.5) parts.push(`costuma fazer ${ROLE_LABEL[cell.role]}`)
   return parts.join(" · ")
 }
 
@@ -156,6 +175,8 @@ function groupAverage(input: SuggestInput): number {
 }
 
 export function suggestSchedule(input: SuggestInput): PlanMass[] {
+  const rules = input.rules ?? DEFAULT_LAMP_RULES
+  const w = weightsFor(rules)
   const readers = [...input.readers].sort(compareReaders)
   const readerById = new Map(readers.map((r) => [r.id, r]))
 
@@ -177,13 +198,13 @@ export function suggestSchedule(input: SuggestInput): PlanMass[] {
   for (const r of readers) {
     const avg = input.stats[r.id]?.monthlyAverage ?? gAvg
     const rel = Math.max(-1, Math.min(1, (gAvg - avg) / Math.max(gAvg, 1)))
-    target.set(r.id, groupTarget + MAX_AVG_BIAS * rel)
+    target.set(r.id, groupTarget + w.avgBias * rel)
   }
 
   const unavailable = new Map<string, Set<string>>()
   for (const [date, ids] of Object.entries(input.unavailable)) unavailable.set(date, new Set(ids))
 
-  const ctx: Ctx = { input, readerById, target, groupTarget, unavailable, byReader: new Map(), inMass: new Map() }
+  const ctx: Ctx = { input, rules, w, readerById, target, groupTarget, unavailable, byReader: new Map(), inMass: new Map() }
 
   // Travadas e missas readOnly contam na carga e ocupam o leitor na missa.
   for (const cell of cells) {
@@ -295,7 +316,7 @@ export function suggestSchedule(input: SuggestInput): PlanMass[] {
       if (!readerId) return { ...rest, profileId: "", reason: "Nenhum leitor disponível nesta data" }
       const reader = readerById.get(readerId) as PlanReader
       const out: PlanSlot = { ...rest, profileId: readerId, reason: buildReason(ctx, reader, cell) }
-      if (isOutsidePreference(reader, cell.mass)) out.warning = "outside-preference"
+      if (rules.preferences && isOutsidePreference(reader, cell.mass)) out.warning = "outside-preference"
       return out
     })
     return { ...mass, slots }

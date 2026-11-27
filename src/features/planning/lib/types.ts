@@ -1,4 +1,5 @@
 import type { Profile } from "@/domain/models/Profile"
+import type { LampRules } from "@/domain/models/PlannerSettings"
 
 export type RoleCode = "C" | "1L" | "2L" | "L" | "P"
 export type RoleGroup = "C" | "R" | "P" // R = 1L, 2L, L (leitura)
@@ -58,6 +59,8 @@ export interface ReaderStats {
 }
 
 export interface SuggestInput {
+  /** Regras suaves ligadas/desligadas pelo coordenador; ausente = todas ligadas. */
+  rules?: LampRules
   masses: PlanMass[]
   readers: PlanReader[]
   stats: Record<string, ReaderStats>

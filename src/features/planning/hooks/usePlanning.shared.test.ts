@@ -1,4 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react"
+import { SAMPLE_STANDARD } from "../lib/testFixtures"
+import { DEFAULT_LAMP_RULES } from "@/domain/models/PlannerSettings"
 import { usePlanning, massToPlan, type PlanTarget } from "./usePlanning"
 import { makeListSchedulesForMonth, makeListSlotHistory } from "@/main/factories/usecases/schedule"
 import { makeListProfiles, makeListUnavailableForRange } from "@/main/factories/usecases/profiles"
@@ -50,8 +52,10 @@ beforeEach(() => {
   resetSync()
 })
 
+const SETTINGS = { standardMasses: SAMPLE_STANDARD, lampRules: DEFAULT_LAMP_RULES, loaded: true }
+
 async function load(target: PlanTarget | null = MINE) {
-  const hook = renderHook(({ t }: { t: PlanTarget | null }) => usePlanning(t), { initialProps: { t: target } })
+  const hook = renderHook(({ t }: { t: PlanTarget | null }) => usePlanning(t, SETTINGS), { initialProps: { t: target } })
   await waitFor(() => expect(hook.result.current.loading).toBe(false))
   await act(async () => {})
   return hook
@@ -138,33 +142,29 @@ describe("autosave", () => {
       expect(syncSave).toHaveBeenLastCalledWith(serializePlanState(masses, removedMasses, phase === "suggested"))
     }
 
-    act(() => result.current.createDefaults())
+    act(() => result.current.addMass({ key: "n", date: "2026-12-01", time: "19:00", description: "", wasPublished: false, readOnly: false, slots: [{ role: "C", profileId: "", locked: false }] }))
     expect(syncSave).toHaveBeenCalledTimes(1)
     expectLast()
 
-    act(() => result.current.addMass({ key: "n", date: "2026-12-01", time: "19:00", description: "", wasPublished: false, readOnly: false, slots: [{ role: "C", profileId: "", locked: false }] }))
+    act(() => result.current.updateMass("d1", { description: "Nova" }))
     expect(syncSave).toHaveBeenCalledTimes(2)
     expectLast()
 
-    act(() => result.current.updateMass("d1", { description: "Nova" }))
+    act(() => result.current.setSlotReader("d1", 0, "a"))
     expect(syncSave).toHaveBeenCalledTimes(3)
     expectLast()
 
-    act(() => result.current.setSlotReader("d1", 0, "a"))
+    act(() => result.current.toggleLock("d1", 0))
     expect(syncSave).toHaveBeenCalledTimes(4)
     expectLast()
 
-    act(() => result.current.toggleLock("d1", 0))
+    act(() => result.current.runLamp())
     expect(syncSave).toHaveBeenCalledTimes(5)
     expectLast()
-
-    act(() => result.current.runLamp())
-    expect(syncSave).toHaveBeenCalledTimes(6)
-    expectLast()
-    expect((syncSave.mock.calls[5][0] as { suggested: boolean }).suggested).toBe(true)
+    expect((syncSave.mock.calls[4][0] as { suggested: boolean }).suggested).toBe(true)
 
     act(() => result.current.removeMass("n"))
-    expect(syncSave).toHaveBeenCalledTimes(7)
+    expect(syncSave).toHaveBeenCalledTimes(6)
     expectLast()
 
     for (const [state] of syncSave.mock.calls) {
