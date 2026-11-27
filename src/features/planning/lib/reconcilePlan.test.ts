@@ -168,4 +168,21 @@ describe("reconcilePlan", () => {
     expect(s).toEqual(a)
     expect(r).toEqual(b)
   })
+
+  it("reabrir depois de salvar como rascunho: o rascunho real (com id e vagas travadas) vence a versão antiga do plano", () => {
+    const stored = mass({ key: "2026-12-06_07:00", slots: [{ role: "C", profileId: "p1", locked: false }] }) // sem id, vaga só sugerida
+    const draft = mass({ key: "d1", id: "d1", scheduleRevision: 3, slots: [{ id: "s1", role: "C", profileId: "p1", locked: true }] })
+    const out = reconcilePlan(state([stored]), [draft])
+    expect(out.masses).toHaveLength(1)
+    expect(out.masses[0]).toMatchObject({ id: "d1", wasPublished: false, readOnly: false })
+    expect(out.masses[0].slots[0].locked).toBe(true)
+  })
+
+  it("data publicada depois: a missa do plano naquele horário é descartada com aviso e a publicada entra somente leitura", () => {
+    const stored = mass({ key: "x", id: "d1", scheduleRevision: 1 })
+    const out = reconcilePlan(state([stored]), [real("d1", "2026-12-06", "07:00", 2, true)])
+    expect(out.masses).toHaveLength(1)
+    expect(out.masses[0]).toMatchObject({ id: "d1", wasPublished: true, readOnly: true })
+    expect(out.notices).toEqual([{ kind: "published", dates: ["2026-12-06"] }])
+  })
 })

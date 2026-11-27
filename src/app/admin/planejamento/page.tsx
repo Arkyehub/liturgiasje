@@ -20,7 +20,7 @@ import { otherMassTimes } from "@/features/planning/lib/massConflicts"
 import { MassSheet } from "@/features/planning/ui/MassSheet"
 import { SuggestionList } from "@/features/planning/ui/SuggestionList"
 import { BalanceDetail } from "@/features/planning/ui/BalanceDetail"
-import { ConfirmDialog } from "@/features/planning/ui/ConfirmDialog"
+import { SaveDraftDrawer } from "@/features/planning/ui/SaveDraftDrawer"
 import { usePlanningSave } from "@/features/planning/hooks/usePlanningSave"
 
 function Loading({ text }: { text: string }) {
@@ -92,19 +92,19 @@ function PlanningScreen() {
       toast.info("Planejamento atualizado: alterado em outro aparelho.")
     }
   }, [externalChange])
-  const [confirmReplace, setConfirmReplace] = useState(false)
+  const [confirmSave, setConfirmSave] = useState(false)
   // Leitura das missas reais em andamento (antes do aviso de substituição): o planejamento não pode ser trocado nesse intervalo.
   const [preparing, setPreparing] = useState(false)
   // Outro planejamento nunca herda a confirmação do anterior (o botão de troca já é ignorado nesses casos; isto é a rede de segurança).
   useEffect(() => {
-    setConfirmReplace(false)
+    setConfirmSave(false)
   }, [key])
   // A confirmação de substituição só faz sentido em edição: se a reserva foi perdida (ou o plano concluído) ela é descartada.
   const { cancelSave } = save
   const inEdit = planning.mode === "edit"
   useEffect(() => {
     if (inEdit) return
-    setConfirmReplace(false)
+    setConfirmSave(false)
     cancelSave()
   }, [inEdit, cancelSave])
   // O aviso informativo de publicadas é mostrado uma vez por planejamento aberto.
@@ -144,7 +144,7 @@ function PlanningScreen() {
     setAckedKey(null)
     setTarget(null)
   }
-  const leaveBlocked = save.saving || preparing || confirmReplace || planning.syncStatus === "saving" || planning.syncStatus === "failed"
+  const leaveBlocked = save.saving || preparing || confirmSave || planning.syncStatus === "saving" || planning.syncStatus === "failed"
 
   let bannerReason: ReadOnlyReason | null = null
   if (!planning.loading && (planning.mode === "edit" || planning.mode === "readonly" || planning.mode === "concluded")) {
@@ -161,9 +161,9 @@ function PlanningScreen() {
     if (readOnly) return
     setPreparing(true)
     try {
-      const { needsConfirm } = await save.prepareSave()
-      if (needsConfirm) setConfirmReplace(true)
-      else void save.saveDraft()
+      const { proceed } = await save.prepareSave()
+      // Sempre confirma (evita toque errado); se houver rascunhos a substituir, o aviso vem na mesma gaveta.
+      if (proceed) setConfirmSave(true)
     } catch {
       // prepareSave já avisou o erro e nada foi gravado.
     } finally {
@@ -273,6 +273,7 @@ function PlanningScreen() {
           month={month}
           mass={editing}
           existing={otherMassTimes(planning.masses, editing?.key)}
+          published={otherMassTimes(planning.masses.filter((m) => m.readOnly), editing?.key)}
           onSave={(saved) => {
             if (editing) {
               const [m] = saved
@@ -303,19 +304,17 @@ function PlanningScreen() {
         />
       )}
 
-      {confirmReplace && save.replacement && (
-        <ConfirmDialog
-          title="Substituir o rascunho existente?"
-          message={`Já existe uma escala em rascunho em ${monthName.charAt(0).toUpperCase()}${monthName.slice(1)} (${replacementCount} ${replacementCount === 1 ? "missa" : "missas"}: ${replacementDates}). Salvar vai substituir essas missas pelas deste planejamento. Missas publicadas não serão tocadas.`}
-          confirmLabel="Substituir e salvar"
-          cancelLabel="Cancelar"
-          tone="danger"
+      {confirmSave && (
+        <SaveDraftDrawer
+          monthLabel={`${monthName.charAt(0).toUpperCase()}${monthName.slice(1)}`}
+          replacementCount={replacementCount}
+          replacementDates={replacementDates}
           onConfirm={() => {
-            setConfirmReplace(false)
+            setConfirmSave(false)
             void save.saveDraft()
           }}
           onCancel={() => {
-            setConfirmReplace(false)
+            setConfirmSave(false)
             save.cancelSave()
           }}
         />
