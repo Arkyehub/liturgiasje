@@ -59,3 +59,25 @@ test("a mass that already exists as a draft in the system is orange and tagged; 
   expect(rows[2]).toHaveTextContent("PUBL")
   expect(rows[2]).toHaveTextContent("Publicada")
 })
+
+test("the date opens each day in a single band; the time is on the left with the tag below it", () => {
+  const { container } = render(
+    <NotebookList
+      masses={[
+        mass("a", { time: "07:00", id: "m1", slots: [{ role: "C", profileId: "p1", locked: true }] }),
+        mass("b", { time: "09:00", wasPublished: true, readOnly: true }),
+        mass("c", { date: "2026-12-13", time: "19:00" }),
+      ]}
+      onSelectMass={jest.fn()}
+    />,
+  )
+  const headers = Array.from(container.querySelectorAll("[data-day-header]"))
+  expect(headers.map((h) => h.textContent)).toEqual(["08Terça", "13Domingo"])
+  const rows = screen.getAllByRole("listitem")
+  expect(rows).toHaveLength(3) // as faixas não contam como itens da lista
+  const draftRow = screen.getByRole("button", { name: /às 07:00/ })
+  expect(draftRow).toHaveTextContent("07:00")
+  expect(draftRow).toHaveTextContent("RASC")
+  expect(screen.getByRole("button", { name: /às 09:00/ })).toHaveTextContent("PUBL")
+  expect(screen.getByRole("button", { name: /às 19:00/ })).not.toHaveTextContent(/RASC|PUBL/)
+})

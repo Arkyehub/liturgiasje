@@ -2,7 +2,6 @@
 
 import { Eye, Lock, LockOpen, TriangleAlert } from "lucide-react"
 import type { PlanMass, PlanSlot } from "../lib/types"
-import { weekdayOf } from "./NotebookList"
 import { MASS_ROW_TINT, MassStatusTag } from "./MassStatusTag"
 
 export interface SuggestionLine {
@@ -14,7 +13,6 @@ export interface SuggestionLine {
 interface SuggestionRowProps extends SuggestionLine {
   /** Nome do leitor da vaga ("" quando vazia). */
   name: string
-  showDate: boolean
   showTime: boolean
   /** Última linha visível do dia: pauta mais forte. */
   lastOfDay: boolean
@@ -51,7 +49,6 @@ export function SuggestionRow({
   mass,
   slot,
   name,
-  showDate,
   showTime,
   lastOfDay,
   onPick,
@@ -59,7 +56,6 @@ export function SuggestionRow({
   onToggleLock,
   readOnly = false,
 }: SuggestionRowProps) {
-  const dd = mass.date.slice(8, 10)
   const empty = slot.profileId === ""
   const swapPending = !!slot.isSwapRequested
   const frozen = mass.readOnly || swapPending || readOnly
@@ -72,31 +68,23 @@ export function SuggestionRow({
     <li
       data-date={mass.date}
       data-existing-draft={existingDraft ? "true" : undefined}
-      className={`flex min-h-11 items-center border-b ${lastOfDay ? "border-stone-400" : "border-stone-100"} ${tint}`}
+      className={`flex border-b ${lastOfDay ? "border-stone-400" : "border-stone-100"} ${tint}`}
     >
-      <div className="flex w-[72px] shrink-0 items-baseline gap-1 pl-4 pr-2">
-        {showDate && (
-          <>
-            <span className="text-lg font-black leading-none text-stone-900">{dd}</span>
-            <span className="text-[11px] font-bold text-stone-500">{weekdayOf(mass.date)}</span>
-          </>
-        )}
+      <div className="flex w-[72px] shrink-0 flex-col items-start gap-1.5 py-3 pl-4 pr-2">
+        {showTime && <span className="text-[15px] font-extrabold leading-tight tabular-nums text-stone-900">{mass.time}</span>}
+        {tag}
       </div>
-      <div className="flex min-w-0 flex-1 items-center gap-2 pl-3 pr-1">
-        <span className="w-11 shrink-0 text-[15px] font-extrabold tabular-nums text-stone-900">{showTime ? mass.time : ""}</span>
+      <div className="flex min-h-11 min-w-0 flex-1 items-center gap-2 pr-1">
         <span className="w-[22px] shrink-0 text-[13px] font-extrabold text-stone-600">{slot.role}</span>
         {empty ? (
-          <>
-            <button
-              type="button"
-              onClick={onPick}
-              disabled={mass.readOnly || readOnly}
-              className="min-h-11 flex-1 text-left text-[13px] font-bold text-red-700 underline decoration-dashed underline-offset-4 disabled:opacity-60"
-            >
-              sem leitor · escolher
-            </button>
-            {tag}
-          </>
+          <button
+            type="button"
+            onClick={onPick}
+            disabled={mass.readOnly || readOnly}
+            className="min-h-11 flex-1 text-left text-[13px] font-bold text-red-700 underline decoration-dashed underline-offset-4 disabled:opacity-60"
+          >
+            sem leitor · escolher
+          </button>
         ) : (
           <>
             <button
@@ -109,7 +97,6 @@ export function SuggestionRow({
               {swapPending && <SwapPendingBadge />}
               {slot.warning === "outside-preference" && <OutsidePreferenceIcon />}
             </button>
-            {tag}
             <button type="button" aria-label="Ver escalas do leitor no mês" onClick={onView} className={iconButton}>
               <Eye aria-hidden="true" className="h-[18px] w-[18px] text-stone-600" />
             </button>

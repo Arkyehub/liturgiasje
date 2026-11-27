@@ -97,26 +97,23 @@ function setup(props: Partial<React.ComponentProps<typeof SuggestionList>> = {})
 
 beforeEach(() => jest.clearAllMocks())
 
-test("one line per role: code + reader name; date only on the day's first line, time only on the mass's first line", () => {
+const dayHeaders = () => Array.from(document.querySelectorAll("[data-day-header]")).map((h) => h.textContent)
+
+test("one line per role: code + reader name; the date opens the day in its own band, time only on the mass's first line", () => {
   const { rows } = setup()
   const lines = rows()
   expect(lines).toHaveLength(7)
-  expect(lines[0]).toHaveTextContent("01")
-  expect(lines[0]).toHaveTextContent("TER")
+  expect(dayHeaders()).toEqual(["01Terça", "06Domingo"])
   expect(lines[0]).toHaveTextContent("19:00")
   expect(within(lines[0]).getByText("C")).toBeInTheDocument()
   expect(within(lines[0]).getByText("Ana Ribeiro")).toBeInTheDocument()
   expect(within(lines[1]).getByText("L")).toBeInTheDocument()
   expect(lines[1]).not.toHaveTextContent("19:00")
-  expect(lines[1]).not.toHaveTextContent("TER")
-  // domingo: 06/DOM só na 1ª linha; 09:00 é a 1ª linha da 2ª missa, sem data
-  expect(lines[2]).toHaveTextContent("06")
-  expect(lines[2]).toHaveTextContent("DOM")
+  // domingo: uma faixa só; 07:00 na 1ª linha da 1ª missa e 09:00 na 1ª linha da 2ª, sem repetir a data
   expect(lines[2]).toHaveTextContent("07:00")
-  expect(lines[3]).not.toHaveTextContent("DOM")
   expect(lines[3]).not.toHaveTextContent("07:00")
   expect(lines[6]).toHaveTextContent("09:00")
-  expect(lines[6]).not.toHaveTextContent("DOM")
+  lines.forEach((l) => expect(l).not.toHaveTextContent("Domingo"))
 })
 
 test("outside-preference shows ⚠️ labelled 'Fora da preferência'; an empty slot shows 'sem leitor · escolher'", () => {
@@ -155,11 +152,10 @@ test("filters: Todas, Com aviso (N) and Travadas (N)", async () => {
   let lines = rows()
   expect(lines).toHaveLength(2)
   expect(lines[0]).toHaveTextContent("Bia Souza")
-  // a 1ª linha visível de cada dia/missa recebe a data e o horário
-  expect(lines[0]).toHaveTextContent("TER")
+  // a faixa do dia e o horário seguem a 1ª linha visível de cada dia/missa
+  expect(dayHeaders()).toEqual(["01Terça", "06Domingo"])
   expect(lines[0]).toHaveTextContent("19:00")
   expect(lines[1]).toHaveTextContent("sem leitor")
-  expect(lines[1]).toHaveTextContent("DOM")
 
   await userEvent.click(screen.getByRole("button", { name: "Travadas (2)" }))
   lines = rows()
