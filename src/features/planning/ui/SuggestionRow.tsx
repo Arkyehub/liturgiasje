@@ -1,6 +1,6 @@
 "use client"
 
-import { Eye, Lock, LockOpen, TriangleAlert } from "lucide-react"
+import { Eye, Lock, LockOpen, Pencil, TriangleAlert } from "lucide-react"
 import type { PlanMass, PlanSlot } from "../lib/types"
 import { MASS_ROW_TINT, MassStatusTag } from "./MassStatusTag"
 
@@ -19,6 +19,8 @@ interface SuggestionRowProps extends SuggestionLine {
   onPick: () => void
   onView: () => void
   onToggleLock: () => void
+  /** Toque no horário da missa (1ª linha dela): abre a edição da missa (remover missa, mudar funções). */
+  onEditMass?: () => void
   /** Planejamento somente leitura: trocar leitor e travar ficam desativados (ver continua). */
   readOnly?: boolean
 }
@@ -54,6 +56,7 @@ export function SuggestionRow({
   onPick,
   onView,
   onToggleLock,
+  onEditMass,
   readOnly = false,
 }: SuggestionRowProps) {
   const empty = slot.profileId === ""
@@ -70,10 +73,25 @@ export function SuggestionRow({
       data-existing-draft={existingDraft ? "true" : undefined}
       className={`flex border-b ${lastOfDay ? "border-stone-400" : "border-stone-100"} ${tint}`}
     >
-      <div className="flex w-[72px] shrink-0 flex-col items-start gap-1.5 py-3 pl-4 pr-2">
-        {showTime && <span className="text-[15px] font-extrabold leading-tight tabular-nums text-stone-900">{mass.time}</span>}
-        {tag}
-      </div>
+      {showTime && onEditMass && !mass.readOnly && !readOnly ? (
+        <button
+          type="button"
+          onClick={onEditMass}
+          aria-label={`Editar missa de ${mass.date.slice(8, 10)}/${mass.date.slice(5, 7)} às ${mass.time}`}
+          className="flex min-h-11 w-[72px] shrink-0 flex-col items-start gap-1.5 py-3 pl-4 pr-0 text-left transition-colors active:bg-stone-100"
+        >
+          <span className="flex items-center gap-0.5">
+            <span className="text-[15px] font-extrabold leading-tight tabular-nums text-stone-900">{mass.time}</span>
+            <Pencil aria-hidden="true" className="h-3 w-3 shrink-0 text-stone-400" />
+          </span>
+          {tag}
+        </button>
+      ) : (
+        <div className="flex w-[72px] shrink-0 flex-col items-start gap-1.5 py-3 pl-4 pr-2">
+          {showTime && <span className="text-[15px] font-extrabold leading-tight tabular-nums text-stone-900">{mass.time}</span>}
+          {tag}
+        </div>
+      )}
       <div className="flex min-h-11 min-w-0 flex-1 items-center gap-2 pr-1">
         <span className="w-[22px] shrink-0 text-[13px] font-extrabold text-stone-600">{slot.role}</span>
         {empty ? (
