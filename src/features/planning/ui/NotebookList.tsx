@@ -34,11 +34,14 @@ export function NotebookList({ masses, onSelectMass }: NotebookListProps) {
           const lastOfDay = i === masses.length - 1 || masses[i + 1].date !== mass.date
           const roles = mass.slots.map((s) => s.role).join(" · ")
           const [, mm, dd] = mass.date.split("-")
+          // Já existe como rascunho no sistema (gravado por este ou outro planejamento): destaque laranja.
+          const existingDraft = !!mass.id && !mass.readOnly
           return (
             <li
               key={mass.key}
               data-date={mass.date}
-              className={`flex min-h-11 items-center border-b ${lastOfDay ? "border-stone-400" : "border-stone-200"}`}
+              data-existing-draft={existingDraft ? "true" : undefined}
+              className={`flex min-h-11 items-center border-b ${lastOfDay ? "border-stone-400" : "border-stone-200"} ${existingDraft ? "bg-orange-100" : ""}`}
             >
               <div className="flex w-[72px] shrink-0 items-baseline gap-1 pl-4 pr-2">
                 {firstOfDay && (
@@ -51,7 +54,7 @@ export function NotebookList({ masses, onSelectMass }: NotebookListProps) {
               <button
                 type="button"
                 disabled={mass.readOnly || !onSelectMass}
-                aria-label={`Missa de ${dd}/${mm} às ${mass.time}${mass.readOnly ? " (publicada, somente leitura)" : ""}`}
+                aria-label={`Missa de ${dd}/${mm} às ${mass.time}${mass.readOnly ? " (publicada, somente leitura)" : existingDraft ? " (já em rascunho)" : ""}`}
                 onClick={() => onSelectMass?.(mass.key)}
                 className="flex min-h-11 min-w-0 flex-1 items-center gap-3 py-1.5 pl-3 pr-4 text-left text-stone-900 transition-colors active:bg-stone-100 disabled:cursor-default disabled:active:bg-transparent"
               >
@@ -67,7 +70,11 @@ export function NotebookList({ masses, onSelectMass }: NotebookListProps) {
                     publicada
                   </span>
                 ) : (
-                  mass.wasPublished && (
+                  existingDraft ? (
+                    <span className="shrink-0 rounded-full bg-orange-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-800">
+                      rascunho
+                    </span>
+                  ) : mass.wasPublished && (
                     <span className="shrink-0 text-[10px] font-bold text-amber-700">volta a rascunho ao salvar</span>
                   )
                 )}

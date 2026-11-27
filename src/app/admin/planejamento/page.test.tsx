@@ -39,6 +39,15 @@ jest.mock("@/main/factories/usecases/profiles", () => ({
 }))
 jest.mock("@/features/planning/hooks/usePlanSync", () => jest.requireActual("@/features/planning/hooks/planSyncTestDouble"))
 jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() } }))
+// Gaveta simplificada (como nos outros testes do projeto): o vaul precisa de APIs do navegador que o jsdom não tem.
+jest.mock("@/shared/ui/drawer", () => ({
+  Drawer: ({ open, children }: { open?: boolean; children: React.ReactNode }) => (open ? <div role="dialog">{children}</div> : null),
+  DrawerContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DrawerHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DrawerFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DrawerTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  DrawerDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+}))
 jest.mock("lucide-react", () => new Proxy({ __esModule: true }, { get: (t, p) => (p in t ? (t as Record<string | symbol, unknown>)[p] : () => <i />) }))
 
 const asAdmin = () =>
@@ -373,12 +382,35 @@ test("'Detalhar' opens the month balance and the back button returns to the sugg
   expect(screen.getByRole("list", { name: "Vagas sugeridas" })).toBeInTheDocument()
 })
 
-test("'Salvar como rascunho' without published masses saves the batch once, no confirmation, and reloads the month", async () => {
+/** Toca em "Salvar como rascunho" e confirma na gaveta (o botão da gaveta tem o mesmo nome, então é buscado dentro dela). */
+async function saveAndConfirm() {
+  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  const drawer = await screen.findByRole("dialog")
+  await userEvent.click(within(drawer).getByRole("button", { name: /^(Salvar como rascunho|Substituir e salvar)$/ }))
+}
+
+test("'Salvar como rascunho' always asks in a drawer first (no miss click) and writes nothing until confirmed; cancel keeps the plan", async () => {
   asAdmin()
   setup()
   await suggestDefaults()
   await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
-  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  const drawer = await screen.findByRole("dialog")
+  expect(within(drawer).getByText("Salvar como rascunho?")).toBeInTheDocument()
+  expect(within(drawer).getByText(/A escala de Dezembro será gravada como rascunho, sem publicar\./)).toBeInTheDocument()
+  expect(saveBatch).not.toHaveBeenCalled()
+  await userEvent.click(within(drawer).getByRole("button", { name: "Cancelar" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(saveBatch).not.toHaveBeenCalled()
+  expect(conclude).not.toHaveBeenCalled()
+  expect(screen.getByRole("list", { name: "Vagas sugeridas" })).toBeInTheDocument()
+})
+
+test("'Salvar como rascunho' without published masses saves the batch once after the drawer confirmation, and reloads the month", async () => {
+  asAdmin()
+  setup()
+  await suggestDefaults()
+  await saveAndConfirm()
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
   await waitFor(() => expect(saveBatch).toHaveBeenCalledTimes(1))
   const [entries, removed] = saveBatch.mock.calls[0]
   expect(entries).toHaveLength(25)
@@ -398,7 +430,7 @@ test("a schedule conflict shows its message and keeps the suggestion and the edi
   const before = within(screen.getByRole("list", { name: "Vagas sugeridas" })).getAllByRole("listitem").map((li) => li.textContent)
   saveBatch.mockRejectedValueOnce({ message: "schedule_conflict" })
 
-  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  await saveAndConfirm()
   await waitFor(() => expect(sonner().error).toHaveBeenCalledWith("A escala foi alterada. Atualize a página e tente novamente."))
   const after = within(screen.getByRole("list", { name: "Vagas sugeridas" })).getAllByRole("listitem").map((li) => li.textContent)
   expect(after).toEqual(before)
@@ -430,7 +462,7 @@ test("saving over a real draft asks first, naming the month, count and dates, an
   setupWithStrayDraft()
   await suggestDefaults()
   await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
-  const dialog = await screen.findByRole("alertdialog")
+  const dialog = await screen.findByRole("dialog")
   expect(within(dialog).getByText("Substituir o rascunho existente?")).toBeInTheDocument()
   expect(
     within(dialog).getByText(
@@ -453,9 +485,9 @@ test("cancelling the replacement confirmation writes nothing and keeps the sugge
   setupWithStrayDraft()
   await suggestDefaults()
   await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
-  const dialog = await screen.findByRole("alertdialog")
+  const dialog = await screen.findByRole("dialog")
   await userEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }))
-  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
   expect(saveBatch).not.toHaveBeenCalled()
   expect(conclude).not.toHaveBeenCalled()
   expect(screen.getByRole("list", { name: "Vagas sugeridas" })).toBeInTheDocument()
@@ -475,6 +507,10 @@ test("'Trocar planejamento' while the real masses are being read is ignored", as
   expect(screen.getByText("Dezembro 2026")).toBeInTheDocument()
   expect(screen.queryByRole("heading", { name: "Qual mês você vai planejar?" })).not.toBeInTheDocument()
   await act(async () => release([]))
+  // terminada a leitura, a gaveta de confirmação aparece; só então grava
+  const drawer = await screen.findByRole("dialog")
+  expect(saveBatch).not.toHaveBeenCalled()
+  await userEvent.click(within(drawer).getByRole("button", { name: "Salvar como rascunho" }))
   await waitFor(() => expect(saveBatch).toHaveBeenCalledTimes(1))
   expect(saveBatch.mock.calls[0][0]).toHaveLength(25)
 })
@@ -484,10 +520,10 @@ test("'Trocar planejamento' while the replacement dialog is open is ignored and 
   setupWithStrayDraft()
   await suggestDefaults()
   await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
-  const dialog = await screen.findByRole("alertdialog")
+  const dialog = await screen.findByRole("dialog")
   expect(screen.getByRole("button", { name: "Trocar planejamento", hidden: true })).toBeDisabled()
   await userEvent.click(screen.getByRole("button", { name: "Trocar planejamento", hidden: true }))
-  expect(screen.getByRole("alertdialog")).toBe(dialog)
+  expect(screen.getByRole("dialog")).toBe(dialog)
   expect(screen.queryByRole("heading", { name: "Qual mês você vai planejar?" })).not.toBeInTheDocument()
   expect(screen.getByText("Dezembro 2026")).toBeInTheDocument()
   expect(saveBatch).not.toHaveBeenCalled()
@@ -498,16 +534,16 @@ test("the replacement dialog closes and resets when the plan leaves edit mode, w
   setupWithStrayDraft()
   const view = await suggestDefaults()
   await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
-  await screen.findByRole("alertdialog")
+  await screen.findByRole("dialog")
   setSync({ mode: "readonly" })
   view.rerender(<PlanejamentoPage />)
-  await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument())
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
   expect(saveBatch).not.toHaveBeenCalled()
   // Voltando a editar, o aviso não reaparece sozinho.
   setSync({ mode: "edit" })
   view.rerender(<PlanejamentoPage />)
   await act(async () => {})
-  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
 })
 
 test("going back to the chooser never asks to discard: the plan is saved as you go", async () => {
@@ -517,7 +553,7 @@ test("going back to the chooser never asks to discard: the plan is saved as you 
   await screen.findByText("0 missas · 0 vagas · 2 leitores aptos")
   await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
   await userEvent.click(screen.getByRole("button", { name: "Trocar planejamento" }))
-  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
   expect(await screen.findByRole("heading", { name: "Qual mês você vai planejar?" })).toBeInTheDocument()
   const event = new Event("beforeunload", { cancelable: true })
   window.dispatchEvent(event)
@@ -536,7 +572,7 @@ test("while saving, the planning is inert and edits are ignored (no edit is lost
   const lockButtonName = () => within(lines()[0]).getAllByRole("button").map((b) => b.getAttribute("aria-label") ?? "")
   expect(lockButtonName()).toContain("Travar leitor")
 
-  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  await saveAndConfirm()
   await waitFor(() => expect(saveBatch).toHaveBeenCalledTimes(1))
   const main = screen.getByRole("main", { hidden: true })
   expect(main).toHaveAttribute("inert")
@@ -788,7 +824,7 @@ test("after 'Salvar como rascunho' the plan reopens as concluded with the Reabri
   setup()
   await suggestDefaults()
   expect(screen.queryByText("SOMENTE LEITURA")).not.toBeInTheDocument()
-  await userEvent.click(screen.getByRole("button", { name: "Salvar como rascunho" }))
+  await saveAndConfirm()
   await waitFor(() => expect(conclude).toHaveBeenCalledTimes(1))
   // a sincronização é avisada de que o servidor concluiu (sem isso ela seguiria em "edit")
   await waitFor(() => expect(syncMarkConcluded).toHaveBeenCalledTimes(1))

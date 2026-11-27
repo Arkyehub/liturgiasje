@@ -194,3 +194,17 @@ test("a date typed outside the month shows an error and cannot be saved", async 
   await userEvent.click(screen.getByRole("button", { name: "Salvar missa" }))
   expect(onSave.mock.calls[0][0][0]).toMatchObject({ date: "2026-12-31" })
 })
+
+test("a published mass at the same date and time blocks saving with a specific message; another time is allowed", async () => {
+  const { onSave } = setup({ published: [{ date: "2026-12-06", time: "09:00" }] })
+  pickDate("2026-12-06")
+  await userEvent.click(screen.getByRole("button", { name: "09:00" }))
+  expect(screen.getByRole("alert")).toHaveTextContent("Já existe missa publicada às 09:00 em 06/12")
+  await userEvent.click(screen.getByRole("button", { name: /Salvar/ }))
+  expect(onSave).not.toHaveBeenCalled()
+  // outro horário no mesmo dia continua livre
+  await userEvent.click(screen.getByRole("button", { name: "11:00" }))
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: /Salvar/ }))
+  expect(onSave).toHaveBeenCalledTimes(1)
+})

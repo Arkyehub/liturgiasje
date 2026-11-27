@@ -13,6 +13,8 @@ interface MassSheetProps {
   mass?: PlanMass
   /** Datas/horários das OUTRAS missas do plano (a missa editada não entra). */
   existing: { date: string; time: string }[]
+  /** Datas/horários das missas JÁ PUBLICADAS (não podem receber outra missa no mesmo horário). */
+  published?: { date: string; time: string }[]
   onSave: (masses: PlanMass[]) => void
   onRemove?: () => void
   onClose: () => void
@@ -44,7 +46,7 @@ function sundaysOf(month: Date): string[] {
 
 const br = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`
 
-export function MassSheet({ month, mass, existing, onSave, onRemove, onClose }: MassSheetProps) {
+export function MassSheet({ month, mass, existing, published = [], onSave, onRemove, onClose }: MassSheetProps) {
   const editing = !!mass
   const [date, setDate] = useState(mass?.date ?? "")
   const [time, setTime] = useState(mass?.time ?? "19:00")
@@ -62,8 +64,9 @@ export function MassSheet({ month, mass, existing, onSave, onRemove, onClose }: 
   // `min`/`max` do input não impedem uma data digitada fora do mês: uma missa assim sumiria da visão do mês.
   const outOfMonth = !!date && (date.length !== 10 || date < firstDay || date > lastDay)
   const dates = !date || outOfMonth ? [] : repeating ? sundaysOf(month) : [date]
-  const conflicts = dates.filter((d) => existing.some((e) => e.date === d && e.time === time))
-  const canSave = dates.length > 0 && roles.length > 0 && conflicts.length === 0
+  const publishedConflicts = dates.filter((d) => published.some((e) => e.date === d && e.time === time))
+  const conflicts = dates.filter((d) => !publishedConflicts.includes(d) && existing.some((e) => e.date === d && e.time === time))
+  const canSave = dates.length > 0 && roles.length > 0 && conflicts.length === 0 && publishedConflicts.length === 0
 
   const pickDate = (value: string) => {
     setDate(value)
@@ -193,6 +196,12 @@ export function MassSheet({ month, mass, existing, onSave, onRemove, onClose }: 
           {outOfMonth && (
             <p id="mass-date-error" role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
               {`A data precisa estar neste mês (${br(firstDay)} a ${br(lastDay)}).`}
+            </p>
+          )}
+
+          {publishedConflicts.length > 0 && (
+            <p role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+              Já existe missa publicada às {time} em {publishedConflicts.map(br).join(", ")}. Não dá para criar outra nesse horário: mude o horário ou o dia.
             </p>
           )}
 

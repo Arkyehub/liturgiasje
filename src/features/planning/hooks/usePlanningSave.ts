@@ -35,7 +35,8 @@ export interface UsePlanningSaveResult {
   /** Rascunhos reais que o próximo salvar vai substituir; null = nada a substituir / ainda não preparado. */
   replacement: { count: number; dates: string[] } | null
   /** Lê as missas reais agora e calcula a substituição. Sem edição habilitada não lê nem grava. */
-  prepareSave(): Promise<{ needsConfirm: boolean }>
+  /** `proceed` = a leitura das missas reais foi bem-sucedida e pode-se pedir a confirmação; `needsConfirm` = há rascunhos a substituir. */
+  prepareSave(): Promise<{ needsConfirm: boolean; proceed: boolean }>
   /** Grava como rascunho (um único lote). Nunca publica nem despublica. Em falha, o planejamento fica intacto. */
   saveDraft(): Promise<boolean>
   cancelSave(): void
@@ -110,24 +111,24 @@ export function usePlanningSave({
   const [replacement, setReplacement] = useState<UsePlanningSaveResult["replacement"]>(null)
 
   const prepareSave = useCallback(async () => {
-    if (!ready || savingRef.current) return { needsConfirm: false }
+    if (!ready || savingRef.current) return { needsConfirm: false, proceed: false }
     const key = monthKey
     try {
       const real = await makeListSchedulesForMonth().execute(startOfMonth(month), true)
       // O mês mudou durante a leitura: o resultado não vale mais.
-      if (monthKeyRef.current !== key) return { needsConfirm: false }
+      if (monthKeyRef.current !== key) return { needsConfirm: false, proceed: false }
       const prepared = compare(masses, removedMasses, real.map(massToPlan), key)
       if (prepared.publishedElsewhere) {
         preparedRef.current = null
         setReplacement(null)
         toast.error(PUBLISHED_ELSEWHERE)
         reload()
-        return { needsConfirm: false }
+        return { needsConfirm: false, proceed: false }
       }
       preparedRef.current = prepared
       const needsConfirm = prepared.listed.length > 0
       setReplacement(needsConfirm ? { count: prepared.listed.length, dates: prepared.dates } : null)
-      return { needsConfirm }
+      return { needsConfirm, proceed: true }
     } catch (err) {
       console.error("[Planejamento] Falha ao ler as missas reais:", err)
       preparedRef.current = null

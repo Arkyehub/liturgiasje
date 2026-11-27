@@ -62,10 +62,13 @@ export function SuggestionRow({
   const empty = slot.profileId === ""
   const swapPending = !!slot.isSwapRequested
   const frozen = mass.readOnly || swapPending || readOnly
+  // Já existe como rascunho no sistema: linha laranja (a troca pendente, mais urgente, mantém o âmbar).
+  const existingDraft = !!mass.id && !mass.readOnly && !swapPending
   return (
     <li
       data-date={mass.date}
-      className={`flex min-h-11 items-center border-b ${lastOfDay ? "border-stone-400" : "border-stone-100"} ${swapPending ? "bg-amber-50" : ""}`}
+      data-existing-draft={existingDraft ? "true" : undefined}
+      className={`flex min-h-11 items-center border-b ${lastOfDay ? "border-stone-400" : "border-stone-100"} ${swapPending ? "bg-amber-50" : ""} ${existingDraft ? "bg-orange-100" : ""}`}
     >
       <div className="flex w-[72px] shrink-0 items-baseline gap-1 pl-4 pr-2">
         {showDate && (
