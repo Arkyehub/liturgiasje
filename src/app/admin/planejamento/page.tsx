@@ -66,6 +66,7 @@ function PlanningScreen() {
       lampRules: settings.lampRules,
       // Lâmpada e missas padrão esperam a leitura terminar (qualquer resultado: lido, indisponível ou com erro).
       loaded: settings.status !== "loading",
+      status: settings.status,
     }),
     [settings.standardMasses, settings.lampRules, settings.status],
   )

@@ -905,3 +905,16 @@ test("a engrenagem não aparece em planejamento concluído nem em somente leitur
   await openMine()
   expect(screen.queryByRole("button", { name: "Configurações do planejamento" })).not.toBeInTheDocument()
 })
+
+test("leitura das configurações falhou: a dica explica (não diz que não há missas padrão) e o painel oferece tentar de novo", async () => {
+  asAdmin()
+  settingsGet.mockRejectedValueOnce({ code: "unknown" }).mockResolvedValueOnce(SETTINGS_WITH_SAMPLE)
+  setup()
+  await openMine()
+  const hint = await screen.findByRole("button", { name: /Não foi possível ler suas missas padrão/ })
+  expect(screen.queryByText("Defina suas missas padrão na engrenagem")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeDisabled()
+  await userEvent.click(hint)
+  await userEvent.click(await screen.findByRole("button", { name: "Tentar novamente" }))
+  await waitFor(() => expect(settingsGet).toHaveBeenCalledTimes(2))
+})

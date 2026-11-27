@@ -38,6 +38,8 @@ export function usePlannerSettings(): UsePlannerSettingsResult {
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   const aliveRef = useRef(true)
+  /** Cada leitura e cada gravação bem-sucedida avançam a geração: uma leitura antiga nunca sobrescreve uma gravação nova. */
+  const generationRef = useRef(0)
 
   useEffect(() => {
     aliveRef.current = true
@@ -48,6 +50,7 @@ export function usePlannerSettings(): UsePlannerSettingsResult {
 
   useEffect(() => {
     let cancelled = false
+    const generation = ++generationRef.current
     // Nova leitura (primeira ou "tentar novamente"): volta ao estado de carregamento até a resposta chegar.
     /* eslint-disable react-hooks/set-state-in-effect */
     setStatus("loading")
@@ -57,12 +60,12 @@ export function usePlannerSettings(): UsePlannerSettingsResult {
       .execute()
       .then(
         (loaded) => {
-          if (cancelled) return
+          if (cancelled || generation !== generationRef.current) return
           setSettings(loaded)
           setStatus("ready")
         },
         (e: unknown) => {
-          if (cancelled) return
+          if (cancelled || generation !== generationRef.current) return
           setSettings(DEFAULTS)
           if (e instanceof SettingsError && e.code === "unavailable") {
             setStatus("unavailable")
@@ -81,6 +84,7 @@ export function usePlannerSettings(): UsePlannerSettingsResult {
   const save = useCallback(async (standardMasses: StandardMass[], lampRules: LampRules) => {
     try {
       const saved = await makeSavePlannerSettings().execute(standardMasses, lampRules)
+      generationRef.current++
       if (!aliveRef.current) return true
       setSettings(saved)
       setStatus("ready")

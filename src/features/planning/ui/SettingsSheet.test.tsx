@@ -169,3 +169,26 @@ test("indisponível neste ambiente: só o aviso e Fechar", () => {
   expect(screen.queryByRole("button", { name: "Salvar" })).not.toBeInTheDocument()
   within(document.body).getByRole("button", { name: "Fechar" })
 })
+
+test("fechar pelo Esc com alterações não salvas pede confirmação: continuar editando mantém tudo; descartar fecha", async () => {
+  const { onClose, onSave } = setup()
+  await userEvent.click(screen.getByRole("checkbox", { name: "Equilibrar a carga entre os leitores" }))
+  await userEvent.keyboard("{Escape}")
+  const dialog = await screen.findByRole("alertdialog")
+  expect(within(dialog).getByText("Descartar as alterações?")).toBeInTheDocument()
+  expect(onClose).not.toHaveBeenCalled()
+  await userEvent.click(within(dialog).getByRole("button", { name: "Continuar editando" }))
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  expect(screen.getByRole("checkbox", { name: "Equilibrar a carga entre os leitores" })).not.toBeChecked() // edição mantida
+  await userEvent.keyboard("{Escape}")
+  await userEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Descartar" }))
+  expect(onClose).toHaveBeenCalledTimes(1)
+  expect(onSave).not.toHaveBeenCalled()
+})
+
+test("fechar pelo Esc SEM alterações fecha direto, sem confirmação", async () => {
+  const { onClose } = setup()
+  await userEvent.keyboard("{Escape}")
+  await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+})

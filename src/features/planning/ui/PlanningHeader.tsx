@@ -15,7 +15,7 @@ interface PlanningHeaderProps {
   /** "Criar Missas Padrões" só vale com a lista em branco e ao menos uma missa padrão configurada. */
   createDefaultsDisabled?: boolean
   /** Por que o botão de padrões está desabilitado (mostra uma dica embaixo). */
-  createDefaultsHint?: "no-standard" | "not-empty" | null
+  createDefaultsHint?: "no-standard" | "not-empty" | "load-error" | null
   /** Abre o painel de configurações (engrenagem); sem callback, a engrenagem não aparece. */
   onOpenSettings?: () => void
   onAddMass?: () => void
@@ -84,6 +84,17 @@ export function PlanningHeader({
             </button>
           ) : (
             "Defina suas missas padrão na engrenagem"
+          )}
+        </p>
+      )}
+      {createDefaultsHint === "load-error" && (
+        <p className="text-center text-xs text-stone-600">
+          {onOpenSettings ? (
+            <button type="button" onClick={onOpenSettings} className="font-bold text-red-700 underline underline-offset-4">
+              Não foi possível ler suas missas padrão. Toque para tentar novamente
+            </button>
+          ) : (
+            "Não foi possível ler suas missas padrão"
           )}
         </p>
       )}

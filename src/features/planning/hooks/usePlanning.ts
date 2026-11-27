@@ -16,6 +16,7 @@ import { parsePlanState, serializePlanState } from "../lib/planState"
 import { reconcilePlan, type ReconcileNotice } from "../lib/reconcilePlan"
 import type { PlanDocument } from "@/domain/models/SchedulePlan"
 import { DEFAULT_LAMP_RULES, type LampRules, type StandardMass } from "@/domain/models/PlannerSettings"
+import type { PlannerSettingsStatus } from "./usePlannerSettings"
 import { usePlanSync, type ExternalChange, type PlanSyncTarget, type SyncMode, type SyncStatus } from "./usePlanSync"
 
 /** Qual planejamento abrir: o meu (editável) ou o de outro coordenador (somente leitura). */
@@ -30,6 +31,8 @@ export interface PlanningSettings {
   lampRules: LampRules
   /** As configurações já foram lidas (ou já se sabe que usam os padrões): sem isso, lâmpada e padrões esperam. */
   loaded: boolean
+  /** Estado da leitura das configurações (para explicar por que não há missas padrão). */
+  status?: PlannerSettingsStatus
 }
 
 const DEFAULT_SETTINGS: PlanningSettings = { standardMasses: [], lampRules: DEFAULT_LAMP_RULES, loaded: true }
@@ -55,7 +58,7 @@ export interface UsePlanningResult {
   /** Edição, tudo carregado, lista em branco (publicadas contam) e ao menos uma missa padrão configurada. */
   canCreateDefaults: boolean
   /** Por que o botão de padrões está desabilitado (para a dica); null quando não há o que explicar. */
-  createDefaultsHint: "no-standard" | "not-empty" | null
+  createDefaultsHint: "no-standard" | "not-empty" | "load-error" | null
   addMass(m: PlanMass): void
   updateMass(key: string, patch: Partial<PlanMass>): void
   removeMass(key: string): void
@@ -144,7 +147,7 @@ function withUniqueKeys(incoming: PlanMass[], existing: PlanMass[]): PlanMass[] 
  * (`usePlanSync`) carregam em paralelo; o plano inicial é o guardado reconciliado com a realidade.
  */
 export function usePlanning(target: PlanTarget | null, settings: PlanningSettings = DEFAULT_SETTINGS): UsePlanningResult {
-  const { standardMasses, lampRules, loaded: settingsLoaded } = settings
+  const { standardMasses, lampRules, loaded: settingsLoaded, status: settingsStatus } = settings
   const month = target?.month ?? null
   // Chave estável: o efeito só recarrega quando o mês muda de fato.
   const monthKey = month ? format(month, "yyyy-MM") : null
@@ -295,7 +298,15 @@ export function usePlanning(target: PlanTarget | null, settings: PlanningSetting
 
   const canCreateDefaults = editable && settingsLoaded && plan.length === 0 && standardMasses.length > 0
   const createDefaultsHint: UsePlanningResult["createDefaultsHint"] =
-    !editable || !settingsLoaded ? null : standardMasses.length === 0 ? "no-standard" : plan.length > 0 ? "not-empty" : null
+    !editable || !settingsLoaded || settingsStatus === "unavailable"
+      ? null
+      : settingsStatus === "error"
+        ? "load-error"
+        : standardMasses.length === 0
+          ? "no-standard"
+          : plan.length > 0
+            ? "not-empty"
+            : null
 
   const createDefaults = useCallback(() => {
     if (!canCreateDefaults || !monthStart) return

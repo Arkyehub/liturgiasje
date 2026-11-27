@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/shared/ui/sheet"
+import { ConfirmDialog } from "./ConfirmDialog"
 import {
   DEFAULT_LAMP_RULES,
   LAMP_RULE_KEYS,
@@ -67,8 +68,11 @@ const sameRules = (a: LampRules, b: LampRules) => LAMP_RULE_KEYS.every((k) => a[
 
 /** Painel de configuração do coordenador: missas padrão por dia da semana e regras da lâmpada. Salvar/Cancelar. */
 export function SettingsSheet({ status, standardMasses, lampRules, error, onSave, onClose, onRetry }: SettingsSheetProps) {
+  // Fechar pelo fundo ou pelo Esc com alterações não salvas pede confirmação (só "Cancelar" descarta direto).
+  const [dirty, setDirty] = useState(false)
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
   return (
-    <Sheet open onOpenChange={(open) => !open && onClose()}>
+    <Sheet open onOpenChange={(open) => !open && (dirty ? setConfirmDiscard(true) : onClose())}>
       <SheetContent side="bottom" className="max-h-[92vh] gap-0 overflow-y-auto rounded-t-[28px] bg-white p-0 sm:mx-auto sm:max-w-md">
         <SheetHeader className="gap-1 px-5 pb-2 pt-5">
           <SheetTitle className="text-xl font-black tracking-tight text-stone-900">Configurações do planejamento</SheetTitle>
@@ -97,7 +101,14 @@ export function SettingsSheet({ status, standardMasses, lampRules, error, onSave
         )}
 
         {status === "ready" && (
-          <SettingsForm standardMasses={standardMasses} lampRules={lampRules} error={error} onSave={onSave} onClose={onClose} />
+          <SettingsForm
+            standardMasses={standardMasses}
+            lampRules={lampRules}
+            error={error}
+            onSave={onSave}
+            onClose={onClose}
+            onDirtyChange={setDirty}
+          />
         )}
 
         {(status === "unavailable" || status === "error" || status === "loading") && (
@@ -112,6 +123,20 @@ export function SettingsSheet({ status, standardMasses, lampRules, error, onSave
           </div>
         )}
       </SheetContent>
+      {confirmDiscard && (
+        <ConfirmDialog
+          title="Descartar as alterações?"
+          message="Você mexeu nas configurações e ainda não salvou. Se fechar agora, as alterações se perdem."
+          confirmLabel="Descartar"
+          cancelLabel="Continuar editando"
+          tone="danger"
+          onConfirm={() => {
+            setConfirmDiscard(false)
+            onClose()
+          }}
+          onCancel={() => setConfirmDiscard(false)}
+        />
+      )}
     </Sheet>
   )
 }
@@ -122,7 +147,8 @@ function SettingsForm({
   error,
   onSave,
   onClose,
-}: Pick<SettingsSheetProps, "standardMasses" | "lampRules" | "error" | "onSave" | "onClose">) {
+  onDirtyChange,
+}: Pick<SettingsSheetProps, "standardMasses" | "lampRules" | "error" | "onSave" | "onClose"> & { onDirtyChange: (dirty: boolean) => void }) {
   // Estado de edição inicial = o que está gravado; o formulário só monta depois da leitura.
   const [rows, setRows] = useState<Row[]>(() => toRows(standardMasses))
   const [rules, setRules] = useState<LampRules>(lampRules)
@@ -131,6 +157,9 @@ function SettingsForm({
 
   const snapshot = JSON.stringify(rows.map((r) => [r.weekday, r.time, PLANNER_ROLES.filter((x) => r.roles.includes(x)).join(",")]))
   const dirty = snapshot !== initialRows || !sameRules(rules, lampRules)
+  useEffect(() => {
+    onDirtyChange(dirty)
+  }, [dirty, onDirtyChange])
   const problems = new Map(rows.map((r) => [r.id, rowProblem(r, rows)]))
   const invalid = [...problems.values()].some(Boolean)
 

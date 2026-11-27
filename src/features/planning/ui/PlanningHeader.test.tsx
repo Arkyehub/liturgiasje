@@ -78,3 +78,11 @@ test("dica 'no-standard' leva à engrenagem; 'not-empty' é só texto", async ()
   expect(screen.getByText("Disponível só com a lista em branco")).toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "Defina suas missas padrão na engrenagem" })).not.toBeInTheDocument()
 })
+
+test("dica 'load-error' avisa que não foi possível ler as missas padrão e leva à engrenagem", async () => {
+  const onOpenSettings = jest.fn()
+  setup({ createDefaultsDisabled: true, createDefaultsHint: "load-error", onOpenSettings })
+  await userEvent.click(screen.getByRole("button", { name: /Não foi possível ler suas missas padrão/ }))
+  expect(onOpenSettings).toHaveBeenCalledTimes(1)
+  expect(screen.queryByText("Defina suas missas padrão na engrenagem")).not.toBeInTheDocument()
+})

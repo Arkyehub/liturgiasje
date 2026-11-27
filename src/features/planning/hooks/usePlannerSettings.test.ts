@@ -88,3 +88,23 @@ test("save com erro devolve false, guarda a mensagem e mantém o que já estava"
   expect(result.current.standardMasses).toEqual(custom.standardMasses)
   expect(result.current.status).toBe("ready")
 })
+
+test("uma leitura antiga que chega depois de uma gravação não sobrescreve os valores novos", async () => {
+  let resolveStale: (v: unknown) => void = () => {}
+  mockGet
+    .mockResolvedValueOnce({ standardMasses: [], lampRules: DEFAULT_LAMP_RULES, hasCustom: false })
+    .mockReturnValueOnce(new Promise((resolve) => { resolveStale = resolve }))
+  const { result } = renderHook(() => usePlannerSettings())
+  await settle()
+  act(() => result.current.reload()) // leitura em andamento
+  mockSave.mockResolvedValue(custom)
+  await act(async () => {
+    await result.current.save(custom.standardMasses, custom.lampRules)
+  })
+  expect(result.current.standardMasses).toEqual(custom.standardMasses)
+  await act(async () => {
+    resolveStale({ standardMasses: [], lampRules: DEFAULT_LAMP_RULES, hasCustom: false }) // dado de antes da gravação
+  })
+  expect(result.current.standardMasses).toEqual(custom.standardMasses)
+  expect(result.current.status).toBe("ready")
+})
