@@ -31,7 +31,7 @@ const plan = (revision = 1, extra: Partial<PlanDocument> = {}): PlanDocument => 
   expiresAt: "2027-01-01T00:00:00Z",
   copiedFromName: null,
   concludedAt: null,
-  hasContent: true,
+  hasContent: true, ownerHasSettings: false,
   revision,
   state: { masses: [] },
   ...extra,

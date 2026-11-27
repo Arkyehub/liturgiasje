@@ -16,11 +16,14 @@ interface PlanChooserProps {
   session: string
   onOpenMine: (month: Date) => void
   onViewOther: (plan: PlanListItem) => void
+  /** Depois de duplicar COM as configurações do outro coordenador: o painel precisa reler as dele. */
+  onSettingsCopied?: () => void
 }
 
 type Pending =
   | { kind: "discard"; plan: PlanListItem }
   | { kind: "overwrite"; source: PlanListItem; month: Date }
+  | { kind: "settings"; source: PlanListItem; month: Date; overwrite: boolean }
 
 const monthKey = (month: Date) => format(month, "yyyy-MM")
 const monthName = (month: Date) => format(month, "MMMM", { locale: ptBR })
@@ -42,7 +45,7 @@ const solid =
   "min-h-11 rounded-2xl bg-stone-800 px-4 text-sm font-bold text-white transition-transform active:scale-95 disabled:opacity-50"
 
 /** Primeira tela do planejamento: para cada um dos 3 meses, os planejamentos de todos os coordenadores. */
-export function PlanChooser({ current, session, onOpenMine, onViewOther }: PlanChooserProps) {
+export function PlanChooser({ current, session, onOpenMine, onViewOther, onSettingsCopied }: PlanChooserProps) {
   const base = startOfMonth(current)
   const baseKey = monthKey(base)
   const [plans, setPlans] = useState<PlanListItem[] | null>(null)
@@ -77,11 +80,21 @@ export function PlanChooser({ current, session, onOpenMine, onViewOther }: PlanC
     }
   }
 
-  function copy(source: PlanListItem, month: Date, overwrite: boolean) {
+  function copy(source: PlanListItem, month: Date, overwrite: boolean, copySettings: boolean) {
     return run(async () => {
-      await makeCopyPlan().execute(source.id, session, overwrite)
+      await makeCopyPlan().execute(source.id, session, overwrite, copySettings)
+      if (copySettings) onSettingsCopied?.()
       onOpenMine(month)
     })
+  }
+
+  /** Depois da confirmação de sobrescrever (quando houver): se o dono tem configurações, pergunta se vêm junto. */
+  function startCopy(source: PlanListItem, month: Date, overwrite: boolean) {
+    if (source.ownerHasSettings) {
+      setPending({ kind: "settings", source, month, overwrite })
+      return Promise.resolve()
+    }
+    return copy(source, month, overwrite, false)
   }
 
   function reopen(plan: PlanListItem, month: Date) {
@@ -212,7 +225,7 @@ export function PlanChooser({ current, session, onOpenMine, onViewOther }: PlanC
                         type="button"
                         disabled={busy || !other.hasContent}
                         onClick={() =>
-                          mine?.hasContent ? setPending({ kind: "overwrite", source: other, month }) : void copy(other, month, false)
+                          mine?.hasContent ? setPending({ kind: "overwrite", source: other, month }) : void startCopy(other, month, false)
                         }
                         className={outline}
                       >
@@ -252,7 +265,27 @@ export function PlanChooser({ current, session, onOpenMine, onViewOther }: PlanC
           onConfirm={() => {
             const { source, month } = pending
             setPending(null)
-            void copy(source, month, true)
+            void startCopy(source, month, true)
+          }}
+          onCancel={() => setPending(null)}
+        />
+      )}
+      {pending?.kind === "settings" && (
+        <ConfirmDialog
+          title={`Copiar também as configurações de ${pending.source.ownerName}?`}
+          message={`Suas missas padrão e regras da lâmpada atuais serão substituídas pelas de ${pending.source.ownerName}.`}
+          confirmLabel="Copiar planejamento e configurações"
+          secondaryLabel="Copiar só o planejamento"
+          cancelLabel="Cancelar"
+          onConfirm={() => {
+            const { source, month, overwrite } = pending
+            setPending(null)
+            void copy(source, month, overwrite, true)
+          }}
+          onSecondary={() => {
+            const { source, month, overwrite } = pending
+            setPending(null)
+            void copy(source, month, overwrite, false)
           }}
           onCancel={() => setPending(null)}
         />

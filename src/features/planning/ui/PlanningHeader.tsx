@@ -1,6 +1,6 @@
 "use client"
 
-import { CalendarDays, Plus } from "lucide-react"
+import { CalendarDays, Plus, Settings } from "lucide-react"
 
 interface PlanningHeaderProps {
   monthLabel: string // ex.: "Dezembro 2026"
@@ -12,6 +12,12 @@ interface PlanningHeaderProps {
   /** Impede trocar agora (gravando ou preparando a gravação). */
   changeDisabled?: boolean
   onCreateDefaults: () => void
+  /** "Criar Missas Padrões" só vale com a lista em branco e ao menos uma missa padrão configurada. */
+  createDefaultsDisabled?: boolean
+  /** Por que o botão de padrões está desabilitado (mostra uma dica embaixo). */
+  createDefaultsHint?: "no-standard" | "not-empty" | "load-error" | null
+  /** Abre o painel de configurações (engrenagem); sem callback, a engrenagem não aparece. */
+  onOpenSettings?: () => void
   onAddMass?: () => void
   /** Desabilita as ações que criam missas (carregando ou leitura com erro). */
   actionsDisabled?: boolean
@@ -30,6 +36,9 @@ export function PlanningHeader({
   onChangePlan,
   changeDisabled = false,
   onCreateDefaults,
+  createDefaultsDisabled = false,
+  createDefaultsHint = null,
+  onOpenSettings,
   onAddMass,
   actionsDisabled = false,
 }: PlanningHeaderProps) {
@@ -53,7 +62,7 @@ export function PlanningHeader({
         </button>
       </div>
       <div className="flex justify-center gap-4">
-        <button type="button" onClick={onCreateDefaults} disabled={actionsDisabled} className={linkClass}>
+        <button type="button" onClick={onCreateDefaults} disabled={actionsDisabled || createDefaultsDisabled} className={linkClass}>
           <CalendarDays className="h-4 w-4" />
           Criar Missas Padrões no mês
         </button>
@@ -61,7 +70,35 @@ export function PlanningHeader({
           <Plus className="h-4 w-4" />
           Missa
         </button>
+        {onOpenSettings && (
+          <button type="button" onClick={onOpenSettings} aria-label="Configurações do planejamento" className={linkClass}>
+            <Settings aria-hidden="true" className="h-4 w-4" />
+          </button>
+        )}
       </div>
+      {createDefaultsHint === "no-standard" && (
+        <p className="text-center text-xs text-stone-600">
+          {onOpenSettings ? (
+            <button type="button" onClick={onOpenSettings} className="font-bold text-amber-700 underline underline-offset-4">
+              Defina suas missas padrão na engrenagem
+            </button>
+          ) : (
+            "Defina suas missas padrão na engrenagem"
+          )}
+        </p>
+      )}
+      {createDefaultsHint === "load-error" && (
+        <p className="text-center text-xs text-stone-600">
+          {onOpenSettings ? (
+            <button type="button" onClick={onOpenSettings} className="font-bold text-red-700 underline underline-offset-4">
+              Não foi possível ler suas missas padrão. Toque para tentar novamente
+            </button>
+          ) : (
+            "Não foi possível ler suas missas padrão"
+          )}
+        </p>
+      )}
+      {createDefaultsHint === "not-empty" && <p className="text-center text-xs text-stone-600">Disponível só com a lista em branco</p>}
     </header>
   )
 }

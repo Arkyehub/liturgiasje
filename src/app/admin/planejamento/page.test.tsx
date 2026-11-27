@@ -9,6 +9,9 @@ import {
   makeUpdateMassesStatus,
 } from "@/main/factories/usecases/schedule"
 import { makeConcludePlan, makeListPlans } from "@/main/factories/usecases/plans"
+import { makeGetPlannerSettings, makeSavePlannerSettings } from "@/main/factories/usecases/plannerSettings"
+import { SAMPLE_STANDARD } from "@/features/planning/lib/testFixtures"
+import { DEFAULT_LAMP_RULES } from "@/domain/models/PlannerSettings"
 import { makeListProfiles, makeListUnavailableForRange } from "@/main/factories/usecases/profiles"
 import type { Mass } from "@/domain/models/Schedule"
 import type { Profile } from "@/domain/models/Profile"
@@ -25,6 +28,10 @@ jest.mock("@/main/factories/usecases/schedule", () => ({
   makeListSlotHistory: jest.fn(),
   makeSaveScheduleBatch: jest.fn(),
   makeUpdateMassesStatus: jest.fn(),
+}))
+jest.mock("@/main/factories/usecases/plannerSettings", () => ({
+  makeGetPlannerSettings: jest.fn(),
+  makeSavePlannerSettings: jest.fn(),
 }))
 jest.mock("@/main/factories/usecases/plans", () => ({
   makeConcludePlan: jest.fn(),
@@ -76,7 +83,7 @@ let listPlans: jest.Mock
 const listItem = (extra: Partial<PlanListItem> = {}): PlanListItem => ({
   id: "o1", monthReference: "2026-12", ownerProfileId: "owner-2", ownerName: "Maria Teste", isMine: false, status: "em_andamento",
   createdAt: "2026-11-20T12:00:00Z", updatedAt: "2026-11-26T09:00:00Z", expiresAt: "2026-12-26T09:00:00Z",
-  copiedFromName: null, concludedAt: null, hasContent: true, ...extra,
+  copiedFromName: null, concludedAt: null, hasContent: true, ownerHasSettings: false, ...extra,
 })
 
 function setup(masses: Mass[] = [], plans: PlanListItem[] = []) {
@@ -94,9 +101,18 @@ function setup(masses: Mass[] = [], plans: PlanListItem[] = []) {
   ;(makeListUnavailableForRange as jest.Mock).mockReturnValue({ execute: jest.fn().mockResolvedValue({}) })
 }
 
+const SETTINGS_WITH_SAMPLE = { standardMasses: SAMPLE_STANDARD, lampRules: DEFAULT_LAMP_RULES, hasCustom: true }
+const settingsGet = jest.fn()
+const settingsSave = jest.fn()
+
 beforeEach(() => {
   jest.clearAllMocks()
   resetSync()
+  // Por padrão o coordenador já tem missas padrão configuradas (o sistema não traz nenhuma).
+  settingsGet.mockResolvedValue(SETTINGS_WITH_SAMPLE)
+  settingsSave.mockImplementation(async (standardMasses, lampRules) => ({ standardMasses, lampRules, hasCustom: true }))
+  ;(makeGetPlannerSettings as jest.Mock).mockReturnValue({ execute: settingsGet })
+  ;(makeSavePlannerSettings as jest.Mock).mockReturnValue({ execute: settingsSave })
   // Só o relógio é falso: a página abre no mês atual (dezembro de 2026).
   jest.useFakeTimers({
     now: new Date(2026, 11, 10, 12),
@@ -294,7 +310,7 @@ test("a failed month read shows an error with 'Tentar novamente' instead of an e
   expect(await screen.findByRole("alertdialog")).toBeInTheDocument()
   expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   // O aviso é um diálogo modal: a página fica fora da árvore de acessibilidade enquanto ele está aberto.
-  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/, hidden: true })).toBeEnabled()
+  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/, hidden: true })).toBeInTheDocument()
   expect(execute).toHaveBeenCalledTimes(2)
   ;(console.error as jest.Mock).mockRestore()
 })
@@ -700,7 +716,7 @@ test("a change brought from another device of the same owner shows a toast and k
   await openMine()
   await waitFor(() => expect(sonner().info).toHaveBeenCalledWith("Planejamento atualizado: alterado em outro aparelho."))
   expect(screen.queryByText("SOMENTE LEITURA")).not.toBeInTheDocument()
-  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeEnabled()
+  expect(screen.getByRole("button", { name: "Adicionar missa" })).toBeEnabled() // edição continua habilitada
 })
 
 test("a write conflict warns how many local edits were not applied", async () => {
@@ -734,7 +750,7 @@ test("in edit mode there is no read-only banner", async () => {
   setup()
   await openMine()
   expect(screen.queryByText("SOMENTE LEITURA")).not.toBeInTheDocument()
-  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeEnabled()
+  await waitFor(() => expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeEnabled())
 })
 
 test("unavailable shared planning shows the message and 'Voltar à lista'", async () => {
@@ -835,4 +851,70 @@ test("after 'Salvar como rascunho' the plan reopens as concluded with the Reabri
   await waitFor(() => expect(makeListSchedulesForMonth).toHaveBeenCalledTimes(4))
   expect(await screen.findByText("Planejamento concluído")).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Reabrir" })).toBeInTheDocument()
+})
+
+// ---- Configurações do planejamento (engrenagem, painel, missas padrão) ----
+const gear = () => screen.getByRole("button", { name: "Configurações do planejamento" })
+
+test("a engrenagem abre o painel de configurações e Cancelar o fecha sem salvar", async () => {
+  asAdmin()
+  setup()
+  await openMine()
+  await userEvent.click(gear())
+  expect(await screen.findByRole("button", { name: "Restaurar regras padrão" })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Cancelar" }))
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Salvar" })).not.toBeInTheDocument())
+  expect(settingsSave).not.toHaveBeenCalled()
+})
+
+test("sem missas padrão configuradas: botão desabilitado com a dica, e a dica abre o painel", async () => {
+  asAdmin()
+  settingsGet.mockResolvedValue({ standardMasses: [], lampRules: DEFAULT_LAMP_RULES, hasCustom: false })
+  setup()
+  await openMine()
+  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeDisabled()
+  await userEvent.click(screen.getByRole("button", { name: "Defina suas missas padrão na engrenagem" }))
+  expect(await screen.findByRole("button", { name: "Salvar" })).toBeInTheDocument()
+})
+
+test("configurar uma missa padrão no painel e salvar habilita 'Criar Missas Padrões' e cria só o configurado", async () => {
+  asAdmin()
+  settingsGet.mockResolvedValue({ standardMasses: [], lampRules: DEFAULT_LAMP_RULES, hasCustom: false })
+  setup()
+  await openMine()
+  await userEvent.click(gear())
+  await userEvent.click(await screen.findByRole("button", { name: "Adicionar horário na quarta" }))
+  const time = screen.getByLabelText("Horário 1 de Quarta") as HTMLInputElement
+  await userEvent.type(time, "06:30")
+  await userEvent.click(screen.getByLabelText("Função C - horário 1 de Quarta"))
+  await userEvent.click(screen.getByRole("button", { name: "Salvar" }))
+  await waitFor(() => expect(settingsSave).toHaveBeenCalledTimes(1))
+  expect(settingsSave.mock.calls[0][0]).toEqual([{ weekday: 3, time: "06:30", roles: ["C"] }])
+  await waitFor(() => expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeEnabled())
+  await userEvent.click(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ }))
+  expect(screen.getByText("5 missas · 5 vagas · 2 leitores aptos")).toBeInTheDocument()
+  // com a lista preenchida, o botão fecha de novo e explica por quê
+  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeDisabled()
+  expect(screen.getByText("Disponível só com a lista em branco")).toBeInTheDocument()
+})
+
+test("a engrenagem não aparece em planejamento concluído nem em somente leitura", async () => {
+  asAdmin()
+  setup()
+  setSync({ mode: "concluded", plan: planDoc({ status: "concluido", concludedAt: "2026-11-25T10:00:00Z" }) })
+  await openMine()
+  expect(screen.queryByRole("button", { name: "Configurações do planejamento" })).not.toBeInTheDocument()
+})
+
+test("leitura das configurações falhou: a dica explica (não diz que não há missas padrão) e o painel oferece tentar de novo", async () => {
+  asAdmin()
+  settingsGet.mockRejectedValueOnce({ code: "unknown" }).mockResolvedValueOnce(SETTINGS_WITH_SAMPLE)
+  setup()
+  await openMine()
+  const hint = await screen.findByRole("button", { name: /Não foi possível ler suas missas padrão/ })
+  expect(screen.queryByText("Defina suas missas padrão na engrenagem")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeDisabled()
+  await userEvent.click(hint)
+  await userEvent.click(await screen.findByRole("button", { name: "Tentar novamente" }))
+  await waitFor(() => expect(settingsGet).toHaveBeenCalledTimes(2))
 })

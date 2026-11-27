@@ -14,6 +14,8 @@ export interface PlanListItem {
   concludedAt: string | null
   /** O plano já foi gravado ao menos uma vez (state não nulo): só então pode ser copiado. */
   hasContent: boolean
+  /** O dono tem configurações do planejamento com algo real (missas padrão ou regra desligada): pode-se oferecer copiá-las. */
+  ownerHasSettings: boolean
 }
 
 export interface PlanDocument extends PlanListItem {

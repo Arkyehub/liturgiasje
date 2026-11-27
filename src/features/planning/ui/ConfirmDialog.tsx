@@ -11,6 +11,9 @@ interface ConfirmDialogProps {
   cancelLabel: string
   /** "danger" pinta a confirmação de vermelho (descartar). */
   tone?: "default" | "danger"
+  /** Segunda ação opcional (entre a confirmação e o cancelamento). */
+  secondaryLabel?: string
+  onSecondary?: () => void
   onConfirm: () => void
   onCancel: () => void
 }
@@ -20,7 +23,7 @@ interface ConfirmDialogProps {
  * Usa o Dialog compartilhado: foco entra no diálogo (na ação segura, "Cancelar"),
  * fica preso nele, Esc cancela e o foco volta a quem abriu.
  */
-export function ConfirmDialog({ title, message, confirmLabel, cancelLabel, tone = "default", onConfirm, onCancel }: ConfirmDialogProps) {
+export function ConfirmDialog({ title, message, confirmLabel, cancelLabel, tone = "default", secondaryLabel, onSecondary, onConfirm, onCancel }: ConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null)
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()} disablePointerDismissal>
@@ -40,6 +43,15 @@ export function ConfirmDialog({ title, message, confirmLabel, cancelLabel, tone 
           >
             {confirmLabel}
           </button>
+          {secondaryLabel && (
+            <button
+              type="button"
+              onClick={onSecondary}
+              className="min-h-12 rounded-2xl border border-stone-300 bg-stone-100 px-4 text-[15px] font-bold text-stone-800 transition-transform active:scale-95"
+            >
+              {secondaryLabel}
+            </button>
+          )}
           <button
             ref={cancelRef}
             type="button"

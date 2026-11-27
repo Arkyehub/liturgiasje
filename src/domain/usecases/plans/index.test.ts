@@ -13,7 +13,7 @@ test.each([
   ['list', new ListPlans(repository), [['2026-12']]],
   ['open', new OpenPlan(repository), ['2026-12', 's']],
   ['get', new GetPlan(repository), ['p']],
-  ['copy', new CopyPlan(repository), ['p', 's', false]],
+  ['copy', new CopyPlan(repository), ['p', 's', false, false]],
   ['save', new SavePlan(repository), ['p', 's', 'r', 1, { a: 1 }]],
   ['conclude', new ConcludePlan(repository), ['p', 's']],
   ['reopen', new ReopenPlan(repository), ['p', 's']],

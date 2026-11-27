@@ -41,8 +41,16 @@ export class SupabaseSchedulePlanRepository implements SchedulePlanRepository {
     return this.call<PlanDocument>("plan_get", { p_plan_id: planId })
   }
 
-  async copy(sourceId: string, session: string, overwrite: boolean): Promise<PlanDocument> {
-    return (await this.call<PlanDocument>("plan_copy", { p_source: sourceId, p_session: session, p_overwrite: overwrite })) as PlanDocument
+  async copy(sourceId: string, session: string, overwrite: boolean, copySettings = false): Promise<PlanDocument> {
+    const base = { p_source: sourceId, p_session: session, p_overwrite: overwrite }
+    if (!copySettings) return (await this.call<PlanDocument>("plan_copy", base)) as PlanDocument
+    try {
+      return (await this.call<PlanDocument>("plan_copy", { ...base, p_copy_settings: true })) as PlanDocument
+    } catch (e) {
+      // Banco ainda sem a função de 4 argumentos: copia só o planejamento.
+      if (e instanceof PlanError && e.code === "unavailable") return (await this.call<PlanDocument>("plan_copy", base)) as PlanDocument
+      throw e
+    }
   }
 
   async save(planId: string, session: string, requestId: string, expectedRevision: number, state: unknown): Promise<number> {

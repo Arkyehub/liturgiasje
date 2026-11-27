@@ -15,6 +15,8 @@ import { ROLE_ORDER } from "../lib/format"
 import { parsePlanState, serializePlanState } from "../lib/planState"
 import { reconcilePlan, type ReconcileNotice } from "../lib/reconcilePlan"
 import type { PlanDocument } from "@/domain/models/SchedulePlan"
+import { DEFAULT_LAMP_RULES, type LampRules, type StandardMass } from "@/domain/models/PlannerSettings"
+import type { PlannerSettingsStatus } from "./usePlannerSettings"
 import { usePlanSync, type ExternalChange, type PlanSyncTarget, type SyncMode, type SyncStatus } from "./usePlanSync"
 
 /** Qual planejamento abrir: o meu (editável) ou o de outro coordenador (somente leitura). */
@@ -22,6 +24,18 @@ export type PlanTarget = { kind: "mine"; month: Date } | { kind: "other"; month:
 
 /** planning = montando as missas; suggested = a lâmpada já rodou (lista por função). */
 export type PlanningPhase = "planning" | "suggested"
+
+/** Configurações do coordenador usadas pelas missas padrão e pela lâmpada (vêm de `usePlannerSettings`). */
+export interface PlanningSettings {
+  standardMasses: StandardMass[]
+  lampRules: LampRules
+  /** As configurações já foram lidas (ou já se sabe que usam os padrões): sem isso, lâmpada e padrões esperam. */
+  loaded: boolean
+  /** Estado da leitura das configurações (para explicar por que não há missas padrão). */
+  status?: PlannerSettingsStatus
+}
+
+const DEFAULT_SETTINGS: PlanningSettings = { standardMasses: [], lampRules: DEFAULT_LAMP_RULES, loaded: true }
 
 export interface UsePlanningResult {
   masses: PlanMass[]
@@ -39,8 +53,12 @@ export interface UsePlanningResult {
   error: boolean
   /** Refaz as leituras do mês depois de uma falha. */
   retry(): void
-  /** Inclui missas novas no plano; sem efeito enquanto carrega ou com erro. */
+  /** Inclui as missas padrão do coordenador no plano; sem efeito se `canCreateDefaults` for falso. */
   createDefaults(): void
+  /** Edição, tudo carregado, lista em branco (publicadas contam) e ao menos uma missa padrão configurada. */
+  canCreateDefaults: boolean
+  /** Por que o botão de padrões está desabilitado (para a dica); null quando não há o que explicar. */
+  createDefaultsHint: "no-standard" | "not-empty" | "load-error" | null
   addMass(m: PlanMass): void
   updateMass(key: string, patch: Partial<PlanMass>): void
   removeMass(key: string): void
@@ -128,7 +146,8 @@ function withUniqueKeys(incoming: PlanMass[], existing: PlanMass[]): PlanMass[] 
  * As leituras reais (missas, perfis, histórico, indisponibilidades) e o planejamento guardado no servidor
  * (`usePlanSync`) carregam em paralelo; o plano inicial é o guardado reconciliado com a realidade.
  */
-export function usePlanning(target: PlanTarget | null): UsePlanningResult {
+export function usePlanning(target: PlanTarget | null, settings: PlanningSettings = DEFAULT_SETTINGS): UsePlanningResult {
+  const { standardMasses, lampRules, loaded: settingsLoaded, status: settingsStatus } = settings
   const month = target?.month ?? null
   // Chave estável: o efeito só recarrega quando o mês muda de fato.
   const monthKey = month ? format(month, "yyyy-MM") : null
@@ -277,13 +296,26 @@ export function usePlanning(target: PlanTarget | null): UsePlanningResult {
   const summary = useMemo(() => summarizePlan(masses), [masses])
   const publishedCount = useMemo(() => masses.filter((m) => m.wasPublished).length, [masses])
 
+  const canCreateDefaults = editable && settingsLoaded && plan.length === 0 && standardMasses.length > 0
+  const createDefaultsHint: UsePlanningResult["createDefaultsHint"] =
+    !editable || !settingsLoaded || settingsStatus === "unavailable"
+      ? null
+      : settingsStatus === "error"
+        ? "load-error"
+        : standardMasses.length === 0
+          ? "no-standard"
+          : plan.length > 0
+            ? "not-empty"
+            : null
+
   const createDefaults = useCallback(() => {
-    if (!editable || !monthStart) return
+    if (!canCreateDefaults || !monthStart) return
     setPlan((prev) => {
-      const defaults = buildDefaultMasses(monthStart, prev.map((m) => ({ date: m.date, time: normalizeTime(m.time) })))
+      if (prev.length > 0) return prev
+      const defaults = buildDefaultMasses(monthStart, prev.map((m) => ({ date: m.date, time: normalizeTime(m.time) })), standardMasses)
       return [...prev, ...withUniqueKeys(defaults, prev)].sort(byDateTime)
     })
-  }, [monthStart, editable])
+  }, [monthStart, canCreateDefaults, standardMasses])
 
   const addMass = useCallback(
     (m: PlanMass) => {
@@ -319,7 +351,7 @@ export function usePlanning(target: PlanTarget | null): UsePlanningResult {
   const phase: PlanningPhase = ready && suggested ? "suggested" : "planning"
 
   const runLamp = useCallback(() => {
-    if (!editable) return
+    if (!editable || !settingsLoaded) return
     if (plan.length === 0) {
       toast.info("Crie as missas do mês primeiro")
       return
@@ -327,9 +359,9 @@ export function usePlanning(target: PlanTarget | null): UsePlanningResult {
     if (readers.length === 0) {
       toast.warning("Nenhum leitor apto (ativos, com ou sem conta vinculada): as vagas ficaram sem leitor.")
     }
-    setPlan((prev) => suggestSchedule({ masses: prev, readers, stats, unavailable }))
+    setPlan((prev) => suggestSchedule({ masses: prev, readers, stats, unavailable, rules: lampRules }))
     setSuggested(true)
-  }, [editable, plan.length, readers, stats, unavailable])
+  }, [editable, settingsLoaded, plan.length, readers, stats, unavailable, lampRules])
 
   const setSlotReader = useCallback(
     (massKey: string, slotIndex: number, profileId: string) => {
@@ -381,6 +413,8 @@ export function usePlanning(target: PlanTarget | null): UsePlanningResult {
     error,
     retry,
     createDefaults,
+    canCreateDefaults,
+    createDefaultsHint,
     addMass,
     updateMass,
     removeMass,

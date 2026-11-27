@@ -1,4 +1,5 @@
 import { buildDefaultMasses } from "./defaultMasses"
+import { SAMPLE_STANDARD } from "./testFixtures"
 import { suggestSchedule, summarizePlan } from "./suggestSchedule"
 import type { PlanMass, PlanReader, PlanSlot, ReaderStats, SuggestInput } from "./types"
 
@@ -179,7 +180,7 @@ describe("suggestSchedule — pontuação", () => {
 
     const allPrefs = { "6": ["07:00", "09:00", "11:00", "19:00"], "2": ["19:00"], "5": ["19:00"] }
     const many = Array.from({ length: 22 }, (_, i) => prefReader(`r${String(i).padStart(2, "0")}`, allPrefs))
-    const dec = buildDefaultMasses(new Date(2026, 11, 1), [])
+    const dec = buildDefaultMasses(new Date(2026, 11, 1), [], SAMPLE_STANDARD)
     expect(dec).toHaveLength(25)
     expect(dec.reduce((n, m) => n + m.slots.length, 0)).toBe(82)
     const out = suggestSchedule(input(dec, many))
@@ -298,5 +299,104 @@ describe("summarizePlan", () => {
       outsidePreference: 1,
       locked: 2,
     })
+  })
+})
+
+// Regras suaves configuráveis (todas ligadas = comportamento de sempre; cada uma desligada zera o seu peso).
+describe("suggestSchedule — regras configuráveis", () => {
+  const ALL_ON = { balance: true, preferences: true, affinity: true, sameDay: true, weekends: true, history: true }
+  const off = (...keys: (keyof typeof ALL_ON)[]) => ({ ...ALL_ON, ...Object.fromEntries(keys.map((k) => [k, false])) })
+  const run = (i: SuggestInput, rules?: SuggestInput["rules"]) => suggestSchedule({ ...i, rules })
+
+  it("sem `rules` equivale a todas ligadas", () => {
+    const A = prefReader("A", { "6": ["09:00"] })
+    const B = prefReader("B", { "6": ["07:00"] })
+    const i = input([mass("m1", "2026-12-06", [slot("C")], { time: "07:00" })], [A, B])
+    expect(suggestSchedule(i)).toEqual(run(i, ALL_ON))
+  })
+
+  it("preferences desligada: ignora preferência, não avisa e o motivo não a cita", () => {
+    const A = prefReader("A", { "6": ["09:00"] })
+    const B = prefReader("B", { "6": ["07:00"] })
+    const i = input([mass("m1", "2026-12-06", [slot("C")], { time: "07:00" })], [A, B])
+    expect(run(i, ALL_ON)[0].slots[0].profileId).toBe("B")
+    const out = run(i, off("preferences"))
+    expect(out[0].slots[0].profileId).toBe("A") // desempate por nome
+    expect(out[0].slots[0].warning).toBeUndefined()
+    expect(out[0].slots[0].reason).not.toMatch(/[Pp]referência/)
+  })
+
+  it("affinity desligada: ignora a função que o leitor mais faz e o motivo não a cita", () => {
+    const j = input([mass("m1", "2026-12-08", [slot("C"), slot("1L")])], [reader("A"), reader("B")])
+    j.stats.A.roleShare = { C: 0.1, R: 0.9, P: 0 }
+    j.stats.B.roleShare = { C: 0.9, R: 0.1, P: 0 }
+    expect(run(j, ALL_ON)[0].slots.map((s) => s.profileId)).toEqual(["B", "A"])
+    const out = run(j, off("affinity"))
+    expect(out[0].slots.map((s) => s.profileId)).toEqual(["A", "B"])
+    out[0].slots.forEach((s) => expect(s.reason).not.toMatch(/costuma fazer/))
+  })
+
+  it("history desligada: a média dos meses anteriores não desloca a meta", () => {
+    const make = () => {
+      const i = input([mass("m1", "2026-12-08", [slot("C")])], [reader("A"), reader("B")])
+      i.stats.A.monthlyAverage = 5
+      i.stats.B.monthlyAverage = 1
+      return i
+    }
+    expect(run(make(), ALL_ON)[0].slots[0].profileId).toBe("B")
+    const out = run(make(), off("history"))
+    expect(out[0].slots[0].profileId).toBe("A")
+    expect(out[0].slots[0].reason).not.toMatch(/média abaixo do grupo/)
+  })
+
+  it("balance desligada: quem tem preferência pode ficar com tudo; ligada, divide", () => {
+    const A = prefReader("A", { "6": ["07:00"] })
+    const B = prefReader("B", {})
+    const sundays = ["2026-12-06", "2026-12-13", "2026-12-20", "2026-12-27"].map((d, n) =>
+      mass(`m${n}`, d, [slot("C")], { time: "07:00" })
+    )
+    const on = loads(run(input(sundays, [A, B]), ALL_ON))
+    expect(on).toEqual({ A: 2, B: 2 })
+    const noBalance = loads(run(input(sundays, [A, B]), off("balance")))
+    expect(noBalance).toEqual({ A: 4 })
+  })
+
+  it("sameDay desligada: o mesmo leitor pode ficar em duas missas do mesmo dia", () => {
+    const A = prefReader("A", { "6": ["07:00", "09:00"] })
+    const B = prefReader("B", {})
+    const day = [
+      mass("m1", "2026-12-06", [slot("C")], { time: "07:00" }),
+      mass("m2", "2026-12-06", [slot("C")], { time: "09:00" }),
+    ]
+    const ids = (rules: SuggestInput["rules"]) => run(input(day, [A, B]), rules).map((m) => m.slots[0].profileId)
+    expect(ids(off("balance"))).toEqual(["A", "B"])
+    expect(ids(off("balance", "sameDay"))).toEqual(["A", "A"])
+  })
+
+  it("weekends desligada: o mesmo leitor pode pegar fins de semana seguidos", () => {
+    const sundays = [
+      mass("m1", "2026-12-06", [slot("C")], { time: "07:00" }),
+      mass("m2", "2026-12-13", [slot("C")], { time: "07:00" }),
+    ]
+    const ids = (rules: SuggestInput["rules"]) => run(input(sundays, [reader("A"), reader("B")]), rules).map((m) => m.slots[0].profileId)
+    expect(ids(off("balance"))).toEqual(["A", "B"])
+    expect(ids(off("balance", "weekends"))).toEqual(["A", "A"])
+  })
+
+  it("todas desligadas: continua respeitando indisponibilidade, um leitor por missa e vagas travadas", () => {
+    const masses = [
+      mass("m1", "2026-12-08", [slot("C", { profileId: "A", locked: true }), slot("L"), slot("P")]),
+      mass("m2", "2026-12-11", [slot("C"), slot("L")]),
+    ]
+    const rules = off("balance", "preferences", "affinity", "sameDay", "weekends", "history")
+    const out = run(input(masses, [reader("A"), reader("B"), reader("C")], { "2026-12-11": ["B"] }), rules)
+    expect(out[0].slots[0]).toEqual({ role: "C", profileId: "A", locked: true })
+    for (const m of out) {
+      const ids = m.slots.map((s) => s.profileId).filter(Boolean)
+      expect(new Set(ids).size).toBe(ids.length)
+    }
+    expect(out[1].slots.map((s) => s.profileId)).not.toContain("B")
+    expect(summarizePlan(out).empty).toBe(0)
+    out[0].slots.slice(1).concat(out[1].slots).forEach((s) => expect(s.reason).toMatch(/leitura(s)? no mês/))
   })
 })

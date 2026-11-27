@@ -24,8 +24,8 @@ export class GetPlan {
 
 export class CopyPlan {
   constructor(private readonly planRepository: SchedulePlanRepository) {}
-  async execute(sourceId: string, session: string, overwrite: boolean): Promise<PlanDocument> {
-    return this.planRepository.copy(sourceId, session, overwrite)
+  async execute(sourceId: string, session: string, overwrite: boolean, copySettings = false): Promise<PlanDocument> {
+    return this.planRepository.copy(sourceId, session, overwrite, copySettings)
   }
 }
 

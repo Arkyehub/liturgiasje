@@ -5,7 +5,7 @@ jest.mock('@/shared/api/supabase', () => ({ supabase: { rpc: jest.fn(), from: je
 
 const rpc = supabase.rpc as jest.Mock
 const repo = new SupabaseSchedulePlanRepository()
-const item = { id: 'p1', monthReference: '2026-12', ownerProfileId: 'o', ownerName: 'Ana', isMine: true, status: 'em_andamento', createdAt: 'a', updatedAt: 'b', expiresAt: 'c', copiedFromName: null, concludedAt: null, hasContent: true }
+const item = { id: 'p1', monthReference: '2026-12', ownerProfileId: 'o', ownerName: 'Ana', isMine: true, status: 'em_andamento', createdAt: 'a', updatedAt: 'b', expiresAt: 'c', copiedFromName: null, concludedAt: null, hasContent: true, ownerHasSettings: false }
 const doc = { ...item, revision: 3, state: { a: 1 } }
 
 beforeEach(() => jest.clearAllMocks())
@@ -34,6 +34,30 @@ test('get calls plan_get and accepts null', async () => {
   expect(rpc).toHaveBeenCalledWith('plan_get', { p_plan_id: 'p1' })
   rpc.mockResolvedValueOnce({ data: null, error: null })
   expect(await repo.get('p1')).toBeNull()
+})
+
+test('copy with copySettings sends p_copy_settings; without it keeps the three-argument call', async () => {
+  rpc.mockResolvedValue({ data: doc, error: null })
+  expect(await repo.copy('src', 's1', false, true)).toEqual(doc)
+  expect(rpc).toHaveBeenCalledWith('plan_copy', { p_source: 'src', p_session: 's1', p_overwrite: false, p_copy_settings: true })
+  rpc.mockClear()
+  await repo.copy('src', 's1', false, false)
+  expect(rpc).toHaveBeenCalledWith('plan_copy', { p_source: 'src', p_session: 's1', p_overwrite: false })
+})
+
+test('copy with copySettings falls back to the three-argument call when the new function is missing', async () => {
+  rpc
+    .mockResolvedValueOnce({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.plan_copy(p_copy_settings, ...)' } })
+    .mockResolvedValueOnce({ data: doc, error: null })
+  expect(await repo.copy('src', 's1', true, true)).toEqual(doc)
+  expect(rpc).toHaveBeenNthCalledWith(1, 'plan_copy', { p_source: 'src', p_session: 's1', p_overwrite: true, p_copy_settings: true })
+  expect(rpc).toHaveBeenNthCalledWith(2, 'plan_copy', { p_source: 'src', p_session: 's1', p_overwrite: true })
+})
+
+test('copy with copySettings does not fall back on other errors', async () => {
+  rpc.mockResolvedValue({ data: null, error: { message: 'plan_not_found' } })
+  await expect(repo.copy('src', 's1', true, true)).rejects.toMatchObject({ code: 'plan_not_found' })
+  expect(rpc).toHaveBeenCalledTimes(1)
 })
 
 test('copy calls plan_copy with three params', async () => {
