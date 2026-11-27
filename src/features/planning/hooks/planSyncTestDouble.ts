@@ -23,7 +23,7 @@ export const planDoc = (extra: Partial<PlanDocument> = {}): PlanDocument => ({
   expiresAt: "2027-01-01T00:00:00Z",
   copiedFromName: null,
   concludedAt: null,
-  hasContent: true,
+  hasContent: true, ownerHasSettings: false,
   revision: 1,
   state: null,
   ...extra,

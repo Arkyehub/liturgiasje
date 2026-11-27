@@ -32,7 +32,7 @@ function plan(over: Partial<PlanListItem>): PlanListItem {
     expiresAt: "2026-12-26T09:00:00Z",
     copiedFromName: null,
     concludedAt: null,
-    hasContent: true,
+    hasContent: true, ownerHasSettings: false,
     ...over
   }
 }

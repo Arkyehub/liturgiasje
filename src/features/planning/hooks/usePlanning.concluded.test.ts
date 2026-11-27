@@ -48,7 +48,7 @@ const realDraft: Mass = {
 const doc = (revision: number, over: Partial<PlanDocument> = {}): PlanDocument => ({
   id: "plan-1", monthReference: "2026-12", ownerProfileId: "owner-1", ownerName: "Coordenador Teste", isMine: true, status: "em_andamento",
   createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-01T00:00:00Z", expiresAt: "2027-01-01T00:00:00Z", copiedFromName: null,
-  concludedAt: null, hasContent: true, revision, state: null, ...over,
+  concludedAt: null, hasContent: true, ownerHasSettings: false, revision, state: null, ...over,
 })
 
 beforeEach(() => {
