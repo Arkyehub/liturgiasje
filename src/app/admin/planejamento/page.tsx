@@ -136,6 +136,7 @@ function PlanningScreen() {
           <PlanChooser
             current={startOfMonth(new Date())}
             session={planning.sessionId}
+            onSettingsCopied={settings.reload}
             onOpenMine={(m) => setTarget({ kind: "mine", month: m })}
             onViewOther={(plan) =>
               setTarget({ kind: "other", month: new Date(`${plan.monthReference}-01T12:00:00`), planId: plan.id })

@@ -41,8 +41,9 @@ function setup(plans: PlanListItem[] = []) {
   mockList.mockResolvedValue(plans)
   const onOpenMine = jest.fn()
   const onViewOther = jest.fn()
-  render(<PlanChooser current={CURRENT} session="sess-1" onOpenMine={onOpenMine} onViewOther={onViewOther} />)
-  return { onOpenMine, onViewOther }
+  const onSettingsCopied = jest.fn()
+  render(<PlanChooser current={CURRENT} session="sess-1" onOpenMine={onOpenMine} onViewOther={onViewOther} onSettingsCopied={onSettingsCopied} />)
+  return { onOpenMine, onViewOther, onSettingsCopied }
 }
 
 function section(name: RegExp) {
@@ -109,7 +110,7 @@ it("Duplicar sem plano meu copia sem sobrescrever e abre o meu", async () => {
   const { onOpenMine } = setup([plan({ id: "o1", isMine: false, ownerName: "Maria" })])
   const dez = await screen.findByRole("region", { name: /Dezembro 2026/ })
   await userEvent.click(within(dez).getByRole("button", { name: /Duplicar para mim/ }))
-  expect(mockCopy).toHaveBeenCalledWith("o1", "sess-1", false)
+  expect(mockCopy).toHaveBeenCalledWith("o1", "sess-1", false, false)
   await waitFor(() => expect(onOpenMine).toHaveBeenCalledWith(new Date(2026, 11, 1)))
 })
 
@@ -121,7 +122,7 @@ it("Duplicar com plano meu pede confirmação e só então sobrescreve", async (
   expect(dialog).toHaveTextContent("Isso substitui o seu planejamento de dezembro")
   expect(mockCopy).not.toHaveBeenCalled()
   await userEvent.click(within(dialog).getByRole("button", { name: "Substituir" }))
-  expect(mockCopy).toHaveBeenCalledWith("o1", "sess-1", true)
+  expect(mockCopy).toHaveBeenCalledWith("o1", "sess-1", true, false)
   await waitFor(() => expect(onOpenMine).toHaveBeenCalledWith(new Date(2026, 11, 1)))
 })
 
@@ -130,7 +131,7 @@ it("Duplicar com plano meu SEM conteúdo não pede confirmação e copia sem sob
   const dez = await screen.findByRole("region", { name: /Dezembro 2026/ })
   await userEvent.click(within(dez).getByRole("button", { name: /Duplicar para mim/ }))
   expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
-  expect(mockCopy).toHaveBeenCalledWith("o1", "sess-1", false)
+  expect(mockCopy).toHaveBeenCalledWith("o1", "sess-1", false, false)
   await waitFor(() => expect(onOpenMine).toHaveBeenCalledWith(new Date(2026, 11, 1)))
 })
 
@@ -190,4 +191,61 @@ it("outro erro mostra a mensagem e Tentar novamente recarrega", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Tentar novamente" }))
   expect(await screen.findByText("Novembro 2026")).toBeInTheDocument()
   expect(mockList).toHaveBeenCalledTimes(2)
+})
+
+describe("copiar as configurações do outro coordenador", () => {
+  const withSettings = (over: Partial<PlanListItem> = {}) => plan({ id: "o1", isMine: false, ownerName: "Maria Souza", ownerHasSettings: true, ...over })
+  const duplicate = async () => {
+    const dez = await screen.findByRole("region", { name: /Dezembro 2026/ })
+    await userEvent.click(within(dez).getByRole("button", { name: /Duplicar para mim/ }))
+  }
+
+  it("sem configurações significativas do dono não pergunta e copia só o planejamento", async () => {
+    const { onSettingsCopied } = setup([withSettings({ ownerHasSettings: false })])
+    await duplicate()
+    await waitFor(() => expect(mockCopy).toHaveBeenCalledWith("o1", "sess-1", false, false))
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+    expect(onSettingsCopied).not.toHaveBeenCalled()
+  })
+
+  it("com configurações pergunta (e avisa que as minhas serão substituídas); 'Copiar planejamento e configurações' copia as duas coisas", async () => {
+    const { onOpenMine, onSettingsCopied } = setup([withSettings()])
+    await duplicate()
+    const dialog = await screen.findByRole("alertdialog")
+    expect(within(dialog).getByText("Copiar também as configurações de Maria Souza?")).toBeInTheDocument()
+    expect(within(dialog).getByText(/Suas missas padrão e regras da lâmpada atuais serão substituídas pelas de Maria Souza\./)).toBeInTheDocument()
+    expect(mockCopy).not.toHaveBeenCalled()
+    await userEvent.click(within(dialog).getByRole("button", { name: "Copiar planejamento e configurações" }))
+    await waitFor(() => expect(mockCopy).toHaveBeenCalledWith("o1", "sess-1", false, true))
+    expect(onSettingsCopied).toHaveBeenCalledTimes(1)
+    expect(onOpenMine).toHaveBeenCalledWith(new Date(2026, 11, 1))
+  })
+
+  it("'Copiar só o planejamento' não copia as configurações", async () => {
+    const { onOpenMine, onSettingsCopied } = setup([withSettings()])
+    await duplicate()
+    await userEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Copiar só o planejamento" }))
+    await waitFor(() => expect(mockCopy).toHaveBeenCalledWith("o1", "sess-1", false, false))
+    expect(onSettingsCopied).not.toHaveBeenCalled()
+    expect(onOpenMine).toHaveBeenCalled()
+  })
+
+  it("Cancelar não copia nada", async () => {
+    setup([withSettings()])
+    await duplicate()
+    await userEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Cancelar" }))
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+    expect(mockCopy).not.toHaveBeenCalled()
+  })
+
+  it("a pergunta vem DEPOIS da confirmação de sobrescrever e carrega o 'overwrite'", async () => {
+    setup([plan({ id: "mine", hasContent: true }), withSettings()])
+    await duplicate()
+    await userEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Substituir" }))
+    const dialog = await screen.findByRole("alertdialog")
+    expect(within(dialog).getByText("Copiar também as configurações de Maria Souza?")).toBeInTheDocument()
+    expect(mockCopy).not.toHaveBeenCalled()
+    await userEvent.click(within(dialog).getByRole("button", { name: "Copiar planejamento e configurações" }))
+    await waitFor(() => expect(mockCopy).toHaveBeenCalledWith("o1", "sess-1", true, true))
+  })
 })
