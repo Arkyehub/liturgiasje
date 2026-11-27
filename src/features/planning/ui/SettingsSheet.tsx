@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/shared/ui/sheet"
+import { TimeRoller } from "@/shared/ui/TimeRoller"
 import { ConfirmDialog } from "./ConfirmDialog"
 import {
   DEFAULT_LAMP_RULES,
@@ -34,6 +35,8 @@ const RULE_LABEL: Record<keyof LampRules, string> = {
 }
 
 const TIME = /^([01][0-9]|2[0-3]):[0-5][0-9]$/
+/** Horário inicial de uma missa nova: o mesmo que o seletor mostra por padrão. */
+const DEFAULT_TIME = "07:00"
 
 interface Row {
   id: number
@@ -204,7 +207,7 @@ function SettingsForm({
                   <button
                     type="button"
                     aria-label={`Adicionar horário na ${day.toLowerCase()}`}
-                    onClick={() => setRows((prev) => [...prev, { id: nextId++, weekday, time: "", roles: [] }])}
+                    onClick={() => setRows((prev) => [...prev, { id: nextId++, weekday, time: DEFAULT_TIME, roles: [] }])}
                     className="flex min-h-11 items-center gap-1 text-[13px] font-bold text-stone-900 underline decoration-stone-300 underline-offset-4"
                   >
                     <Plus aria-hidden="true" className="h-4 w-4" />
@@ -217,13 +220,10 @@ function SettingsForm({
                   return (
                     <div key={row.id} className="flex flex-col gap-2 rounded-2xl border border-stone-200 p-3">
                       <div className="flex items-center gap-2">
-                        <input
-                          type="time"
-                          aria-label={`Horário ${n + 1} de ${day}`}
-                          value={row.time}
-                          onChange={(e) => update(row.id, { time: e.target.value })}
-                          className="min-h-11 flex-1 rounded-2xl border border-stone-300 bg-white px-3 text-[15px] font-semibold tabular-nums text-stone-900"
-                        />
+                        {/* Seletor de horário padrão do aplicativo (o mesmo do cadastro de missa). */}
+                        <div role="group" aria-label={`Horário ${n + 1} de ${day}`} className="flex min-w-0 flex-1 justify-center">
+                          <TimeRoller value={row.time} onChange={(time) => update(row.id, { time })} />
+                        </div>
                         <button
                           type="button"
                           aria-label={`Remover horário ${n + 1} de ${day}`}
