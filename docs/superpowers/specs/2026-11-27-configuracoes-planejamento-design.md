@@ -21,6 +21,7 @@ Também: "Criar Missas Padrões no mês" só pode ser usado com a lista do plane
 **Não objetivos**
 - Multi-igreja (separação de igrejas no banco). Não existe hoje; a tabela é chaveada pelo perfil e funciona igual com um banco por igreja ou um banco compartilhado.
 - Configurar as três regras duras (indisponibilidade na data, um leitor por missa, vagas travadas): ficam sempre ligadas e aparecem só como aviso no painel.
+- Funções personalizáveis por igreja: as funções C, 1L, 2L, L e P continuam fixas para todas (são usadas em todo o app). Dia da semana segue `getDay()` (0 = domingo), igual ao código de hoje.
 - Configuração por planejamento/mês. Engrenagem na tela de escolha de planejamentos (no primeiro corte, só dentro de um planejamento aberto).
 - Pesos numéricos ajustáveis; só liga/desliga.
 
@@ -59,8 +60,8 @@ Tabela `public.planner_settings`:
 Funções (admin ativo, `authenticated`, nunca `anon`):
 - `planner_settings_get() returns jsonb` → `{ standardMasses, lampRules, hasCustom }`; sem linha devolve `{ standardMasses: [], lampRules: {}, hasCustom: false }`.
 - `planner_settings_save(p_standard_masses jsonb, p_lamp_rules jsonb) returns jsonb` → upsert da linha do coordenador autenticado e devolve o mesmo formato de `get`. Validações no servidor (erro `invalid_settings`): `standard_masses` é array com no máximo 70 itens; cada item tem `weekday` inteiro 0..6, `time` no formato `HH:mm` válido, `roles` array não vazio, sem repetição, só de `C|1L|2L|L|P`, sem `L` junto com `1L`/`2L`; sem dois itens com o mesmo `weekday`+`time`; `lamp_rules` é objeto e só as chaves conhecidas são guardadas, todas booleanas. Tamanho máximo do JSON (erro `settings_too_large`, ex.: 32 KB).
-- `plan_copy(p_source, p_session, p_overwrite, p_copy_settings boolean default false)`: nova assinatura (a antiga é removida). Com `p_copy_settings = true`, na **mesma transação**, copia as configurações do dono do planejamento de origem para as do coordenador atual (substitui; se a origem não tem linha, a do coordenador atual é removida, voltando aos padrões). Falha em qualquer parte desfaz tudo.
-- `plan_list` e os itens de planejamento ganham `ownerHasSettings boolean` (o dono tem linha em `planner_settings`), para o app só perguntar quando houver algo a copiar.
+- `plan_copy(p_source, p_session, p_overwrite, p_copy_settings boolean)`: **nova função de 4 argumentos, sem valor padrão**; a de 3 argumentos **continua existindo, intacta**, para o app já publicado (evita quebrar a duplicação em qualquer ordem de implantação; um valor padrão no 4º argumento tornaria a chamada de 3 argumentos ambígua). Com `p_copy_settings = true`, na **mesma transação**, copia as configurações do **dono do planejamento de origem** (`owner_profile_id` da origem, mesmo que ele próprio tenha copiado de outro; coordenador arquivado também vale) para as do coordenador atual, substituindo as dele. Se a origem não tem configurações significativas (ver abaixo), não faz nada nas configurações (nunca apaga as do coordenador atual). Falha em qualquer parte desfaz tudo.
+- `plan_list` e os itens de planejamento ganham `ownerHasSettings boolean`: o dono tem linha em `planner_settings` **com algo real** (ao menos uma missa padrão, ou ao menos uma regra desligada). Linha só com padrões não conta. `planner_settings_get` devolve o mesmo critério em `hasCustom`.
 
 Migration `migration_planejamento_configuracoes.sql` + rollback; idempotente; **não semeia nenhuma missa**.
 
@@ -99,9 +100,12 @@ Mudar as regras **não** refaz a escala já sugerida; vale na próxima vez que o
 
 ### 5.5 Carga e uso das configurações
 
+- **Ordem de implantação:** migration primeiro, depois o app. O app novo, se a função de 4 argumentos não existir (`unavailable`), cai na de 3 argumentos e não oferece a cópia de configurações.
+
 - Hook `usePlannerSettings`: lê as configurações uma vez ao abrir a tela do planejamento; expõe `standardMasses`, `lampRules`, `status`, `save()`, `reload()`.
 - `usePlanning` recebe `standardMasses` e `lampRules`; `createDefaults` e `runLamp` usam esses valores.
-- Se as funções não existirem no ambiente (`unavailable`) ou a leitura falhar: regras padrão (todas ligadas), sem missas padrão (botão de padrões desabilitado) e, no caso de falha de rede, um aviso com "Tentar novamente" no painel.
+- Enquanto as configurações carregam, a lâmpada e "Criar Missas Padrões" ficam desabilitadas. Se as funções não existirem no ambiente (`unavailable`): regras padrão (todas ligadas) e sem missas padrão, em silêncio. Se a leitura falhar (rede): a lâmpada usa as regras padrão e o app avisa com um toast ("Não foi possível ler suas regras; usando as regras padrão"); o painel mostra o erro com "Tentar novamente"; "Criar Missas Padrões" fica desabilitado.
+- "Lista em branco" é conferida só no app (sem trava no servidor): a gravação já recusa data e horário repetidos.
 - Concorrência: última gravação vence (um dono, um aparelho por vez na prática); sem revisão otimista.
 
 ### 5.6 Duplicar o planejamento de outro coordenador
@@ -123,6 +127,8 @@ No `PlanChooser`, depois da confirmação de sobrescrever (quando o meu planejam
 - "Restaurar regras padrão" não apaga as missas padrão.
 - A pergunta de copiar configurações vem **depois** da confirmação de sobrescrever.
 - Limites: 70 missas padrão, 32 KB.
+- Quem nunca configurou o painel vê o botão de padrões desabilitado com a dica; a engrenagem só existe dentro de um planejamento aberto (um coordenador novo abre um planejamento vazio, configura e então cria as missas).
+- Coordenadores que já existem perdem o atalho de hoje (terça/sexta/domingo); nada é semeado pela migration.
 
 ## 8. Deixado ao construtor
 
