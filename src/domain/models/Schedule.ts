@@ -48,6 +48,13 @@ export interface MemberReading {
   isSwapTakeover: boolean // o membro assumiu a vaga de outra pessoa por troca
 }
 
+export interface SlotHistoryRow {
+  date: string // yyyy-MM-dd
+  role: string
+  profileId: string
+  originalProfileId?: string | null // pode faltar em bancos sem a coluna
+}
+
 export interface SwapRequest extends ScheduleSlot {
   mass: {
     date: string

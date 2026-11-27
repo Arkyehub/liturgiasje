@@ -1,0 +1,86 @@
+"use client"
+
+import { Fragment } from "react"
+import type { PlanMass } from "../lib/types"
+import { DayHeader } from "./DayHeader"
+import { MASS_ROW_TINT, MassStatusTag } from "./MassStatusTag"
+
+const WEEKDAYS = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"]
+
+interface NotebookListProps {
+  masses: PlanMass[]
+  /** Toque numa linha editável abre a edição. Sem callback (somente leitura) as linhas ficam desativadas. */
+  onSelectMass?: (key: string) => void
+}
+
+export function weekdayOf(date: string): string {
+  return WEEKDAYS[new Date(`${date}T00:00:00`).getDay()]
+}
+
+/** Lista "caderno": linhas pautadas, margem vermelha fina e a data só na 1ª missa do dia. */
+export function NotebookList({ masses, onSelectMass }: NotebookListProps) {
+  if (masses.length === 0) {
+    return (
+      <div className="border-t-2 border-stone-900 px-6 py-12 text-center text-sm font-medium text-stone-500">
+        Nenhuma missa neste mês ainda. Use <strong className="font-bold text-stone-800">Criar Missas Padrões no mês</strong> ou{" "}
+        <strong className="font-bold text-stone-800">+ Missa</strong>.
+      </div>
+    )
+  }
+
+  return (
+    <div className="border-t-2 border-stone-900">
+      <ul aria-label="Missas do mês">
+        {masses.map((mass, i) => {
+          const firstOfDay = i === 0 || masses[i - 1].date !== mass.date
+          const lastOfDay = i === masses.length - 1 || masses[i + 1].date !== mass.date
+          const roles = mass.slots.map((s) => s.role).join(" · ")
+          const [, mm, dd] = mass.date.split("-")
+          // Já existe como rascunho no sistema (gravado por este ou outro planejamento): destaque laranja.
+          const existingDraft = !!mass.id && !mass.readOnly
+          const tint = mass.readOnly ? MASS_ROW_TINT.published : existingDraft ? MASS_ROW_TINT.draft : ""
+          return (
+            <Fragment key={mass.key}>
+              {firstOfDay && (
+                <li role="presentation">
+                  <DayHeader date={mass.date} />
+                </li>
+              )}
+              <li
+                data-date={mass.date}
+                data-existing-draft={existingDraft ? "true" : undefined}
+                className={`flex border-b ${lastOfDay ? "border-stone-400" : "border-stone-200"} ${tint}`}
+              >
+                <button
+                  type="button"
+                  disabled={mass.readOnly || !onSelectMass}
+                  aria-label={`Missa de ${dd}/${mm} às ${mass.time}${mass.readOnly ? " (publicada, somente leitura)" : existingDraft ? " (já em rascunho)" : ""}`}
+                  onClick={() => onSelectMass?.(mass.key)}
+                  className="flex min-h-11 min-w-0 flex-1 items-start text-left text-stone-900 transition-colors active:bg-stone-100 disabled:cursor-default disabled:active:bg-transparent"
+                >
+                  <span className="flex w-[72px] shrink-0 flex-col items-start gap-1.5 py-3 pl-4 pr-2">
+                    <span className="text-[15px] font-extrabold leading-tight tabular-nums">{mass.time}</span>
+                    {mass.readOnly ? (
+                      <MassStatusTag kind="published" />
+                    ) : existingDraft ? (
+                      <MassStatusTag kind="draft" />
+                    ) : null}
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col justify-center self-stretch py-1.5 pr-4">
+                    <span className="truncate text-sm font-bold tracking-wide text-stone-700">{roles}</span>
+                    {mass.description && (
+                      <span className="truncate text-[11px] font-bold text-amber-700">{mass.description}</span>
+                    )}
+                    {!mass.readOnly && !existingDraft && mass.wasPublished && (
+                      <span className="text-[10px] font-bold text-amber-700">volta a rascunho ao salvar</span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            </Fragment>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}

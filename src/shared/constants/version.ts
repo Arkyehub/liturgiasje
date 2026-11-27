@@ -1,2 +1,2 @@
-export const APP_VERSION = "2.01";
+export const APP_VERSION = "2.02";
 // Reversão de emergência - Evitando quebra de produção
