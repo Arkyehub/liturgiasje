@@ -41,3 +41,40 @@ test("actionsDisabled disables the creation actions", () => {
   expect(screen.getByRole("button", { name: "Adicionar missa" })).toBeDisabled()
   expect(screen.getByRole("button", { name: "Trocar planejamento" })).toBeEnabled()
 })
+
+test("a engrenagem não aparece sem onOpenSettings", () => {
+  setup()
+  expect(screen.queryByRole("button", { name: "Configurações do planejamento" })).not.toBeInTheDocument()
+})
+
+test("engrenagem chama onOpenSettings", async () => {
+  const onOpenSettings = jest.fn()
+  setup({ onOpenSettings })
+  await userEvent.click(screen.getByRole("button", { name: "Configurações do planejamento" }))
+  expect(onOpenSettings).toHaveBeenCalledTimes(1)
+})
+
+test("createDefaultsDisabled desabilita só o botão de padrões", () => {
+  setup({ createDefaultsDisabled: true })
+  expect(screen.getByRole("button", { name: /Criar Missas Padrões no mês/ })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "Adicionar missa" })).toBeEnabled()
+})
+
+test("dica 'no-standard' leva à engrenagem; 'not-empty' é só texto", async () => {
+  const onOpenSettings = jest.fn()
+  const { rerender } = (() => {
+    const view = render(
+      <PlanningHeader monthLabel="Dezembro 2026" massCount={0} slotCount={0} readerCount={2} onChangePlan={jest.fn()} onCreateDefaults={jest.fn()}
+        createDefaultsDisabled createDefaultsHint="no-standard" onOpenSettings={onOpenSettings} />,
+    )
+    return view
+  })()
+  await userEvent.click(screen.getByRole("button", { name: "Defina suas missas padrão na engrenagem" }))
+  expect(onOpenSettings).toHaveBeenCalledTimes(1)
+  rerender(
+    <PlanningHeader monthLabel="Dezembro 2026" massCount={2} slotCount={3} readerCount={2} onChangePlan={jest.fn()} onCreateDefaults={jest.fn()}
+      createDefaultsDisabled createDefaultsHint="not-empty" onOpenSettings={onOpenSettings} />,
+  )
+  expect(screen.getByText("Disponível só com a lista em branco")).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Defina suas missas padrão na engrenagem" })).not.toBeInTheDocument()
+})

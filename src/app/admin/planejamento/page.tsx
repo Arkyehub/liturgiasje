@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { format, startOfMonth } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -8,6 +8,8 @@ import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/shared/hooks/useAuth"
 import { usePlanning, type PlanTarget } from "@/features/planning/hooks/usePlanning"
+import { usePlannerSettings } from "@/features/planning/hooks/usePlannerSettings"
+import { SettingsSheet } from "@/features/planning/ui/SettingsSheet"
 import { NotebookList } from "@/features/planning/ui/NotebookList"
 import { PublishedNotice } from "@/features/planning/ui/PublishedNotice"
 import { PlanChooser } from "@/features/planning/ui/PlanChooser"
@@ -57,7 +59,18 @@ function PlanningScreen() {
   const [target, setTarget] = useState<PlanTarget | null>(null)
   const month = target?.month ?? null
   const key = target ? targetKey(target) : null
-  const planning = usePlanning(target)
+  const settings = usePlannerSettings()
+  const planningSettings = useMemo(
+    () => ({
+      standardMasses: settings.standardMasses,
+      lampRules: settings.lampRules,
+      // Lâmpada e missas padrão esperam a leitura terminar (qualquer resultado: lido, indisponível ou com erro).
+      loaded: settings.status !== "loading",
+    }),
+    [settings.standardMasses, settings.lampRules, settings.status],
+  )
+  const planning = usePlanning(target, planningSettings)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const save = usePlanningSave({
     month: month ?? IDLE_MONTH,
     masses: planning.masses,
@@ -217,6 +230,9 @@ function PlanningScreen() {
           onChangePlan={leave}
           changeDisabled={leaveBlocked}
           onCreateDefaults={planning.createDefaults}
+          createDefaultsDisabled={!planning.canCreateDefaults}
+          createDefaultsHint={planning.createDefaultsHint}
+          onOpenSettings={planning.mode === "edit" ? () => setSettingsOpen(true) : undefined}
           onAddMass={() => setSheet("new")}
           actionsDisabled={planning.loading || planning.error || readOnly}
         />
@@ -286,6 +302,18 @@ function PlanningScreen() {
           }}
           onRemove={editing ? () => { planning.removeMass(editing.key); setSheet(null) } : undefined}
           onClose={() => setSheet(null)}
+        />
+      )}
+
+      {settingsOpen && planning.mode === "edit" && (
+        <SettingsSheet
+          status={settings.status}
+          standardMasses={settings.standardMasses}
+          lampRules={settings.lampRules}
+          error={settings.error}
+          onSave={settings.save}
+          onClose={() => setSettingsOpen(false)}
+          onRetry={settings.reload}
         />
       )}
 
