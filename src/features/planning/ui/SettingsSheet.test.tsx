@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { SettingsSheet } from "./SettingsSheet"
+import { rollTo } from "./testRoller"
 import { DEFAULT_LAMP_RULES, type LampRules, type StandardMass } from "@/domain/models/PlannerSettings"
 
 jest.mock("lucide-react", () => new Proxy({ __esModule: true }, { get: (t, p) => (p in t ? (t as Record<string | symbol, unknown>)[p] : () => <i />) }))
@@ -25,11 +26,7 @@ function setup(props: Partial<React.ComponentProps<typeof SettingsSheet>> = {}) 
 }
 
 const addTime = (day: string) => userEvent.click(screen.getByRole("button", { name: `Adicionar horário na ${day.toLowerCase()}` }))
-const setTime = async (label: string, value: string) => {
-  const input = screen.getByLabelText(label) as HTMLInputElement
-  await userEvent.clear(input)
-  await userEvent.type(input, value)
-}
+const setTime = (label: string, value: string) => rollTo(screen.getByRole("group", { name: label }), value)
 const saveButton = () => screen.getByRole("button", { name: /^Salvar|Salvando/ })
 
 test("nenhuma missa vem pronta: cada dia começa vazio e as seis regras vêm marcadas", async () => {
@@ -86,13 +83,17 @@ test("Leitura única (L) não convive com 1ª e 2ª leituras", async () => {
   expect(role("L")).not.toBeChecked()
 })
 
-test("horário vazio, sem função ou repetido no mesmo dia bloqueia o Salvar com a mensagem", async () => {
+test("horário novo já vem com o seletor padrão em 07:00; sem função ou repetido no mesmo dia bloqueia o Salvar com a mensagem", async () => {
   setup()
   await addTime("Sexta")
-  expect(screen.getByRole("alert")).toHaveTextContent("Informe um horário válido.")
+  const group = screen.getByRole("group", { name: "Horário 1 de Sexta" })
+  expect(group).toHaveTextContent("07:00")
+  expect(within(group).getByRole("button", { name: "Aumentar hora" })).toBeInTheDocument() // é o TimeRoller do aplicativo
+  expect(document.querySelector('input[type="time"]')).toBeNull()
+  expect(screen.getByRole("alert")).toHaveTextContent("Marque ao menos uma função.")
   expect(saveButton()).toBeDisabled()
   await setTime("Horário 1 de Sexta", "19:00")
-  expect(screen.getByRole("alert")).toHaveTextContent("Marque ao menos uma função.")
+  expect(group).toHaveTextContent("19:00")
   await userEvent.click(screen.getByLabelText("Função C - horário 1 de Sexta"))
   expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   expect(saveButton()).toBeEnabled()
@@ -101,6 +102,9 @@ test("horário vazio, sem função ou repetido no mesmo dia bloqueia o Salvar co
   await userEvent.click(screen.getByLabelText("Função L - horário 2 de Sexta"))
   expect(screen.getAllByRole("alert").some((a) => a.textContent === "Já existe este horário neste dia.")).toBe(true)
   expect(saveButton()).toBeDisabled()
+  await setTime("Horário 2 de Sexta", "19:30")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(saveButton()).toBeEnabled()
 })
 
 test("remove um horário existente e salva sem ele", async () => {
@@ -126,7 +130,7 @@ test("Restaurar regras padrão volta tudo a marcado e não apaga as missas padr�
   expect(screen.getByRole("checkbox", { name: "Equilibrar a carga entre os leitores" })).not.toBeChecked()
   await userEvent.click(screen.getByRole("button", { name: "Restaurar regras padrão" }))
   screen.getAllByRole("checkbox").filter((c) => /Equilibrar|Dar mais vagas/.test(c.getAttribute("aria-label") ?? c.parentElement?.textContent ?? "")).forEach((c) => expect(c).toBeChecked())
-  expect(screen.getByLabelText("Horário 1 de Domingo")).toHaveValue("09:00")
+  expect(screen.getByRole("group", { name: "Horário 1 de Domingo" })).toHaveTextContent("09:00")
 })
 
 test("Cancelar fecha sem salvar", async () => {

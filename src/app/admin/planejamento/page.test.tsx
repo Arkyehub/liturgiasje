@@ -11,6 +11,7 @@ import {
 import { makeConcludePlan, makeListPlans } from "@/main/factories/usecases/plans"
 import { makeGetPlannerSettings, makeSavePlannerSettings } from "@/main/factories/usecases/plannerSettings"
 import { SAMPLE_STANDARD } from "@/features/planning/lib/testFixtures"
+import { rollTo } from "@/features/planning/ui/testRoller"
 import { DEFAULT_LAMP_RULES } from "@/domain/models/PlannerSettings"
 import { makeListProfiles, makeListUnavailableForRange } from "@/main/factories/usecases/profiles"
 import type { Mass } from "@/domain/models/Schedule"
@@ -884,8 +885,7 @@ test("configurar uma missa padrão no painel e salvar habilita 'Criar Missas Pad
   await openMine()
   await userEvent.click(gear())
   await userEvent.click(await screen.findByRole("button", { name: "Adicionar horário na quarta" }))
-  const time = screen.getByLabelText("Horário 1 de Quarta") as HTMLInputElement
-  await userEvent.type(time, "06:30")
+  await rollTo(screen.getByRole("group", { name: "Horário 1 de Quarta" }), "06:30")
   await userEvent.click(screen.getByLabelText("Função C - horário 1 de Quarta"))
   await userEvent.click(screen.getByRole("button", { name: "Salvar" }))
   await waitFor(() => expect(settingsSave).toHaveBeenCalledTimes(1))
