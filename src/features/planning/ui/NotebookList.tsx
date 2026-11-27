@@ -1,6 +1,8 @@
 "use client"
 
+import { Fragment } from "react"
 import type { PlanMass } from "../lib/types"
+import { DayHeader } from "./DayHeader"
 import { MASS_ROW_TINT, MassStatusTag } from "./MassStatusTag"
 
 const WEEKDAYS = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"]
@@ -27,8 +29,7 @@ export function NotebookList({ masses, onSelectMass }: NotebookListProps) {
   }
 
   return (
-    <div className="relative border-t-2 border-stone-900">
-      <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-[72px] w-px bg-red-300" />
+    <div className="border-t-2 border-stone-900">
       <ul aria-label="Missas do mês">
         {masses.map((mass, i) => {
           const firstOfDay = i === 0 || masses[i - 1].date !== mass.date
@@ -39,45 +40,44 @@ export function NotebookList({ masses, onSelectMass }: NotebookListProps) {
           const existingDraft = !!mass.id && !mass.readOnly
           const tint = mass.readOnly ? MASS_ROW_TINT.published : existingDraft ? MASS_ROW_TINT.draft : ""
           return (
-            <li
-              key={mass.key}
-              data-date={mass.date}
-              data-existing-draft={existingDraft ? "true" : undefined}
-              className={`flex min-h-11 items-center border-b ${lastOfDay ? "border-stone-400" : "border-stone-200"} ${tint}`}
-            >
-              <div className="flex w-[72px] shrink-0 items-baseline gap-1 pl-4 pr-2">
-                {firstOfDay && (
-                  <>
-                    <span className="text-lg font-black leading-none text-stone-900">{dd}</span>
-                    <span className="text-[11px] font-bold text-stone-500">{weekdayOf(mass.date)}</span>
-                  </>
-                )}
-              </div>
-              <button
-                type="button"
-                disabled={mass.readOnly || !onSelectMass}
-                aria-label={`Missa de ${dd}/${mm} às ${mass.time}${mass.readOnly ? " (publicada, somente leitura)" : existingDraft ? " (já em rascunho)" : ""}`}
-                onClick={() => onSelectMass?.(mass.key)}
-                className="flex min-h-11 min-w-0 flex-1 items-center gap-3 py-1.5 pl-3 pr-4 text-left text-stone-900 transition-colors active:bg-stone-100 disabled:cursor-default disabled:active:bg-transparent"
+            <Fragment key={mass.key}>
+              {firstOfDay && (
+                <li role="presentation">
+                  <DayHeader date={mass.date} />
+                </li>
+              )}
+              <li
+                data-date={mass.date}
+                data-existing-draft={existingDraft ? "true" : undefined}
+                className={`flex border-b ${lastOfDay ? "border-stone-400" : "border-stone-200"} ${tint}`}
               >
-                <span className="w-11 shrink-0 text-[15px] font-extrabold tabular-nums">{mass.time}</span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-bold tracking-wide text-stone-700">{roles}</span>
-                  {mass.description && (
-                    <span className="truncate text-[11px] font-bold text-amber-700">{mass.description}</span>
-                  )}
-                </span>
-                {mass.readOnly ? (
-                  <MassStatusTag kind="published" />
-                ) : (
-                  existingDraft ? (
-                    <MassStatusTag kind="draft" />
-                  ) : mass.wasPublished && (
-                    <span className="shrink-0 text-[10px] font-bold text-amber-700">volta a rascunho ao salvar</span>
-                  )
-                )}
-              </button>
-            </li>
+                <button
+                  type="button"
+                  disabled={mass.readOnly || !onSelectMass}
+                  aria-label={`Missa de ${dd}/${mm} às ${mass.time}${mass.readOnly ? " (publicada, somente leitura)" : existingDraft ? " (já em rascunho)" : ""}`}
+                  onClick={() => onSelectMass?.(mass.key)}
+                  className="flex min-h-11 min-w-0 flex-1 items-start text-left text-stone-900 transition-colors active:bg-stone-100 disabled:cursor-default disabled:active:bg-transparent"
+                >
+                  <span className="flex w-[72px] shrink-0 flex-col items-start gap-1.5 py-3 pl-4 pr-2">
+                    <span className="text-[15px] font-extrabold leading-tight tabular-nums">{mass.time}</span>
+                    {mass.readOnly ? (
+                      <MassStatusTag kind="published" />
+                    ) : existingDraft ? (
+                      <MassStatusTag kind="draft" />
+                    ) : null}
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col justify-center self-stretch py-1.5 pr-4">
+                    <span className="truncate text-sm font-bold tracking-wide text-stone-700">{roles}</span>
+                    {mass.description && (
+                      <span className="truncate text-[11px] font-bold text-amber-700">{mass.description}</span>
+                    )}
+                    {!mass.readOnly && !existingDraft && mass.wasPublished && (
+                      <span className="text-[10px] font-bold text-amber-700">volta a rascunho ao salvar</span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            </Fragment>
           )
         })}
       </ul>

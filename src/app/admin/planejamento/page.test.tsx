@@ -229,19 +229,20 @@ test("creating the default masses on an empty December shows 25 masses / 82 slot
   expect(screen.getByText("25 missas · 82 vagas · 2 leitores aptos")).toBeInTheDocument()
   expect(screen.getByText("82 vagas sem leitor")).toBeInTheDocument()
 
-  // a data (06 + DOM) aparece só na 1ª das 4 missas do domingo
+  // a data abre o dia numa faixa única ("06 Domingo"), uma vez para as 4 missas do domingo
   const list = screen.getByRole("list", { name: "Missas do mês" })
-  expect(within(list).getAllByText("06")).toHaveLength(1)
+  const headers = Array.from(list.querySelectorAll("[data-day-header]"))
+  expect(headers.filter((h) => h.getAttribute("data-day-header") === "2026-12-06")).toHaveLength(1)
+  const sundayHeader = headers.find((h) => h.getAttribute("data-day-header") === "2026-12-06") as HTMLElement
+  expect(sundayHeader).toHaveTextContent("06Domingo")
   const sunday = within(list).getAllByRole("listitem").filter((li) => li.getAttribute("data-date") === "2026-12-06")
   expect(sunday).toHaveLength(4)
-  expect(within(sunday[0]).getByText("06")).toBeInTheDocument()
-  expect(within(sunday[0]).getByText("DOM")).toBeInTheDocument()
-  expect(within(sunday[1]).queryByText("DOM")).not.toBeInTheDocument()
+  sunday.forEach((li) => expect(li).not.toHaveTextContent("Domingo"))
   expect(within(sunday[0]).getByText("07:00")).toBeInTheDocument()
   expect(within(sunday[0]).getByText("C · 1L · 2L · P")).toBeInTheDocument()
   const tuesday = within(list).getAllByRole("listitem").find((li) => li.getAttribute("data-date") === "2026-12-01") as HTMLElement
   expect(within(tuesday).getByText("C · L")).toBeInTheDocument()
-  expect(within(tuesday).getByText("TER")).toBeInTheDocument()
+  expect(headers.find((h) => h.getAttribute("data-day-header") === "2026-12-01")).toHaveTextContent("01Terça")
 })
 
 test("with 2 published masses the informative notice lists the dates once; they stay read-only and there is no include/keep option", async () => {

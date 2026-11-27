@@ -1,8 +1,9 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { Fragment, useMemo, useState } from "react"
 import { Lightbulb, MessageCircle } from "lucide-react"
 import type { PlanMass, PlanReader, PlanSummary, ReaderStats } from "../lib/types"
+import { DayHeader } from "./DayHeader"
 import { ReaderCard } from "./ReaderCard"
 import { ReaderPicker } from "./ReaderPicker"
 import { SuggestionRow, type SuggestionLine } from "./SuggestionRow"
@@ -129,8 +130,7 @@ export function SuggestionList({
         </div>
       </div>
 
-      <div className="relative border-t-2 border-stone-900">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-[72px] w-px bg-red-300" />
+      <div className="border-t-2 border-stone-900">
         {lines.length === 0 && <p className="px-6 py-10 text-center text-sm font-medium text-stone-500">Nenhuma vaga neste filtro.</p>}
         <ul aria-label="Vagas sugeridas">
           {lines.map((line, i) => {
@@ -138,18 +138,23 @@ export function SuggestionList({
             const next = lines[i + 1]
             const ref = { massKey: line.mass.key, slotIndex: line.slotIndex }
             return (
-              <SuggestionRow
-                key={`${line.mass.key}:${line.slotIndex}`}
-                {...line}
-                name={nameOf(line.slot.profileId)}
-                showDate={!prev || prev.mass.date !== line.mass.date}
-                showTime={!prev || prev.mass.key !== line.mass.key}
-                lastOfDay={!next || next.mass.date !== line.mass.date}
-                onPick={() => setPicking(ref)}
-                onView={() => setViewing(ref)}
-                onToggleLock={() => onToggleLock(ref.massKey, ref.slotIndex)}
-                readOnly={readOnly}
-              />
+              <Fragment key={`${line.mass.key}:${line.slotIndex}`}>
+                {(!prev || prev.mass.date !== line.mass.date) && (
+                  <li role="presentation">
+                    <DayHeader date={line.mass.date} />
+                  </li>
+                )}
+                <SuggestionRow
+                  {...line}
+                  name={nameOf(line.slot.profileId)}
+                  showTime={!prev || prev.mass.key !== line.mass.key}
+                  lastOfDay={!next || next.mass.date !== line.mass.date}
+                  onPick={() => setPicking(ref)}
+                  onView={() => setViewing(ref)}
+                  onToggleLock={() => onToggleLock(ref.massKey, ref.slotIndex)}
+                  readOnly={readOnly}
+                />
+              </Fragment>
             )
           })}
         </ul>
