@@ -3,6 +3,7 @@
 import { Eye, Lock, LockOpen, TriangleAlert } from "lucide-react"
 import type { PlanMass, PlanSlot } from "../lib/types"
 import { weekdayOf } from "./NotebookList"
+import { MASS_ROW_TINT, MassStatusTag } from "./MassStatusTag"
 
 export interface SuggestionLine {
   mass: PlanMass
@@ -64,11 +65,14 @@ export function SuggestionRow({
   const frozen = mass.readOnly || swapPending || readOnly
   // Já existe como rascunho no sistema: linha laranja (a troca pendente, mais urgente, mantém o âmbar).
   const existingDraft = !!mass.id && !mass.readOnly && !swapPending
+  const tint = swapPending ? "bg-amber-50" : mass.readOnly ? MASS_ROW_TINT.published : existingDraft ? MASS_ROW_TINT.draft : ""
+  // A tag aparece uma vez por missa (na primeira linha dela).
+  const tag = showTime && (mass.readOnly ? <MassStatusTag kind="published" /> : existingDraft ? <MassStatusTag kind="draft" /> : null)
   return (
     <li
       data-date={mass.date}
       data-existing-draft={existingDraft ? "true" : undefined}
-      className={`flex min-h-11 items-center border-b ${lastOfDay ? "border-stone-400" : "border-stone-100"} ${swapPending ? "bg-amber-50" : ""} ${existingDraft ? "bg-orange-100" : ""}`}
+      className={`flex min-h-11 items-center border-b ${lastOfDay ? "border-stone-400" : "border-stone-100"} ${tint}`}
     >
       <div className="flex w-[72px] shrink-0 items-baseline gap-1 pl-4 pr-2">
         {showDate && (
@@ -82,14 +86,17 @@ export function SuggestionRow({
         <span className="w-11 shrink-0 text-[15px] font-extrabold tabular-nums text-stone-900">{showTime ? mass.time : ""}</span>
         <span className="w-[22px] shrink-0 text-[13px] font-extrabold text-stone-600">{slot.role}</span>
         {empty ? (
-          <button
-            type="button"
-            onClick={onPick}
-            disabled={mass.readOnly || readOnly}
-            className="min-h-11 flex-1 text-left text-[13px] font-bold text-red-700 underline decoration-dashed underline-offset-4 disabled:opacity-60"
-          >
-            sem leitor · escolher
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={onPick}
+              disabled={mass.readOnly || readOnly}
+              className="min-h-11 flex-1 text-left text-[13px] font-bold text-red-700 underline decoration-dashed underline-offset-4 disabled:opacity-60"
+            >
+              sem leitor · escolher
+            </button>
+            {tag}
+          </>
         ) : (
           <>
             <button
@@ -102,6 +109,7 @@ export function SuggestionRow({
               {swapPending && <SwapPendingBadge />}
               {slot.warning === "outside-preference" && <OutsidePreferenceIcon />}
             </button>
+            {tag}
             <button type="button" aria-label="Ver escalas do leitor no mês" onClick={onView} className={iconButton}>
               <Eye aria-hidden="true" className="h-[18px] w-[18px] text-stone-600" />
             </button>

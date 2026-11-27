@@ -1,6 +1,7 @@
 "use client"
 
 import type { PlanMass } from "../lib/types"
+import { MASS_ROW_TINT, MassStatusTag } from "./MassStatusTag"
 
 const WEEKDAYS = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"]
 
@@ -36,12 +37,13 @@ export function NotebookList({ masses, onSelectMass }: NotebookListProps) {
           const [, mm, dd] = mass.date.split("-")
           // Já existe como rascunho no sistema (gravado por este ou outro planejamento): destaque laranja.
           const existingDraft = !!mass.id && !mass.readOnly
+          const tint = mass.readOnly ? MASS_ROW_TINT.published : existingDraft ? MASS_ROW_TINT.draft : ""
           return (
             <li
               key={mass.key}
               data-date={mass.date}
               data-existing-draft={existingDraft ? "true" : undefined}
-              className={`flex min-h-11 items-center border-b ${lastOfDay ? "border-stone-400" : "border-stone-200"} ${existingDraft ? "bg-orange-100" : ""}`}
+              className={`flex min-h-11 items-center border-b ${lastOfDay ? "border-stone-400" : "border-stone-200"} ${tint}`}
             >
               <div className="flex w-[72px] shrink-0 items-baseline gap-1 pl-4 pr-2">
                 {firstOfDay && (
@@ -66,14 +68,10 @@ export function NotebookList({ masses, onSelectMass }: NotebookListProps) {
                   )}
                 </span>
                 {mass.readOnly ? (
-                  <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-stone-500">
-                    publicada
-                  </span>
+                  <MassStatusTag kind="published" />
                 ) : (
                   existingDraft ? (
-                    <span className="shrink-0 rounded-full bg-orange-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-800">
-                      rascunho
-                    </span>
+                    <MassStatusTag kind="draft" />
                   ) : mass.wasPublished && (
                     <span className="shrink-0 text-[10px] font-bold text-amber-700">volta a rascunho ao salvar</span>
                   )

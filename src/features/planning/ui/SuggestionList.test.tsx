@@ -361,3 +361,21 @@ describe("readOnly", () => {
     expect(screen.getByRole("button", { name: /Sugerir de novo/ })).toBeEnabled()
   })
 })
+
+test("rascunho existente ganha a tag RASC e linha laranja leve; publicada, PUBL e linha verde leve; a tag aparece só na 1ª linha da missa", () => {
+  const masses: PlanMass[] = [
+    { ...MASSES[1], id: "m1" }, // rascunho existente (4 vagas)
+    { ...MASSES[2], id: "m2", wasPublished: true, readOnly: true }, // publicada
+    MASSES[0], // nova, sem tag
+  ]
+  const { rows } = setup({ masses })
+  const lines = rows()
+  const draft = lines.filter((li) => li.getAttribute("data-existing-draft") === "true")
+  expect(draft).toHaveLength(4)
+  draft.forEach((li) => expect(li).toHaveClass("bg-orange-50"))
+  expect(lines.filter((li) => li.textContent?.includes("RASC"))).toHaveLength(1)
+  const published = lines.filter((li) => li.className.includes("bg-green-50"))
+  expect(published).toHaveLength(1)
+  expect(published[0]).toHaveTextContent("PUBL")
+  expect(lines.filter((li) => li.textContent?.includes("PUBL"))).toHaveLength(1)
+})
