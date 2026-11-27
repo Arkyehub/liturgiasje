@@ -259,7 +259,7 @@ test("with 2 published masses the informative notice lists the dates once; they 
 
   await userEvent.click(within(notice).getByRole("button", { name: "Entendi" }))
   expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
-  expect(screen.getAllByText("publicada")).toHaveLength(2)
+  expect(screen.getAllByText("Publicada")).toHaveLength(2) // texto acessível da tag "PUBL"
   expect(screen.queryByText("volta a rascunho ao salvar")).not.toBeInTheDocument()
   within(screen.getByRole("list", { name: "Missas do mês" })).getAllByRole("button").forEach((b) => expect(b).toBeDisabled())
 })
